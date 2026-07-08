@@ -10,6 +10,7 @@ const state = {
   duckdns: null,
   branding: null,
   whatsapp: null,
+  version: null,
   view: new URLSearchParams(window.location.search).get("view") || "calendar",
   calendarDate: new Date(),
   calendarMode: "month",
@@ -233,21 +234,24 @@ async function loadData() {
   state.dogs = dogsResponse.dogs || [];
   state.appointments = appointmentsResponse.appointments || [];
   if (state.me?.role === "admin") {
-    const [usersResponse, duckdnsResponse, brandingResponse, whatsappResponse] = await Promise.all([
+    const [usersResponse, duckdnsResponse, brandingResponse, whatsappResponse, versionResponse] = await Promise.all([
       api("/api/users"),
       api("/api/settings/duckdns"),
       api("/api/settings/branding"),
-      api("/api/settings/whatsapp")
+      api("/api/settings/whatsapp"),
+      api("/api/version")
     ]);
     state.users = usersResponse.users || [];
     state.duckdns = duckdnsResponse.duckdns || null;
     state.branding = brandingResponse.branding || state.branding;
     state.whatsapp = whatsappResponse.whatsapp || null;
+    state.version = versionResponse || null;
     applyBranding();
   } else {
     state.users = [];
     state.duckdns = null;
     state.whatsapp = null;
+    state.version = null;
   }
 }
 
@@ -691,6 +695,7 @@ function renderSettings() {
   const loginBackground = branding.loginBackground;
   const whatsapp = state.whatsapp || {};
   const duckdns = state.duckdns || {};
+  const version = state.version || {};
   const localUrls = duckdns.localUrls || [];
   const localLinks = localUrls.length
     ? localUrls.map((item) => `<a href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.label)}: ${escapeHtml(item.url)}</a>`).join("")
@@ -929,6 +934,25 @@ function renderSettings() {
         </label>
         <button class="btn danger" type="submit">Importa e ripristina</button>
       </form>
+      <form class="settings-panel wide" id="updateForm">
+        <div class="settings-heading-row">
+          <div>
+            <h2>Aggiornamento portale</h2>
+            <p class="settings-note">Versione installata: ${escapeHtml(version.releaseLabel || version.version || "non disponibile")}. Accetta solo pacchetti ${escapeHtml(version.updateExtension || ".pgs-update")}.</p>
+          </div>
+          <span class="badge">Beta</span>
+        </div>
+        <div class="form-grid">
+          <label>File update locale
+            <input name="updateFile" type="file" accept=".pgs-update" />
+          </label>
+          <label class="full">URL update web
+            <input name="updateUrl" type="url" placeholder="https://.../Pet-Grooming-Software-0.0.1-beta.2.pgs-update" />
+          </label>
+        </div>
+        <p class="settings-note">L'update aggiorna solo il software. Database, foto e backup non vengono toccati. Dopo l'installazione serve riavviare il servizio.</p>
+        <button class="btn" type="submit">Installa update</button>
+      </form>
     </section>
   `;
 }
@@ -1088,6 +1112,39 @@ function bindSettings() {
       });
       notify("Backup importato. Accesso richiesto.");
       await logout();
+    } catch (err) {
+      notify(err.message);
+    }
+  });
+
+  document.getElementById("updateForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const file = form.elements.updateFile.files[0];
+    const updateUrl = String(data.get("updateUrl") || "").trim();
+    try {
+      let payload;
+      if (file) {
+        if (!file.name.toLowerCase().endsWith(".pgs-update")) throw new Error("Seleziona un file .pgs-update");
+        payload = {
+          fileName: file.name,
+          package: JSON.parse(await file.text())
+        };
+      } else if (updateUrl) {
+        if (!new URL(updateUrl).pathname.toLowerCase().endsWith(".pgs-update")) {
+          throw new Error("L'URL deve puntare a un file .pgs-update");
+        }
+        payload = { url: updateUrl };
+      } else {
+        throw new Error("Seleziona un file update o inserisci un URL");
+      }
+      const response = await api("/api/system/update", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      form.reset();
+      notify(`Update ${response.update.installedVersion || ""} installato: riavvia il servizio`);
     } catch (err) {
       notify(err.message);
     }
@@ -1359,6 +1416,10 @@ function openAppointmentDialog(appointment = {}, options = {}) {
               .join("")}
           </select>
         </label>
+        <label class="checkbox-line full" data-create-dog-row>
+          <input name="createDogProfile" type="checkbox" ${!appointment.dogId ? "checked" : ""} />
+          Crea subito la scheda cane con questi dati
+        </label>
         <label>Nome cane
           <input name="dogName" value="${escapeAttr(selectedDog?.dogName || appointment.dogName || "")}" required />
         </label>
@@ -1386,6 +1447,12 @@ function openAppointmentDialog(appointment = {}, options = {}) {
       if (completionMode && !form.elements.treatmentDone.value) {
         form.elements.treatmentDone.value = form.elements.service.value || "Toilettatura";
       }
+      const createDogRow = form.querySelector("[data-create-dog-row]");
+      const syncCreateDogRow = () => {
+        const hasLinkedDog = Boolean(form.elements.dogId.value);
+        createDogRow.hidden = hasLinkedDog;
+        if (hasLinkedDog) form.elements.createDogProfile.checked = false;
+      };
       modalRoot.querySelector("[data-complete-form]")?.addEventListener("click", () => {
         form.elements.status.value = "completato";
         if (!form.elements.treatmentDone.value) form.elements.treatmentDone.value = form.elements.service.value || "Toilettatura";
@@ -1393,12 +1460,14 @@ function openAppointmentDialog(appointment = {}, options = {}) {
         notify("Completa trattamento e importo, poi salva la prestazione");
       });
       form.elements.dogId.addEventListener("change", () => {
+        syncCreateDogRow();
         const dog = state.dogs.find((item) => item.id === form.elements.dogId.value);
         if (!dog) return;
         form.elements.dogName.value = dog.dogName || "";
         form.elements.ownerName.value = dog.ownerName || "";
         form.elements.contact.value = dog.contact || "";
       });
+      syncCreateDogRow();
     },
     onDanger: async () => {
       await api(`/api/appointments/${appointment.id}`, { method: "DELETE", body: "{}" });
@@ -1408,6 +1477,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
     },
     onSubmit: async (formData) => {
       const payload = Object.fromEntries(formData.entries());
+      payload.createDogProfile = formData.get("createDogProfile") === "on";
       if (completionMode) payload.status = "completato";
       if (payload.status === "completato" && !payload.treatmentDone) payload.treatmentDone = payload.service || "Toilettatura";
       await api(isEdit ? `/api/appointments/${appointment.id}` : "/api/appointments", {

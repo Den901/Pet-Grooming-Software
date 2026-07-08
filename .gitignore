@@ -7,9 +7,13 @@ npm-debug.log*
 data/db.json
 data/uploads/*
 !data/uploads/.gitkeep
+data/update-backups/
+data/last-update.json
 backups/
+dist/
 *.backup
 *.enc
+*.pgs-update
 
 server.log
 server.err.log

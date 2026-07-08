@@ -4,6 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
+const packageInfo = require("./package.json");
 
 const PORT = Number(process.env.PORT || 3017);
 const ROOT_DIR = __dirname;
@@ -12,8 +13,15 @@ const DATA_DIR = path.join(ROOT_DIR, "data");
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 const DB_FILE = path.join(DATA_DIR, "db.json");
 const MAX_BODY_BYTES = 16 * 1024 * 1024;
+const MAX_UPDATE_BYTES = 28 * 1024 * 1024;
+const MAX_UPDATE_BODY_BYTES = 40 * 1024 * 1024;
 const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin123";
+const APP_ID = "pet-grooming-software";
+const APP_VERSION = packageInfo.version || "0.0.1-beta.1";
+const UPDATE_FORMAT = "PET_GROOMING_SOFTWARE_UPDATE";
+const UPDATE_FORMAT_VERSION = 1;
+const UPDATE_EXTENSION = ".pgs-update";
 
 const sessions = new Map();
 
@@ -234,6 +242,10 @@ function sendError(res, status, message) {
   sendJson(res, status, { error: message });
 }
 
+function releaseLabel(version = APP_VERSION) {
+  return String(version).replace("-beta.", " beta ").replace("-beta", " beta");
+}
+
 function parseCookies(req) {
   const header = req.headers.cookie || "";
   return Object.fromEntries(
@@ -274,13 +286,13 @@ function clearSession(req, res) {
   res.setHeader("Set-Cookie", "session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0");
 }
 
-function readBody(req) {
+function readBody(req, maxBytes = MAX_BODY_BYTES) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
     req.on("data", (chunk) => {
       size += chunk.length;
-      if (size > MAX_BODY_BYTES) {
+      if (size > maxBytes) {
         reject(new Error("Richiesta troppo grande"));
         req.destroy();
         return;
@@ -557,6 +569,124 @@ function restoreBackup(payload) {
   });
 }
 
+function isUpdateFileName(fileName) {
+  return cleanString(fileName).toLowerCase().endsWith(UPDATE_EXTENSION);
+}
+
+function normalizeUpdatePath(filePath) {
+  const normalized = cleanString(filePath).replace(/\\/g, "/").replace(/^\/+/, "");
+  if (!normalized || normalized.includes("\0") || normalized.split("/").includes("..")) return "";
+  if (normalized.startsWith(".git/") || normalized.startsWith("data/") || normalized.startsWith("node_modules/") || normalized.startsWith("dist/")) return "";
+  if (normalized.startsWith("public/") || normalized.startsWith("scripts/") || normalized.startsWith("docs/")) return normalized;
+  if (["server.js", "package.json", "README.md", "start-windows.bat", "start-linux.sh", ".gitignore"].includes(normalized)) return normalized;
+  return "";
+}
+
+function decodeUpdateFile(entry) {
+  const filePath = normalizeUpdatePath(entry?.path);
+  if (!filePath) throw new Error(`Percorso update non consentito: ${entry?.path || "-"}`);
+  const data = Buffer.from(String(entry.data || ""), "base64");
+  if (!data.length) throw new Error(`File update vuoto: ${filePath}`);
+  const sha256 = crypto.createHash("sha256").update(data).digest("hex");
+  if (cleanString(entry.sha256) && cleanString(entry.sha256).toLowerCase() !== sha256) {
+    throw new Error(`Hash non valido per ${filePath}`);
+  }
+  return { path: filePath, data, sha256 };
+}
+
+function validateUpdatePackage(envelope, fileName) {
+  if (!isUpdateFileName(fileName)) throw new Error(`Formato update non valido: usa un file ${UPDATE_EXTENSION}`);
+  if (!envelope || envelope.format !== UPDATE_FORMAT || envelope.formatVersion !== UPDATE_FORMAT_VERSION || envelope.app !== APP_ID) {
+    throw new Error("Pacchetto update non riconosciuto");
+  }
+  if (!Array.isArray(envelope.files) || envelope.files.length === 0) throw new Error("Pacchetto update senza file");
+  const files = envelope.files.map(decodeUpdateFile);
+  const totalBytes = files.reduce((sum, file) => sum + file.data.length, 0);
+  if (totalBytes > MAX_UPDATE_BYTES) throw new Error("Pacchetto update troppo grande");
+  return {
+    version: cleanString(envelope.version) || "senza-versione",
+    createdAt: cleanString(envelope.createdAt),
+    files,
+    totalBytes
+  };
+}
+
+function applyUpdatePackage(envelope, fileName) {
+  const update = validateUpdatePackage(envelope, fileName);
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const backupDir = path.join(DATA_DIR, "update-backups", stamp);
+  fs.mkdirSync(backupDir, { recursive: true });
+  for (const file of update.files) {
+    const target = path.normalize(path.join(ROOT_DIR, file.path));
+    const relativeTarget = path.relative(ROOT_DIR, target);
+    if (relativeTarget.startsWith("..") || path.isAbsolute(relativeTarget)) throw new Error(`Percorso update non valido: ${file.path}`);
+    const backupTarget = path.join(backupDir, file.path);
+    fs.mkdirSync(path.dirname(backupTarget), { recursive: true });
+    if (fs.existsSync(target)) fs.copyFileSync(target, backupTarget);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, file.data);
+  }
+  const summary = {
+    format: UPDATE_FORMAT,
+    installedAt: new Date().toISOString(),
+    previousVersion: APP_VERSION,
+    installedVersion: update.version,
+    source: fileName,
+    files: update.files.map((file) => ({ path: file.path, sha256: file.sha256 })),
+    restartRequired: true
+  };
+  fs.writeFileSync(path.join(DATA_DIR, "last-update.json"), JSON.stringify(summary, null, 2));
+  return summary;
+}
+
+function downloadUpdatePackage(updateUrl) {
+  return new Promise((resolve, reject) => {
+    let parsed;
+    try {
+      parsed = new URL(cleanString(updateUrl));
+    } catch {
+      reject(new Error("URL update non valido"));
+      return;
+    }
+    if (!["http:", "https:"].includes(parsed.protocol) || !isUpdateFileName(parsed.pathname)) {
+      reject(new Error(`L'URL deve puntare a un file ${UPDATE_EXTENSION}`));
+      return;
+    }
+    const client = parsed.protocol === "https:" ? https : http;
+    const req = client.get(parsed, { timeout: 15000 }, (response) => {
+      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        downloadUpdatePackage(new URL(response.headers.location, parsed).toString()).then(resolve, reject);
+        response.resume();
+        return;
+      }
+      if (response.statusCode !== 200) {
+        reject(new Error(`Download update fallito: ${response.statusCode}`));
+        response.resume();
+        return;
+      }
+      let size = 0;
+      const chunks = [];
+      response.on("data", (chunk) => {
+        size += chunk.length;
+        if (size > MAX_UPDATE_BYTES) {
+          req.destroy(new Error("Pacchetto update troppo grande"));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      response.on("end", () => {
+        try {
+          resolve({ fileName: path.basename(parsed.pathname), envelope: JSON.parse(Buffer.concat(chunks).toString("utf8")) });
+        } catch {
+          reject(new Error("Pacchetto update web non valido"));
+        }
+      });
+    });
+    req.on("timeout", () => req.destroy(new Error("Timeout download update")));
+    req.on("error", reject);
+  });
+}
+
 function normalizeDog(payload, existing = {}) {
   const now = new Date().toISOString();
   const id = existing.id || crypto.randomUUID();
@@ -573,6 +703,42 @@ function normalizeDog(payload, existing = {}) {
     createdAt: existing.createdAt || now,
     updatedAt: now
   };
+}
+
+function lowerMatch(value) {
+  return cleanString(value).toLowerCase();
+}
+
+function findMatchingDogFromAppointment(payload, db) {
+  const dogName = lowerMatch(payload.dogName);
+  const ownerName = lowerMatch(payload.ownerName);
+  const contact = lowerMatch(payload.contact);
+  if (!dogName) return null;
+  return db.dogs.find((dog) => {
+    if (lowerMatch(dog.dogName) !== dogName) return false;
+    if (ownerName && lowerMatch(dog.ownerName) !== ownerName) return false;
+    if (contact && lowerMatch(dog.contact) !== contact) return false;
+    return true;
+  });
+}
+
+function maybeCreateDogFromAppointment(payload, db) {
+  if (payload.createDogProfile !== true || cleanString(payload.dogId)) return { payload, dog: null };
+  const dogName = cleanString(payload.dogName);
+  if (!dogName) return { payload, dog: null };
+  const matchingDog = findMatchingDogFromAppointment(payload, db);
+  if (matchingDog) {
+    return { payload: { ...payload, dogId: matchingDog.id }, dog: matchingDog };
+  }
+  const dog = normalizeDog({
+    dogName,
+    ownerName: cleanString(payload.ownerName),
+    contact: cleanString(payload.contact),
+    estimatedMinutes: 0,
+    notes: `Scheda creata da appuntamento del ${cleanString(payload.date) || "giorno non indicato"}.`
+  });
+  db.dogs.push(dog);
+  return { payload: { ...payload, dogId: dog.id }, dog };
 }
 
 function normalizeAppointment(payload, db, existing = {}) {
@@ -614,6 +780,15 @@ async function handleApi(req, res, url) {
       return sendJson(res, 200, { ok: true });
     }
 
+    if (url.pathname === "/api/version" && method === "GET") {
+      return sendJson(res, 200, {
+        app: APP_ID,
+        version: APP_VERSION,
+        releaseLabel: releaseLabel(APP_VERSION),
+        updateExtension: UPDATE_EXTENSION
+      });
+    }
+
     if (url.pathname === "/api/public-settings" && method === "GET") {
       return sendJson(res, 200, { branding: publicBrandingSettings(db) });
     }
@@ -639,6 +814,20 @@ async function handleApi(req, res, url) {
     }
 
     if (!user) return sendError(res, 401, "Accesso richiesto");
+
+    if (parts[1] === "system" && parts[2] === "update" && method === "POST") {
+      if (user.role !== "admin") return sendError(res, 403, "Solo amministratore");
+      const body = await readBody(req, MAX_UPDATE_BODY_BYTES);
+      let fileName = cleanString(body.fileName);
+      let envelope = body.package;
+      if (cleanString(body.url)) {
+        const downloaded = await downloadUpdatePackage(body.url);
+        fileName = downloaded.fileName;
+        envelope = downloaded.envelope;
+      }
+      const result = applyUpdatePackage(envelope, fileName);
+      return sendJson(res, 200, { update: result });
+    }
 
     if (url.pathname === "/api/me/password" && method === "POST") {
       const body = await readBody(req);
@@ -850,25 +1039,27 @@ async function handleApi(req, res, url) {
       }
       if (method === "POST") {
         const body = await readBody(req);
-        const appointment = normalizeAppointment(body, db);
+        const prepared = maybeCreateDogFromAppointment(body, db);
+        const appointment = normalizeAppointment(prepared.payload, db);
         if (!appointment.date || !appointment.startTime || !appointment.dogName) {
           return sendError(res, 400, "Data, orario e cane sono obbligatori");
         }
         db.appointments.push(appointment);
         writeDb(db);
-        return sendJson(res, 201, { appointment });
+        return sendJson(res, 201, { appointment, dog: prepared.dog });
       }
       const index = db.appointments.findIndex((item) => item.id === id);
       if (index === -1) return sendError(res, 404, "Appuntamento non trovato");
       if (method === "PUT") {
         const body = await readBody(req);
-        const appointment = normalizeAppointment(body, db, db.appointments[index]);
+        const prepared = maybeCreateDogFromAppointment(body, db);
+        const appointment = normalizeAppointment(prepared.payload, db, db.appointments[index]);
         if (!appointment.date || !appointment.startTime || !appointment.dogName) {
           return sendError(res, 400, "Data, orario e cane sono obbligatori");
         }
         db.appointments[index] = appointment;
         writeDb(db);
-        return sendJson(res, 200, { appointment });
+        return sendJson(res, 200, { appointment, dog: prepared.dog });
       }
       if (method === "DELETE") {
         db.appointments.splice(index, 1);

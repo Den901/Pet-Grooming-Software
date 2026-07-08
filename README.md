@@ -1,5 +1,7 @@
 # Toilettatura Manager
 
+Release corrente: `0.0.1 beta 1` (`0.0.1-beta.1`).
+
 Portale web PWA in Node.js per gestire:
 
 - login amministratore e operatori;
@@ -11,6 +13,7 @@ Portale web PWA in Node.js per gestire:
 - ricerca schede;
 - backup cifrato con password e import backup;
 - impostazioni WhatsApp per promemoria appuntamenti;
+- aggiornamento software da file locale o URL web con pacchetto `.pgs-update`;
 - layout desktop, mobile e iPad.
 
 ## Anteprime
@@ -26,6 +29,7 @@ Le immagini del portale sono salvate in `docs/screenshots/` e vanno aggiornate a
 | Storico appuntamenti | ![Storico appuntamenti su iPad](docs/screenshots/storico-appuntamenti-ipad.png) |
 | Identita e WhatsApp | ![Impostazioni identita e WhatsApp su iPad](docs/screenshots/impostazioni-identita-whatsapp-ipad.png) |
 | DuckDNS | ![Impostazioni DuckDNS su iPad](docs/screenshots/impostazioni-duckdns-ipad.png) |
+| Aggiornamento portale | ![Aggiornamento portale su iPad](docs/screenshots/impostazioni-update-ipad.png) |
 
 ## Accesso iniziale
 
@@ -62,6 +66,95 @@ In alternativa:
 sh start-linux.sh
 ```
 
+## Pacchetti installativi
+
+Per creare i pacchetti di distribuzione:
+
+```powershell
+npm.cmd run release:packages
+```
+
+Il comando genera nella cartella `dist/`:
+
+- `Pet-Grooming-Software-0.0.1-beta.1-windows.zip`;
+- `Pet-Grooming-Software-0.0.1-beta.1-linux.tar.gz`;
+- `Pet-Grooming-Software-0.0.1-beta.1.pgs-update`.
+
+Se `npm` non e bloccato dalla policy PowerShell puoi usare anche `npm run release:packages`.
+
+### Installazione Windows
+
+Prerequisito: Node.js 18 o superiore installato sul PC.
+
+1. Estrai `Pet-Grooming-Software-0.0.1-beta.1-windows.zip`.
+2. Apri PowerShell nella cartella estratta. Per installare in `ProgramData` e creare l'avvio automatico e consigliato aprirlo come amministratore.
+3. Per installare in `C:\ProgramData\Pet Grooming Software` e creare l'avvio automatico all'accesso:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -Port 3017 -CreateStartupTask
+```
+
+Se preferisci installare senza privilegi nella cartella utente:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -InstallDir "$env:USERPROFILE\Pet Grooming Software" -Port 3017
+```
+
+Avvio manuale dopo l'installazione standard:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "C:\ProgramData\Pet Grooming Software\start-pet-grooming.ps1"
+```
+
+Per riavviare dopo un update, chiudi la finestra dove gira Node.js e rilancia lo stesso comando di avvio. Se hai usato `-CreateStartupTask`, al prossimo accesso Windows riapre il portale automaticamente.
+
+### Installazione Linux
+
+Prerequisito: Node.js 18 o superiore installato sul server.
+
+1. Copia `Pet-Grooming-Software-0.0.1-beta.1-linux.tar.gz` sul server.
+2. Estrai il pacchetto e entra nella cartella:
+
+```bash
+tar -xzf Pet-Grooming-Software-0.0.1-beta.1-linux.tar.gz
+cd Pet-Grooming-Software-0.0.1-beta.1
+```
+
+3. Installazione consigliata in `/opt` con servizio systemd:
+
+```bash
+chmod +x scripts/install-linux.sh
+INSTALL_DIR=/opt/pet-grooming-software PORT=3017 ./scripts/install-linux.sh
+```
+
+Comandi utili per il servizio:
+
+```bash
+sudo systemctl status pet-grooming-software
+sudo systemctl restart pet-grooming-software
+sudo systemctl stop pet-grooming-software
+```
+
+Installazione manuale senza systemd:
+
+```bash
+chmod +x scripts/install-linux.sh
+INSTALL_DIR="$HOME/pet-grooming-software" PORT=3017 CREATE_SERVICE=0 ./scripts/install-linux.sh
+"$HOME/pet-grooming-software/start-pet-grooming.sh"
+```
+
+Dopo l'installazione apri:
+
+```text
+http://localhost:3017
+```
+
+Da altri dispositivi della rete usa l'IP del computer o server:
+
+```text
+http://IP_DEL_SERVER:3017
+```
+
 ## Indirizzo web
 
 Sul computer dove gira il portale:
@@ -93,6 +186,19 @@ PORT=8080 node server.js
 ## PWA
 
 Il portale include `manifest.json` e `service worker`, quindi puo essere installato dal browser come app. Su dominio pubblico con DuckDNS e dispositivi iPad e consigliato usare HTTPS, perche i browser moderni richiedono HTTPS per installazione PWA completa fuori da `localhost`.
+
+## Release e aggiornamenti
+
+La versione iniziale e `0.0.1 beta 1`. A ogni modifica di release fai avanzare la beta di 1:
+
+```powershell
+npm run release:bump
+npm run release:packages
+```
+
+Il file `.pgs-update` puo essere caricato in una release GitHub oppure scelto localmente da `Impostazioni > Aggiornamento portale`. Il portale accetta solo il formato personalizzato `PET_GROOMING_SOFTWARE_UPDATE` con estensione `.pgs-update`, app id corretto, hash dei file e percorsi software ammessi.
+
+L'aggiornamento non modifica database, foto, backup o `node_modules`. Dopo l'installazione dell'update bisogna riavviare il servizio Node.js.
 
 ## DuckDNS e accesso locale
 
