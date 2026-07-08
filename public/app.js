@@ -1112,7 +1112,7 @@ function renderSettings() {
             <input name="updateFile" type="file" accept=".pgs-update" />
           </label>
           <label class="full">URL update web
-            <input name="updateUrl" type="url" placeholder="https://.../Pet-Grooming-Software-0.0.1-beta.3.pgs-update" />
+            <input name="updateUrl" type="url" value="${escapeAttr(updateCheck?.updateAvailable && updateCheck.packageUrl ? updateCheck.packageUrl : "")}" placeholder="https://.../Pet-Grooming-Software-0.0.1-beta.4.pgs-update" />
           </label>
         </div>
         <p class="settings-note">L'update aggiorna solo il software. Database, foto e backup non vengono toccati. Dopo l'installazione serve riavviare il servizio.</p>
@@ -1331,6 +1331,8 @@ function bindSettings() {
           throw new Error("L'URL deve puntare a un file .pgs-update");
         }
         payload = { url: updateUrl };
+      } else if (state.updateCheck?.updateAvailable && state.updateCheck.packageUrl) {
+        payload = { url: state.updateCheck.packageUrl };
       } else {
         throw new Error("Seleziona un file update o inserisci un URL");
       }
@@ -1349,6 +1351,8 @@ function bindSettings() {
   document.getElementById("installWebUpdateBtn")?.addEventListener("click", async () => {
     if (!state.updateCheck?.packageUrl) return;
     try {
+      const button = document.getElementById("installWebUpdateBtn");
+      if (button) button.disabled = true;
       const response = await api("/api/system/update", {
         method: "POST",
         body: JSON.stringify({ url: state.updateCheck.packageUrl })
@@ -1356,6 +1360,9 @@ function bindSettings() {
       notify(`Update ${response.update.installedVersion || ""} installato: riavvia il servizio`);
     } catch (err) {
       notify(err.message);
+    } finally {
+      const button = document.getElementById("installWebUpdateBtn");
+      if (button) button.disabled = false;
     }
   });
   document.getElementById("restartPortalBtn")?.addEventListener("click", () => {

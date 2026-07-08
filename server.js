@@ -18,7 +18,7 @@ const MAX_UPDATE_BODY_BYTES = 40 * 1024 * 1024;
 const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin123";
 const APP_ID = "pet-grooming-software";
-const APP_VERSION = packageInfo.version || "0.0.1-beta.3";
+const APP_VERSION = packageInfo.version || "0.0.1-beta.4";
 const UPDATE_FORMAT = "PET_GROOMING_SOFTWARE_UPDATE";
 const UPDATE_FORMAT_VERSION = 1;
 const UPDATE_EXTENSION = ".pgs-update";
@@ -656,7 +656,7 @@ function applyUpdatePackage(envelope, fileName) {
   return summary;
 }
 
-function downloadUpdatePackage(updateUrl) {
+function downloadUpdatePackage(updateUrl, sourceFileName = "", redirectCount = 0) {
   return new Promise((resolve, reject) => {
     let parsed;
     try {
@@ -665,14 +665,23 @@ function downloadUpdatePackage(updateUrl) {
       reject(new Error("URL update non valido"));
       return;
     }
-    if (!["http:", "https:"].includes(parsed.protocol) || !isUpdateFileName(parsed.pathname)) {
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      reject(new Error("URL update non valido"));
+      return;
+    }
+    const packageFileName = sourceFileName || path.basename(parsed.pathname);
+    if (!sourceFileName && !isUpdateFileName(packageFileName)) {
       reject(new Error(`L'URL deve puntare a un file ${UPDATE_EXTENSION}`));
+      return;
+    }
+    if (redirectCount > 5) {
+      reject(new Error("Troppi redirect durante il download update"));
       return;
     }
     const client = parsed.protocol === "https:" ? https : http;
     const req = client.get(parsed, { timeout: 15000 }, (response) => {
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-        downloadUpdatePackage(new URL(response.headers.location, parsed).toString()).then(resolve, reject);
+        downloadUpdatePackage(new URL(response.headers.location, parsed).toString(), packageFileName, redirectCount + 1).then(resolve, reject);
         response.resume();
         return;
       }
@@ -693,7 +702,7 @@ function downloadUpdatePackage(updateUrl) {
       });
       response.on("end", () => {
         try {
-          resolve({ fileName: path.basename(parsed.pathname), envelope: JSON.parse(Buffer.concat(chunks).toString("utf8")) });
+          resolve({ fileName: packageFileName, envelope: JSON.parse(Buffer.concat(chunks).toString("utf8")) });
         } catch {
           reject(new Error("Pacchetto update web non valido"));
         }
