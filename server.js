@@ -12,6 +12,8 @@ const DATA_DIR = path.join(ROOT_DIR, "data");
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 const DB_FILE = path.join(DATA_DIR, "db.json");
 const MAX_BODY_BYTES = 16 * 1024 * 1024;
+const DEFAULT_ADMIN_USERNAME = "admin";
+const DEFAULT_ADMIN_PASSWORD = "admin123";
 
 const sessions = new Map();
 
@@ -39,6 +41,15 @@ function defaultSettings() {
       email: "",
       address: "",
       logoUrl: "",
+      loginBackground: {
+        mode: "pattern",
+        solidColor: "#f6f3ed",
+        patternColor: "#f6f3ed",
+        patternAccentColor: "#ded9cf",
+        gradientTop: "#f6f3ed",
+        gradientBottom: "#dfe9e4",
+        imageUrl: ""
+      },
       colors: {
         brand: "#234344",
         brandStrong: "#183233",
@@ -75,10 +86,15 @@ function ensureSettingsShape(settings = {}) {
     ...defaults.branding.colors,
     ...(settings.branding?.colors || {})
   };
+  const loginBackground = {
+    ...defaults.branding.loginBackground,
+    ...(settings.branding?.loginBackground || {})
+  };
   return {
     branding: {
       ...defaults.branding,
       ...(settings.branding || {}),
+      loginBackground,
       colors
     },
     duckdns: {
@@ -95,18 +111,20 @@ function ensureSettingsShape(settings = {}) {
 function ensureStorage() {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
   if (!fs.existsSync(DB_FILE)) {
-    const adminPassword = makePassword("admin123");
+    const adminPassword = makePassword(DEFAULT_ADMIN_PASSWORD);
     const userPassword = makePassword("operatore123");
     const now = new Date().toISOString();
     const db = {
       users: [
         {
           id: crypto.randomUUID(),
-          username: "admin",
+          username: DEFAULT_ADMIN_USERNAME,
           displayName: "Amministratore",
           role: "admin",
           active: true,
           createdAt: now,
+          mustChangePassword: true,
+          defaultPassword: true,
           passwordHash: adminPassword.hash,
           passwordSalt: adminPassword.salt
         },
@@ -136,6 +154,7 @@ function readDb() {
   db.dogs ||= [];
   db.appointments ||= [];
   db.settings = ensureSettingsShape(db.settings);
+  if (ensureUserSecurityFlags(db)) writeDb(db);
   return db;
 }
 
@@ -157,6 +176,34 @@ function verifyPassword(password, user) {
   return storedBuffer.length === testBuffer.length && crypto.timingSafeEqual(storedBuffer, testBuffer);
 }
 
+function isDefaultAdminUser(user) {
+  return user?.username === DEFAULT_ADMIN_USERNAME && user.role === "admin" && verifyPassword(DEFAULT_ADMIN_PASSWORD, user);
+}
+
+function acceptsDefaultAdminPassword(user, password) {
+  const compactPassword = cleanString(password).replace(/\s+/g, "");
+  return isDefaultAdminUser(user) && compactPassword === DEFAULT_ADMIN_PASSWORD;
+}
+
+function ensureUserSecurityFlags(db) {
+  let changed = false;
+  for (const user of db.users) {
+    if (!user || user.username !== DEFAULT_ADMIN_USERNAME || user.role !== "admin") continue;
+    if (isDefaultAdminUser(user)) {
+      if (user.mustChangePassword !== true || user.defaultPassword !== true) {
+        user.mustChangePassword = true;
+        user.defaultPassword = true;
+        changed = true;
+      }
+    } else if (user.defaultPassword || user.mustChangePassword) {
+      user.defaultPassword = false;
+      user.mustChangePassword = false;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 function publicUser(user) {
   if (!user) return null;
   return {
@@ -165,6 +212,8 @@ function publicUser(user) {
     displayName: user.displayName,
     role: user.role,
     active: Boolean(user.active),
+    mustChangePassword: Boolean(user.mustChangePassword),
+    defaultPassword: Boolean(user.defaultPassword),
     createdAt: user.createdAt,
     updatedAt: user.updatedAt
   };
@@ -254,7 +303,8 @@ function cleanString(value, fallback = "") {
 }
 
 function cleanNumber(value, fallback = 0) {
-  const number = Number(value);
+  const normalized = typeof value === "string" ? value.trim().replace(",", ".") : value;
+  const number = Number(normalized);
   return Number.isFinite(number) && number >= 0 ? number : fallback;
 }
 
@@ -268,6 +318,20 @@ function stringField(payload, key, existing = "") {
 
 function numberField(payload, key, existing = 0) {
   return hasField(payload, key) ? cleanNumber(payload[key], 0) : cleanNumber(existing, 0);
+}
+
+function firstStringField(payload, keys, existing = "") {
+  for (const key of keys) {
+    if (hasField(payload, key)) return cleanString(payload[key]);
+  }
+  return cleanString(existing);
+}
+
+function firstNumberField(payload, keys, existing = 0) {
+  for (const key of keys) {
+    if (hasField(payload, key)) return cleanNumber(payload[key], 0);
+  }
+  return cleanNumber(existing, 0);
 }
 
 function cleanHexColor(value, fallback) {
@@ -296,6 +360,15 @@ function publicBrandingSettings(db) {
     email: cleanString(branding.email),
     address: cleanString(branding.address),
     logoUrl: cleanString(branding.logoUrl),
+    loginBackground: {
+      mode: ["pattern", "solid", "gradient", "image"].includes(branding.loginBackground?.mode) ? branding.loginBackground.mode : "pattern",
+      solidColor: cleanHexColor(branding.loginBackground?.solidColor, "#f6f3ed"),
+      patternColor: cleanHexColor(branding.loginBackground?.patternColor, "#f6f3ed"),
+      patternAccentColor: cleanHexColor(branding.loginBackground?.patternAccentColor, "#ded9cf"),
+      gradientTop: cleanHexColor(branding.loginBackground?.gradientTop, "#f6f3ed"),
+      gradientBottom: cleanHexColor(branding.loginBackground?.gradientBottom, "#dfe9e4"),
+      imageUrl: cleanString(branding.loginBackground?.imageUrl)
+    },
     colors: {
       brand: cleanHexColor(branding.colors?.brand, "#234344"),
       brandStrong: cleanHexColor(branding.colors?.brandStrong, "#183233"),
@@ -504,6 +577,10 @@ function normalizeAppointment(payload, db, existing = {}) {
   const id = existing.id || crypto.randomUUID();
   const dogId = stringField(payload, "dogId", existing.dogId);
   const dog = dogId ? db.dogs.find((item) => item.id === dogId) : null;
+  const service = stringField(payload, "service", existing.service);
+  const status = ["programmato", "confermato", "completato", "annullato"].includes(payload.status) ? payload.status : existing.status || "programmato";
+  let treatmentDone = firstStringField(payload, ["treatmentDone", "treatment", "performedTreatment"], existing.treatmentDone);
+  if (status === "completato" && !treatmentDone) treatmentDone = service;
   return {
     id,
     dogId,
@@ -513,10 +590,10 @@ function normalizeAppointment(payload, db, existing = {}) {
     date: stringField(payload, "date", existing.date),
     startTime: stringField(payload, "startTime", existing.startTime),
     endTime: stringField(payload, "endTime", existing.endTime),
-    service: stringField(payload, "service", existing.service),
-    treatmentDone: stringField(payload, "treatmentDone", existing.treatmentDone),
-    paidAmount: numberField(payload, "paidAmount", existing.paidAmount),
-    status: ["programmato", "confermato", "completato", "annullato"].includes(payload.status) ? payload.status : existing.status || "programmato",
+    service,
+    treatmentDone,
+    paidAmount: firstNumberField(payload, ["paidAmount", "amountPaid", "amount", "price"], existing.paidAmount),
+    status,
     notes: stringField(payload, "notes", existing.notes),
     createdAt: existing.createdAt || now,
     updatedAt: now
@@ -541,7 +618,8 @@ async function handleApi(req, res, url) {
     if (url.pathname === "/api/login" && method === "POST") {
       const body = await readBody(req);
       const foundUser = db.users.find((item) => item.username.toLowerCase() === cleanString(body.username).toLowerCase());
-      if (!foundUser || !foundUser.active || !verifyPassword(body.password || "", foundUser)) {
+      const passwordMatches = foundUser && (verifyPassword(body.password || "", foundUser) || acceptsDefaultAdminPassword(foundUser, body.password || ""));
+      if (!foundUser || !foundUser.active || !passwordMatches) {
         return sendError(res, 401, "Credenziali non valide");
       }
       setSession(res, foundUser);
@@ -559,6 +637,30 @@ async function handleApi(req, res, url) {
 
     if (!user) return sendError(res, 401, "Accesso richiesto");
 
+    if (url.pathname === "/api/me/password" && method === "POST") {
+      const body = await readBody(req);
+      const target = db.users.find((item) => item.id === user.id && item.active);
+      if (!target) return sendError(res, 401, "Accesso richiesto");
+      const newPassword = cleanString(body.newPassword);
+      const confirmPassword = cleanString(body.confirmPassword);
+      if (!target.mustChangePassword && !verifyPassword(body.currentPassword || "", target)) {
+        return sendError(res, 401, "Password attuale non corretta");
+      }
+      if (newPassword.length < 8) return sendError(res, 400, "La nuova password deve avere almeno 8 caratteri");
+      if (confirmPassword && confirmPassword !== newPassword) return sendError(res, 400, "Le password non coincidono");
+      if (newPassword.replace(/\s+/g, "") === DEFAULT_ADMIN_PASSWORD) {
+        return sendError(res, 400, "Scegli una password diversa da quella di default");
+      }
+      const passwordInfo = makePassword(newPassword);
+      target.passwordHash = passwordInfo.hash;
+      target.passwordSalt = passwordInfo.salt;
+      target.mustChangePassword = false;
+      target.defaultPassword = false;
+      target.updatedAt = new Date().toISOString();
+      writeDb(db);
+      return sendJson(res, 200, { user: publicUser(target) });
+    }
+
     if (parts[1] === "settings" && parts[2] === "branding") {
       if (user.role !== "admin") return sendError(res, 403, "Solo amministratore");
       if (method === "GET") {
@@ -568,7 +670,12 @@ async function handleApi(req, res, url) {
         const body = await readBody(req);
         const current = db.settings.branding || {};
         const currentColors = current.colors || {};
+        const currentLoginBackground = current.loginBackground || {};
         const logoUrl = savePhoto(body.logoData, "branding-logo") || (body.clearLogo === true ? "" : current.logoUrl || "");
+        const loginBackgroundImageUrl =
+          savePhoto(body.loginBackgroundImageData, "login-background") ||
+          (body.clearLoginBackgroundImage === true ? "" : currentLoginBackground.imageUrl || "");
+        const requestedLoginBackground = body.loginBackground || {};
         db.settings.branding = {
           ...current,
           portalName: cleanString(body.portalName) || "Toilettatura Manager",
@@ -579,6 +686,17 @@ async function handleApi(req, res, url) {
           email: cleanString(body.email),
           address: cleanString(body.address),
           logoUrl,
+          loginBackground: {
+            mode: ["pattern", "solid", "gradient", "image"].includes(requestedLoginBackground.mode)
+              ? requestedLoginBackground.mode
+              : currentLoginBackground.mode || "pattern",
+            solidColor: cleanHexColor(requestedLoginBackground.solidColor, currentLoginBackground.solidColor || "#f6f3ed"),
+            patternColor: cleanHexColor(requestedLoginBackground.patternColor, currentLoginBackground.patternColor || "#f6f3ed"),
+            patternAccentColor: cleanHexColor(requestedLoginBackground.patternAccentColor, currentLoginBackground.patternAccentColor || "#ded9cf"),
+            gradientTop: cleanHexColor(requestedLoginBackground.gradientTop, currentLoginBackground.gradientTop || "#f6f3ed"),
+            gradientBottom: cleanHexColor(requestedLoginBackground.gradientBottom, currentLoginBackground.gradientBottom || "#dfe9e4"),
+            imageUrl: loginBackgroundImageUrl
+          },
           colors: {
             brand: cleanHexColor(body.colors?.brand, currentColors.brand || "#234344"),
             brandStrong: cleanHexColor(body.colors?.brandStrong, currentColors.brandStrong || "#183233"),

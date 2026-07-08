@@ -38,6 +38,7 @@ async function boot() {
     }
     await loadData();
     renderShell();
+    promptDefaultPasswordChange();
   } catch {
     renderLogin();
   }
@@ -77,6 +78,15 @@ function getBranding() {
     email: "",
     address: "",
     logoUrl: "",
+    loginBackground: {
+      mode: "pattern",
+      solidColor: "#f6f3ed",
+      patternColor: "#f6f3ed",
+      patternAccentColor: "#ded9cf",
+      gradientTop: "#f6f3ed",
+      gradientBottom: "#dfe9e4",
+      imageUrl: ""
+    },
     colors: {
       brand: "#234344",
       brandStrong: "#183233",
@@ -86,6 +96,16 @@ function getBranding() {
       text: "#162625"
     },
     ...(state.branding || {}),
+    loginBackground: {
+      mode: "pattern",
+      solidColor: "#f6f3ed",
+      patternColor: "#f6f3ed",
+      patternAccentColor: "#ded9cf",
+      gradientTop: "#f6f3ed",
+      gradientBottom: "#dfe9e4",
+      imageUrl: "",
+      ...(state.branding?.loginBackground || {})
+    },
     colors: {
       brand: "#234344",
       brandStrong: "#183233",
@@ -101,6 +121,7 @@ function getBranding() {
 function applyBranding() {
   const branding = getBranding();
   const colors = branding.colors;
+  const loginBackground = loginBackgroundCss(branding.loginBackground, colors);
   document.title = branding.portalName || "Toilettatura Manager";
   const variables = {
     "--brand": colors.brand,
@@ -108,11 +129,60 @@ function applyBranding() {
     "--accent": colors.accent,
     "--bg": colors.background,
     "--panel": colors.panel,
-    "--ink": colors.text
+    "--ink": colors.text,
+    "--login-background": loginBackground.background,
+    "--login-background-size": loginBackground.size,
+    "--login-background-position": loginBackground.position
   };
   for (const [key, value] of Object.entries(variables)) {
-    if (/^#[0-9a-f]{6}$/i.test(value)) document.documentElement.style.setProperty(key, value);
+    if (key.startsWith("--login-") || /^#[0-9a-f]{6}$/i.test(value)) document.documentElement.style.setProperty(key, value);
   }
+}
+
+function loginBackgroundCss(loginBackground = {}, colors = {}) {
+  const mode = ["pattern", "solid", "gradient", "image"].includes(loginBackground.mode) ? loginBackground.mode : "pattern";
+  const solid = safeHex(loginBackground.solidColor, colors.background || "#f6f3ed");
+  const patternBase = safeHex(loginBackground.patternColor, solid);
+  const patternAccent = safeHex(loginBackground.patternAccentColor, colors.accent || "#cf6155");
+  const top = safeHex(loginBackground.gradientTop, solid);
+  const bottom = safeHex(loginBackground.gradientBottom, colors.brand || "#234344");
+  const imageUrl = safeCssUrl(loginBackground.imageUrl);
+  if (mode === "solid") {
+    return { background: solid, size: "cover", position: "center" };
+  }
+  if (mode === "gradient") {
+    return { background: `linear-gradient(180deg, ${top} 0%, ${bottom} 100%)`, size: "cover", position: "center" };
+  }
+  if (mode === "image" && imageUrl) {
+    return {
+      background: `linear-gradient(rgba(246, 243, 237, 0.16), rgba(246, 243, 237, 0.16)), url("${imageUrl}")`,
+      size: "cover",
+      position: "center"
+    };
+  }
+  return {
+    background: `radial-gradient(circle at 16px 16px, ${hexToRgba(patternAccent, 0.32)} 2px, transparent 2.5px), ${patternBase}`,
+    size: "32px 32px, cover",
+    position: "center"
+  };
+}
+
+function safeHex(value, fallback) {
+  return /^#[0-9a-f]{6}$/i.test(String(value || "")) ? value : fallback;
+}
+
+function hexToRgba(hex, alpha) {
+  const clean = safeHex(hex, "#000000").slice(1);
+  const red = parseInt(clean.slice(0, 2), 16);
+  const green = parseInt(clean.slice(2, 4), 16);
+  const blue = parseInt(clean.slice(4, 6), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function safeCssUrl(value) {
+  const url = String(value || "");
+  if (!url.startsWith("/uploads/")) return "";
+  return url.replace(/["\\\n\r]/g, "");
 }
 
 function renderBrandMark(className) {
@@ -185,8 +255,49 @@ function renderLogin(error = "") {
       await loadData();
       renderShell();
       notify("Accesso effettuato");
+      promptDefaultPasswordChange();
     } catch (err) {
       renderLogin(err.message);
+    }
+  });
+}
+
+function promptDefaultPasswordChange() {
+  if (!state.me?.mustChangePassword) return;
+  openDefaultPasswordDialog();
+}
+
+function openDefaultPasswordDialog() {
+  openModal({
+    title: "Cambio password admin",
+    submitLabel: "Aggiorna password",
+    preventClose: true,
+    content: `
+      <div class="warning-box">
+        La password dell'amministratore e ancora quella di default: <strong>admin123</strong>.
+        Per sicurezza cambiala adesso prima di usare il portale.
+      </div>
+      <div class="form-grid">
+        <label class="full">Nuova password
+          <input name="newPassword" type="password" minlength="8" autocomplete="new-password" required />
+        </label>
+        <label class="full">Ripeti nuova password
+          <input name="confirmPassword" type="password" minlength="8" autocomplete="new-password" required />
+        </label>
+      </div>
+    `,
+    onSubmit: async (formData) => {
+      const response = await api("/api/me/password", {
+        method: "POST",
+        body: JSON.stringify({
+          newPassword: formData.get("newPassword"),
+          confirmPassword: formData.get("confirmPassword")
+        })
+      });
+      state.me = response.user;
+      await loadData();
+      renderShell();
+      notify("Password admin aggiornata");
     }
   });
 }
@@ -373,11 +484,19 @@ function renderWeekCalendar() {
 }
 
 function renderAppointmentPill(appointment) {
+  const isCompleted = appointment.status === "completato";
   return `
-    <button class="appt-pill status-${escapeHtml(appointment.status)}" type="button" data-appointment-id="${appointment.id}">
-      <span>${escapeHtml(appointment.startTime || "--")}</span>
-      <small>${escapeHtml(appointment.dogName || "Senza nome")}</small>
-    </button>
+    <div class="appt-row status-${escapeHtml(appointment.status)}">
+      <button class="appt-pill" type="button" data-appointment-id="${appointment.id}">
+        <span>${escapeHtml(appointment.startTime || "--")}</span>
+        <small>${escapeHtml(appointment.dogName || "Senza nome")}</small>
+      </button>
+      ${
+        isCompleted
+          ? `<span class="appt-complete done" title="Prestazione completata" aria-label="Prestazione completata">&#10003;</span>`
+          : `<button class="appt-complete" type="button" data-complete-appointment-id="${appointment.id}" title="Concludi prestazione" aria-label="Concludi prestazione">&#10003;</button>`
+      }
+    </div>
   `;
 }
 
@@ -414,6 +533,13 @@ function bindCalendar() {
     button.addEventListener("click", () => {
       const appointment = state.appointments.find((item) => item.id === button.dataset.appointmentId);
       openAppointmentDialog(appointment);
+    });
+  });
+  document.querySelectorAll("[data-complete-appointment-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const appointment = state.appointments.find((item) => item.id === button.dataset.completeAppointmentId);
+      if (!appointment) return;
+      openAppointmentDialog(appointment, { completionMode: true });
     });
   });
 }
@@ -527,6 +653,7 @@ function bindUsers() {
 
 function renderSettings() {
   const branding = getBranding();
+  const loginBackground = branding.loginBackground;
   const whatsapp = state.whatsapp || {};
   const duckdns = state.duckdns || {};
   const localUrls = duckdns.localUrls || [];
@@ -578,6 +705,41 @@ function renderSettings() {
             <input name="clearLogo" type="checkbox" />
             Rimuovi logo
           </label>
+        </div>
+        <div class="login-bg-settings">
+          <h3>Sfondo login</h3>
+          <div class="form-grid">
+            <label>Tipo sfondo
+              <select name="loginBackgroundMode" data-login-bg-mode>
+                <option value="pattern" ${loginBackground.mode === "pattern" ? "selected" : ""}>Pattern</option>
+                <option value="solid" ${loginBackground.mode === "solid" ? "selected" : ""}>Colore singolo</option>
+                <option value="gradient" ${loginBackground.mode === "gradient" ? "selected" : ""}>Sfumatura sopra/sotto</option>
+                <option value="image" ${loginBackground.mode === "image" ? "selected" : ""}>Immagine di sfondo</option>
+              </select>
+            </label>
+            <label data-login-bg-panel="solid">Colore singolo
+              <input name="loginSolidColor" type="color" value="${escapeAttr(loginBackground.solidColor)}" />
+            </label>
+            <label data-login-bg-panel="pattern">Colore pattern
+              <input name="loginPatternColor" type="color" value="${escapeAttr(loginBackground.patternColor)}" />
+            </label>
+            <label data-login-bg-panel="pattern">Dettaglio pattern
+              <input name="loginPatternAccentColor" type="color" value="${escapeAttr(loginBackground.patternAccentColor)}" />
+            </label>
+            <label data-login-bg-panel="gradient">Colore sopra
+              <input name="loginGradientTop" type="color" value="${escapeAttr(loginBackground.gradientTop)}" />
+            </label>
+            <label data-login-bg-panel="gradient">Colore sotto
+              <input name="loginGradientBottom" type="color" value="${escapeAttr(loginBackground.gradientBottom)}" />
+            </label>
+            <label data-login-bg-panel="image">Immagine sfondo
+              <input name="loginBackgroundImage" type="file" accept="image/png,image/jpeg,image/webp" />
+            </label>
+            <label class="checkbox-line" data-login-bg-panel="image">
+              <input name="clearLoginBackgroundImage" type="checkbox" />
+              Rimuovi immagine sfondo
+            </label>
+          </div>
         </div>
         <div class="color-grid">
           <label>Colore principale
@@ -729,11 +891,14 @@ function renderSettings() {
 }
 
 function bindSettings() {
+  bindLoginBackgroundMode(document.getElementById("brandingForm"));
+
   document.getElementById("brandingForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
     const logo = form.elements.logo.files[0];
+    const loginBackgroundImage = form.elements.loginBackgroundImage.files[0];
     const payload = {
       portalName: data.get("portalName"),
       businessName: data.get("businessName"),
@@ -743,6 +908,15 @@ function bindSettings() {
       email: data.get("email"),
       address: data.get("address"),
       clearLogo: data.get("clearLogo") === "on",
+      clearLoginBackgroundImage: data.get("clearLoginBackgroundImage") === "on",
+      loginBackground: {
+        mode: data.get("loginBackgroundMode"),
+        solidColor: data.get("loginSolidColor"),
+        patternColor: data.get("loginPatternColor"),
+        patternAccentColor: data.get("loginPatternAccentColor"),
+        gradientTop: data.get("loginGradientTop"),
+        gradientBottom: data.get("loginGradientBottom")
+      },
       colors: {
         brand: data.get("brand"),
         brandStrong: data.get("brandStrong"),
@@ -753,6 +927,7 @@ function bindSettings() {
       }
     };
     if (logo) payload.logoData = await fileToDataUrl(logo);
+    if (loginBackgroundImage) payload.loginBackgroundImageData = await fileToDataUrl(loginBackgroundImage);
     try {
       const response = await api("/api/settings/branding", {
         method: "PUT",
@@ -874,6 +1049,18 @@ function bindSettings() {
   });
 }
 
+function bindLoginBackgroundMode(form) {
+  const modeSelect = form.querySelector("[data-login-bg-mode]");
+  const sync = () => {
+    const mode = modeSelect.value || "pattern";
+    form.querySelectorAll("[data-login-bg-panel]").forEach((field) => {
+      field.hidden = field.dataset.loginBgPanel !== mode;
+    });
+  };
+  modeSelect.addEventListener("change", sync);
+  sync();
+}
+
 function openDogDetailsDialog(dog = {}) {
   const history = dogAppointmentHistory(dog);
   const photo = dog.photoUrl
@@ -910,7 +1097,7 @@ function openDogDetailsDialog(dog = {}) {
             </div>
           </div>
           <div class="modal-inline-actions">
-            <button class="btn" type="button" data-detail-done-appointment="${dog.id}">Appuntamento fatto</button>
+            <button class="btn" type="button" data-detail-done-appointment="${dog.id}">Concludi prestazione</button>
             <button class="btn secondary" type="button" data-detail-appointment="${dog.id}">Nuovo appuntamento</button>
             <button class="btn secondary" type="button" data-detail-delete="${dog.id}">Elimina</button>
           </div>
@@ -956,7 +1143,7 @@ function openDogDetailsDialog(dog = {}) {
           contact: freshDog.contact,
           service: "Toilettatura",
           status: "completato"
-        });
+        }, { completionMode: true });
       });
       deleteButton?.addEventListener("click", () => {
         const freshDog = state.dogs.find((item) => item.id === dog.id) || dog;
@@ -1063,14 +1250,19 @@ function openDogDialog(dog = {}) {
   });
 }
 
-function openAppointmentDialog(appointment = {}) {
+function openAppointmentDialog(appointment = {}, options = {}) {
   const isEdit = Boolean(appointment.id);
-  const isDoneEntry = !isEdit && appointment.status === "completato";
+  const completionMode = Boolean(options.completionMode) || (!isEdit && appointment.status === "completato");
+  const currentStatus = completionMode ? "completato" : appointment.status || "programmato";
   const selectedDog = appointment.dogId ? state.dogs.find((dog) => dog.id === appointment.dogId) : null;
   openModal({
-    title: isEdit ? "Modifica appuntamento" : isDoneEntry ? "Nuovo appuntamento fatto" : "Nuovo appuntamento",
-    submitLabel: isEdit ? "Salva appuntamento" : isDoneEntry ? "Salva nello storico" : "Crea appuntamento",
+    title: completionMode ? "Concludi prestazione" : isEdit ? "Modifica appuntamento" : "Nuovo appuntamento",
+    submitLabel: completionMode ? "Salva prestazione" : isEdit ? "Salva appuntamento" : "Crea appuntamento",
     dangerLabel: isEdit ? "Elimina" : "",
+    extraActions:
+      isEdit && currentStatus !== "completato"
+        ? `<button class="btn secondary" type="button" data-complete-form>Concludi prestazione</button>`
+        : "",
     content: `
       <div class="form-grid">
         <label>Data
@@ -1079,7 +1271,7 @@ function openAppointmentDialog(appointment = {}) {
         <label>Stato
           <select name="status">
             ${["programmato", "confermato", "completato", "annullato"]
-              .map((status) => `<option value="${status}" ${appointment.status === status ? "selected" : ""}>${statusLabel(status)}</option>`)
+              .map((status) => `<option value="${status}" ${currentStatus === status ? "selected" : ""}>${statusLabel(status)}</option>`)
               .join("")}
           </select>
         </label>
@@ -1121,6 +1313,15 @@ function openAppointmentDialog(appointment = {}) {
       </div>
     `,
     onOpen: (form) => {
+      if (completionMode && !form.elements.treatmentDone.value) {
+        form.elements.treatmentDone.value = form.elements.service.value || "Toilettatura";
+      }
+      modalRoot.querySelector("[data-complete-form]")?.addEventListener("click", () => {
+        form.elements.status.value = "completato";
+        if (!form.elements.treatmentDone.value) form.elements.treatmentDone.value = form.elements.service.value || "Toilettatura";
+        form.elements.treatmentDone.focus();
+        notify("Completa trattamento e importo, poi salva la prestazione");
+      });
       form.elements.dogId.addEventListener("change", () => {
         const dog = state.dogs.find((item) => item.id === form.elements.dogId.value);
         if (!dog) return;
@@ -1137,6 +1338,8 @@ function openAppointmentDialog(appointment = {}) {
     },
     onSubmit: async (formData) => {
       const payload = Object.fromEntries(formData.entries());
+      if (completionMode) payload.status = "completato";
+      if (payload.status === "completato" && !payload.treatmentDone) payload.treatmentDone = payload.service || "Toilettatura";
       await api(isEdit ? `/api/appointments/${appointment.id}` : "/api/appointments", {
         method: isEdit ? "PUT" : "POST",
         body: JSON.stringify(payload)
@@ -1144,7 +1347,7 @@ function openAppointmentDialog(appointment = {}) {
       await loadData();
       state.calendarDate = parseISODate(payload.date);
       renderView();
-      notify(isEdit ? "Appuntamento aggiornato" : "Appuntamento creato");
+      notify(payload.status === "completato" ? "Prestazione conclusa" : isEdit ? "Appuntamento aggiornato" : "Appuntamento creato");
     }
   });
 }
@@ -1196,7 +1399,20 @@ function openUserDialog(user = {}) {
   });
 }
 
-function openModal({ title, content, submitLabel = "Salva", dangerLabel = "", headerAction = "", hideActions = false, onSubmit, onDanger, onOpen, onHeaderAction }) {
+function openModal({
+  title,
+  content,
+  submitLabel = "Salva",
+  dangerLabel = "",
+  headerAction = "",
+  extraActions = "",
+  hideActions = false,
+  preventClose = false,
+  onSubmit,
+  onDanger,
+  onOpen,
+  onHeaderAction
+}) {
   modalRoot.innerHTML = `
     <div class="modal-backdrop" role="presentation">
       <form class="modal-card" role="dialog" aria-modal="true">
@@ -1205,7 +1421,7 @@ function openModal({ title, content, submitLabel = "Salva", dangerLabel = "", he
             <h2>${escapeHtml(title)}</h2>
             ${headerAction}
           </div>
-          <button class="modal-close" type="button" data-close aria-label="Chiudi">x</button>
+          ${preventClose ? "" : `<button class="modal-close" type="button" data-close aria-label="Chiudi">x</button>`}
         </div>
         <div class="modal-body">${content}</div>
         ${
@@ -1213,7 +1429,8 @@ function openModal({ title, content, submitLabel = "Salva", dangerLabel = "", he
             ? ""
             : `<div class="modal-actions">
                 ${dangerLabel ? `<button class="btn danger" type="button" data-danger>${escapeHtml(dangerLabel)}</button>` : ""}
-                <button class="btn secondary" type="button" data-close>Annulla</button>
+                ${extraActions}
+                ${preventClose ? "" : `<button class="btn secondary" type="button" data-close>Annulla</button>`}
                 <button class="btn" type="submit">${escapeHtml(submitLabel)}</button>
               </div>`
         }
@@ -1223,7 +1440,7 @@ function openModal({ title, content, submitLabel = "Salva", dangerLabel = "", he
   const form = modalRoot.querySelector("form");
   modalRoot.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", closeModal));
   modalRoot.querySelector(".modal-backdrop").addEventListener("click", (event) => {
-    if (event.target.classList.contains("modal-backdrop")) closeModal();
+    if (!preventClose && event.target.classList.contains("modal-backdrop")) closeModal();
   });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
