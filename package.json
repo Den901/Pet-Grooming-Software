@@ -1,0 +1,13 @@
+{
+  "name": "toilettatura-portal",
+  "version": "1.0.0",
+  "description": "Portale PWA per gestione appuntamenti e schede di toilettatura.",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "name": "Toilettatura Manager",
+  "short_name": "Toilettatura",
+  "description": "Portale PWA per appuntamenti, schede animali, utenti e backup.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f3ed",
+  "theme_color": "#234344",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Calendario",
+      "url": "/?view=calendar"
+    },
+    {
+      "name": "Schede",
+      "url": "/?view=dogs"
+    }
+  ]
+}
