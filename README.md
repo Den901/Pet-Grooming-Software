@@ -3,7 +3,7 @@
 Portale web PWA in Node.js per gestire:
 
 - login amministratore e operatori;
-- personalizzazione logo, colori, sfondo login, nome portale e dati azienda;
+- personalizzazione logo, colori, tema chiaro/scuro, sfondo login, nome portale e dati azienda;
 - calendario appuntamenti;
 - schede animali con foto, proprietario, contatto, patologie, tempi stimati e note;
 - storico appuntamenti a menu nella scheda cane con trattamento eseguito e importo pagato;
@@ -116,6 +116,7 @@ Per l'accesso web serve che il router inoltri la porta verso il computer dove gi
 In `Impostazioni` puoi personalizzare:
 
 - logo;
+- tema chiaro, scuro o palette personalizzata;
 - sfondo login con pattern, colore singolo, immagine o sfumatura verticale a due colori;
 - nome portale;
 - nome azienda;

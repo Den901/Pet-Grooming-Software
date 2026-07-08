@@ -33,6 +33,7 @@ const mimeTypes = {
 function defaultSettings() {
   return {
     branding: {
+      theme: "light",
       portalName: "Toilettatura Manager",
       businessName: "Toilettatura",
       tagline: "Agenda e schede clienti",
@@ -94,6 +95,7 @@ function ensureSettingsShape(settings = {}) {
     branding: {
       ...defaults.branding,
       ...(settings.branding || {}),
+      theme: ["light", "dark", "custom"].includes(settings.branding?.theme) ? settings.branding.theme : defaults.branding.theme,
       loginBackground,
       colors
     },
@@ -352,6 +354,7 @@ function savePhoto(dataUri, id) {
 function publicBrandingSettings(db) {
   const branding = ensureSettingsShape(db.settings).branding;
   return {
+    theme: ["light", "dark", "custom"].includes(branding.theme) ? branding.theme : "light",
     portalName: cleanString(branding.portalName) || "Toilettatura Manager",
     businessName: cleanString(branding.businessName) || "Toilettatura",
     tagline: cleanString(branding.tagline) || "Agenda e schede clienti",
@@ -678,6 +681,7 @@ async function handleApi(req, res, url) {
         const requestedLoginBackground = body.loginBackground || {};
         db.settings.branding = {
           ...current,
+          theme: ["light", "dark", "custom"].includes(body.theme) ? body.theme : current.theme || "light",
           portalName: cleanString(body.portalName) || "Toilettatura Manager",
           businessName: cleanString(body.businessName) || "Toilettatura",
           tagline: cleanString(body.tagline),

@@ -34,6 +34,10 @@ body {
   background: var(--bg);
 }
 
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
 button,
 input,
 select,
@@ -61,6 +65,13 @@ textarea {
   background: #fff;
   color: var(--ink);
   outline: none;
+}
+
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea {
+  background: #0d171a;
+  color: var(--ink);
 }
 
 textarea {
@@ -107,8 +118,8 @@ label {
 }
 
 .brand-mark {
-  width: 58px;
-  height: 58px;
+  width: 86px;
+  height: 86px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -218,8 +229,8 @@ label {
 }
 
 .sidebar-logo {
-  width: 42px;
-  height: 42px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -230,8 +241,8 @@ label {
 }
 
 .settings-logo-preview {
-  width: 64px;
-  height: 64px;
+  width: 78px;
+  height: 78px;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -1236,6 +1247,75 @@ label {
 
 .muted {
   color: var(--muted);
+}
+
+:root[data-theme="dark"] .login-panel,
+:root[data-theme="dark"] .modal-card,
+:root[data-theme="dark"] .day-cell,
+:root[data-theme="dark"] .table-card,
+:root[data-theme="dark"] .history-item,
+:root[data-theme="dark"] .settings-panel,
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .card,
+:root[data-theme="dark"] .empty-state {
+  background: var(--panel);
+  color: var(--ink);
+}
+
+:root[data-theme="dark"] .metric,
+:root[data-theme="dark"] .detail-item,
+:root[data-theme="dark"] .access-box,
+:root[data-theme="dark"] .dog-history,
+:root[data-theme="dark"] .empty-history,
+:root[data-theme="dark"] .modal-actions,
+:root[data-theme="dark"] .calendar-weekdays,
+:root[data-theme="dark"] .segmented,
+:root[data-theme="dark"] .btn.secondary,
+:root[data-theme="dark"] .modal-close,
+:root[data-theme="dark"] .icon-btn,
+:root[data-theme="dark"] .history-summary::after,
+:root[data-theme="dark"] .history-edit,
+:root[data-theme="dark"] .add-day,
+:root[data-theme="dark"] .role-pill,
+:root[data-theme="dark"] .state-pill {
+  background: var(--panel-soft);
+  color: var(--ink);
+}
+
+:root[data-theme="dark"] .calendar-grid,
+:root[data-theme="dark"] .calendar-weekdays,
+:root[data-theme="dark"] .day-cell,
+:root[data-theme="dark"] .history-item,
+:root[data-theme="dark"] .detail-item,
+:root[data-theme="dark"] .access-box,
+:root[data-theme="dark"] .metric {
+  border-color: var(--line);
+}
+
+:root[data-theme="dark"] .appt-row,
+:root[data-theme="dark"] .state-pill.active {
+  background: rgba(104, 183, 173, 0.14);
+}
+
+:root[data-theme="dark"] .status-confermato {
+  background: rgba(93, 143, 183, 0.16);
+}
+
+:root[data-theme="dark"] .status-completato {
+  background: rgba(104, 183, 173, 0.14);
+}
+
+:root[data-theme="dark"] .status-annullato {
+  background: rgba(229, 138, 125, 0.14);
+}
+
+:root[data-theme="dark"] .appt-complete {
+  background: #0d171a;
+}
+
+:root[data-theme="dark"] .segmented button.active {
+  background: var(--panel);
+  color: var(--ink);
 }
 
 @media (max-width: 1024px) {

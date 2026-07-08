@@ -19,6 +19,24 @@ const state = {
 const weekdayShort = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 const formatter = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "2-digit", month: "short" });
 const monthFormatter = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" });
+const THEME_PRESETS = {
+  light: {
+    brand: "#234344",
+    brandStrong: "#183233",
+    accent: "#cf6155",
+    background: "#f6f3ed",
+    panel: "#ffffff",
+    text: "#162625"
+  },
+  dark: {
+    brand: "#68b7ad",
+    brandStrong: "#0b1518",
+    accent: "#e58a7d",
+    background: "#081012",
+    panel: "#121d20",
+    text: "#eef7f3"
+  }
+};
 
 boot();
 
@@ -70,6 +88,7 @@ async function api(path, options = {}) {
 
 function getBranding() {
   return {
+    theme: "light",
     portalName: "Toilettatura Manager",
     businessName: "Toilettatura",
     tagline: "Agenda e schede clienti",
@@ -96,6 +115,7 @@ function getBranding() {
       text: "#162625"
     },
     ...(state.branding || {}),
+    theme: ["light", "dark", "custom"].includes(state.branding?.theme) ? state.branding.theme : "light",
     loginBackground: {
       mode: "pattern",
       solidColor: "#f6f3ed",
@@ -121,7 +141,9 @@ function getBranding() {
 function applyBranding() {
   const branding = getBranding();
   const colors = branding.colors;
+  const theme = branding.theme === "dark" ? "dark" : "light";
   const loginBackground = loginBackgroundCss(branding.loginBackground, colors);
+  document.documentElement.dataset.theme = theme;
   document.title = branding.portalName || "Toilettatura Manager";
   const variables = {
     "--brand": colors.brand,
@@ -130,12 +152,16 @@ function applyBranding() {
     "--bg": colors.background,
     "--panel": colors.panel,
     "--ink": colors.text,
+    "--panel-soft": theme === "dark" ? "#182629" : "#fbfaf7",
+    "--muted": theme === "dark" ? "#a5b6b1" : "#63716f",
+    "--line": theme === "dark" ? "#2b3d42" : "#ded9cf",
+    "--shadow": theme === "dark" ? "0 18px 40px rgba(0, 0, 0, 0.34)" : "0 18px 40px rgba(22, 38, 37, 0.1)",
     "--login-background": loginBackground.background,
     "--login-background-size": loginBackground.size,
     "--login-background-position": loginBackground.position
   };
   for (const [key, value] of Object.entries(variables)) {
-    if (key.startsWith("--login-") || /^#[0-9a-f]{6}$/i.test(value)) document.documentElement.style.setProperty(key, value);
+    if (key.startsWith("--login-") || key === "--shadow" || /^#[0-9a-f]{6}$/i.test(value)) document.documentElement.style.setProperty(key, value);
   }
 }
 
@@ -698,6 +724,13 @@ function renderSettings() {
           <label class="full">Informazioni azienda
             <textarea name="companyInfo">${escapeHtml(branding.companyInfo)}</textarea>
           </label>
+          <label>Tema portale
+            <select name="theme" data-theme-select>
+              <option value="light" ${branding.theme === "light" ? "selected" : ""}>Chiaro</option>
+              <option value="dark" ${branding.theme === "dark" ? "selected" : ""}>Scuro</option>
+              <option value="custom" ${branding.theme === "custom" ? "selected" : ""}>Personalizzato</option>
+            </select>
+          </label>
           <label>Logo
             <input name="logo" type="file" accept="image/png,image/jpeg,image/webp" />
           </label>
@@ -891,6 +924,7 @@ function renderSettings() {
 }
 
 function bindSettings() {
+  bindThemePreset(document.getElementById("brandingForm"));
   bindLoginBackgroundMode(document.getElementById("brandingForm"));
 
   document.getElementById("brandingForm").addEventListener("submit", async (event) => {
@@ -907,6 +941,7 @@ function bindSettings() {
       phone: data.get("phone"),
       email: data.get("email"),
       address: data.get("address"),
+      theme: data.get("theme"),
       clearLogo: data.get("clearLogo") === "on",
       clearLoginBackgroundImage: data.get("clearLoginBackgroundImage") === "on",
       loginBackground: {
@@ -1046,6 +1081,28 @@ function bindSettings() {
     } catch (err) {
       notify(err.message);
     }
+  });
+}
+
+function bindThemePreset(form) {
+  const themeSelect = form.querySelector("[data-theme-select]");
+  const colorNames = ["brand", "brandStrong", "accent", "background", "panel", "text"];
+  const colorInputs = colorNames.map((name) => form.elements[name]).filter(Boolean);
+  const applyPreset = () => {
+    const preset = THEME_PRESETS[themeSelect.value];
+    if (!preset) return;
+    for (const name of colorNames) {
+      if (form.elements[name]) form.elements[name].value = preset[name];
+    }
+  };
+  themeSelect.addEventListener("change", applyPreset);
+  colorInputs.forEach((input) => {
+    input.addEventListener("input", () => {
+      const preset = THEME_PRESETS[themeSelect.value];
+      if (!preset || input.value.toLowerCase() !== preset[input.name].toLowerCase()) {
+        themeSelect.value = "custom";
+      }
+    });
   });
 }
 
