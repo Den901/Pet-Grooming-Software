@@ -12,6 +12,20 @@ Portale web PWA in Node.js per gestire:
 - impostazioni WhatsApp per promemoria appuntamenti;
 - layout desktop, mobile e iPad.
 
+## Anteprime
+
+Le immagini del portale sono salvate in `docs/screenshots/` e vanno aggiornate a ogni release.
+
+| Vista | Anteprima |
+| --- | --- |
+| Desktop | ![Vista desktop](docs/screenshots/desktop.png) |
+| Dashboard iPad | ![Dashboard iPad](docs/screenshots/ipad-dashboard.png) |
+| Schede in miniature | ![Schede in miniature su iPad](docs/screenshots/schede-miniature-ipad.png) |
+| Scheda cane in popup | ![Scheda cane in popup su iPad](docs/screenshots/scheda-popup-ipad.png) |
+| Storico appuntamenti | ![Storico appuntamenti su iPad](docs/screenshots/storico-appuntamenti-ipad.png) |
+| Identita e WhatsApp | ![Impostazioni identita e WhatsApp su iPad](docs/screenshots/impostazioni-identita-whatsapp-ipad.png) |
+| DuckDNS | ![Impostazioni DuckDNS su iPad](docs/screenshots/impostazioni-duckdns-ipad.png) |
+
 ## Accesso iniziale
 
 - Amministratore: `admin` / `admin123`
