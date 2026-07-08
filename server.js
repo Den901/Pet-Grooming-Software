@@ -18,7 +18,7 @@ const MAX_UPDATE_BODY_BYTES = 40 * 1024 * 1024;
 const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin123";
 const APP_ID = "pet-grooming-software";
-const APP_VERSION = packageInfo.version || "0.0.1-beta.2";
+const APP_VERSION = packageInfo.version || "0.0.1-beta.3";
 const UPDATE_FORMAT = "PET_GROOMING_SOFTWARE_UPDATE";
 const UPDATE_FORMAT_VERSION = 1;
 const UPDATE_EXTENSION = ".pgs-update";
@@ -29,6 +29,7 @@ const UPDATE_MANIFEST_URL =
 const MAX_UPDATE_MANIFEST_BYTES = 256 * 1024;
 
 const sessions = new Map();
+let restartScheduled = false;
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -809,6 +810,19 @@ async function checkWebUpdate(manifestUrl = UPDATE_MANIFEST_URL) {
   return validateUpdateManifest(manifest, url);
 }
 
+function schedulePortalRestart() {
+  if (restartScheduled) return false;
+  restartScheduled = true;
+  const restartTimer = setTimeout(() => {
+    console.log("Riavvio portale richiesto dal pannello amministratore");
+    server.close(() => process.exit(0));
+    const forceExitTimer = setTimeout(() => process.exit(0), 3000);
+    forceExitTimer.unref?.();
+  }, 700);
+  restartTimer.unref?.();
+  return true;
+}
+
 function normalizeDog(payload, existing = {}) {
   const now = new Date().toISOString();
   const id = existing.id || crypto.randomUUID();
@@ -948,6 +962,16 @@ async function handleApi(req, res, url) {
       const body = method === "POST" ? await readBody(req) : {};
       const update = await checkWebUpdate(body.manifestUrl);
       return sendJson(res, 200, { update });
+    }
+
+    if (parts[1] === "system" && parts[2] === "restart" && method === "POST") {
+      if (user.role !== "admin") return sendError(res, 403, "Solo amministratore");
+      const scheduled = schedulePortalRestart();
+      return sendJson(res, 200, {
+        ok: true,
+        restartScheduled: scheduled,
+        message: scheduled ? "Riavvio servizio avviato" : "Riavvio gia in corso"
+      });
     }
 
     if (parts[1] === "system" && parts[2] === "update" && method === "POST") {

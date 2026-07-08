@@ -1112,13 +1112,14 @@ function renderSettings() {
             <input name="updateFile" type="file" accept=".pgs-update" />
           </label>
           <label class="full">URL update web
-            <input name="updateUrl" type="url" placeholder="https://.../Pet-Grooming-Software-0.0.1-beta.2.pgs-update" />
+            <input name="updateUrl" type="url" placeholder="https://.../Pet-Grooming-Software-0.0.1-beta.3.pgs-update" />
           </label>
         </div>
         <p class="settings-note">L'update aggiorna solo il software. Database, foto e backup non vengono toccati. Dopo l'installazione serve riavviare il servizio.</p>
         <div class="settings-actions">
           <button class="btn" type="submit">Installa update</button>
           <button class="btn secondary" type="button" id="checkUpdateBtn">Controlla update web</button>
+          <button class="btn secondary" type="button" id="restartPortalBtn">Riavvia servizio</button>
           ${
             updateCheck?.updateAvailable && updateCheck.packageUrl
               ? `<button class="btn secondary" type="button" id="installWebUpdateBtn">Installa update disponibile</button>`
@@ -1356,6 +1357,16 @@ function bindSettings() {
     } catch (err) {
       notify(err.message);
     }
+  });
+  document.getElementById("restartPortalBtn")?.addEventListener("click", () => {
+    confirmAction("Riavviare il servizio del portale? Su Linux con systemd tornera online dopo pochi secondi.", async () => {
+      await api("/api/system/restart", {
+        method: "POST",
+        body: "{}"
+      });
+      notify("Riavvio servizio in corso");
+      setTimeout(() => window.location.reload(), 7000);
+    });
   });
 
   if (!state.updateCheck && !state.updateCheckLoading) refreshUpdateCheck(false);

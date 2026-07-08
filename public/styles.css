@@ -217,15 +217,25 @@ label {
 }
 
 .sidebar {
-  position: sticky;
+  position: fixed;
+  left: 0;
   top: 0;
+  bottom: 0;
+  width: 260px;
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   gap: 20px;
   padding: 20px 16px;
   background: var(--brand-strong);
   color: #eff7f4;
+  overflow-y: auto;
+  z-index: 20;
+}
+
+.main {
+  grid-column: 2;
 }
 
 .sidebar-head {
@@ -1527,6 +1537,9 @@ label {
 
   .sidebar {
     position: sticky;
+    left: auto;
+    bottom: auto;
+    width: auto;
     z-index: 20;
     height: auto;
     align-self: start;
@@ -1569,6 +1582,7 @@ label {
   }
 
   .main {
+    grid-column: 1;
     padding: 18px;
   }
 
