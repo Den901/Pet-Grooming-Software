@@ -141,7 +141,7 @@ function getBranding() {
 function applyBranding() {
   const branding = getBranding();
   const colors = branding.colors;
-  const theme = branding.theme === "dark" ? "dark" : "light";
+  const theme = branding.theme === "dark" || (branding.theme === "custom" && isDarkHex(colors.background)) ? "dark" : "light";
   const loginBackground = loginBackgroundCss(branding.loginBackground, colors);
   document.documentElement.dataset.theme = theme;
   document.title = branding.portalName || "Toilettatura Manager";
@@ -152,6 +152,7 @@ function applyBranding() {
     "--bg": colors.background,
     "--panel": colors.panel,
     "--ink": colors.text,
+    "--green": theme === "dark" ? colors.brand : "#2f7a65",
     "--panel-soft": theme === "dark" ? "#182629" : "#fbfaf7",
     "--muted": theme === "dark" ? "#a5b6b1" : "#63716f",
     "--line": theme === "dark" ? "#2b3d42" : "#ded9cf",
@@ -163,6 +164,14 @@ function applyBranding() {
   for (const [key, value] of Object.entries(variables)) {
     if (key.startsWith("--login-") || key === "--shadow" || /^#[0-9a-f]{6}$/i.test(value)) document.documentElement.style.setProperty(key, value);
   }
+}
+
+function isDarkHex(hex) {
+  const clean = safeHex(hex, "#ffffff").slice(1);
+  const red = parseInt(clean.slice(0, 2), 16);
+  const green = parseInt(clean.slice(2, 4), 16);
+  const blue = parseInt(clean.slice(4, 6), 16);
+  return (red * 299 + green * 587 + blue * 114) / 1000 < 128;
 }
 
 function loginBackgroundCss(loginBackground = {}, colors = {}) {
@@ -775,22 +784,23 @@ function renderSettings() {
           </div>
         </div>
         <div class="color-grid">
-          <label>Colore principale
+          <p class="settings-note full" data-dark-color-note>Nel tema scuro puoi cambiare i colori verdi/evidenza senza toccare sfondo, pannelli e testo.</p>
+          <label data-color-scope="accent">Colore principale
             <input name="brand" type="color" value="${escapeAttr(branding.colors.brand)}" />
           </label>
-          <label>Colore scuro
+          <label data-color-scope="accent">Colore scuro
             <input name="brandStrong" type="color" value="${escapeAttr(branding.colors.brandStrong)}" />
           </label>
-          <label>Accento
+          <label data-color-scope="accent">Accento
             <input name="accent" type="color" value="${escapeAttr(branding.colors.accent)}" />
           </label>
-          <label>Sfondo
+          <label data-color-scope="surface">Sfondo
             <input name="background" type="color" value="${escapeAttr(branding.colors.background)}" />
           </label>
-          <label>Pannelli
+          <label data-color-scope="surface">Pannelli
             <input name="panel" type="color" value="${escapeAttr(branding.colors.panel)}" />
           </label>
-          <label>Testo
+          <label data-color-scope="surface">Testo
             <input name="text" type="color" value="${escapeAttr(branding.colors.text)}" />
           </label>
         </div>
@@ -1087,23 +1097,26 @@ function bindSettings() {
 function bindThemePreset(form) {
   const themeSelect = form.querySelector("[data-theme-select]");
   const colorNames = ["brand", "brandStrong", "accent", "background", "panel", "text"];
-  const colorInputs = colorNames.map((name) => form.elements[name]).filter(Boolean);
+  const surfaceColorFields = form.querySelectorAll('[data-color-scope="surface"]');
+  const darkColorNote = form.querySelector("[data-dark-color-note]");
   const applyPreset = () => {
     const preset = THEME_PRESETS[themeSelect.value];
-    if (!preset) return;
-    for (const name of colorNames) {
-      if (form.elements[name]) form.elements[name].value = preset[name];
+    if (preset) {
+      for (const name of colorNames) {
+        if (form.elements[name]) form.elements[name].value = preset[name];
+      }
     }
+    syncDarkColorControls();
+  };
+  const syncDarkColorControls = () => {
+    const isDark = themeSelect.value === "dark";
+    surfaceColorFields.forEach((field) => {
+      field.hidden = isDark;
+    });
+    if (darkColorNote) darkColorNote.hidden = !isDark;
   };
   themeSelect.addEventListener("change", applyPreset);
-  colorInputs.forEach((input) => {
-    input.addEventListener("input", () => {
-      const preset = THEME_PRESETS[themeSelect.value];
-      if (!preset || input.value.toLowerCase() !== preset[input.name].toLowerCase()) {
-        themeSelect.value = "custom";
-      }
-    });
-  });
+  syncDarkColorControls();
 }
 
 function bindLoginBackgroundMode(form) {
