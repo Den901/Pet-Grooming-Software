@@ -205,7 +205,7 @@ label {
   flex-direction: column;
   gap: 20px;
   padding: 20px 16px;
-  background: #173233;
+  background: var(--brand-strong);
   color: #eff7f4;
 }
 
@@ -223,8 +223,8 @@ label {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: #f4c362;
-  color: #173233;
+  background: var(--accent);
+  color: var(--brand-strong);
   font-weight: 900;
   flex: 0 0 auto;
 }
