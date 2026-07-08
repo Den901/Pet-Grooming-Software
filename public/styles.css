@@ -25,13 +25,21 @@
 
 html {
   min-height: 100%;
+  width: 100%;
+  overflow-x: hidden;
   background: var(--bg);
 }
 
 body {
   min-height: 100vh;
+  width: 100%;
+  overflow-x: hidden;
   margin: 0;
   background: var(--bg);
+}
+
+img {
+  max-width: 100%;
 }
 
 :root[data-theme="dark"] {
@@ -382,6 +390,12 @@ label {
   font-size: 0.88rem;
 }
 
+.btn.small {
+  min-height: 36px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+}
+
 .segmented {
   padding: 4px;
   border-radius: var(--radius);
@@ -630,6 +644,91 @@ label {
   font-size: 0.95rem;
 }
 
+.mobile-agenda {
+  display: none;
+}
+
+.mobile-agenda-day {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  display: grid;
+  gap: 10px;
+}
+
+.mobile-agenda-day.today {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(225, 166, 61, 0.18);
+}
+
+.mobile-day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mobile-day-head div {
+  display: grid;
+  gap: 2px;
+}
+
+.mobile-day-head strong {
+  font-size: 0.98rem;
+}
+
+.mobile-day-head span,
+.mobile-empty {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+.mobile-appointment-list {
+  display: grid;
+  gap: 8px;
+}
+
+.mobile-appt-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--radius);
+  background: #edf4f1;
+  border-left: 4px solid var(--green);
+}
+
+.mobile-appt-card {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  color: var(--ink);
+  background: transparent;
+  padding: 0;
+}
+
+.mobile-appt-card span {
+  color: var(--green);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.mobile-appt-card strong,
+.mobile-appt-card small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-appt-card small {
+  color: var(--muted);
+}
+
 .searchbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -794,6 +893,21 @@ label {
 .dog-detail-body {
   display: grid;
   gap: 14px;
+}
+
+.dog-detail-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.dog-detail-heading strong {
+  font-size: 1.1rem;
+}
+
+.dog-detail-heading span {
+  color: var(--green);
+  font-size: 0.88rem;
+  font-weight: 850;
 }
 
 .section-heading-row {
@@ -1111,6 +1225,32 @@ label {
   flex-wrap: wrap;
 }
 
+.update-status {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-soft);
+}
+
+.update-available {
+  display: grid;
+  gap: 4px;
+}
+
+.update-available strong {
+  color: var(--green);
+}
+
+.update-available span,
+.danger-note {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.danger-note {
+  color: var(--danger);
+}
+
 .login-bg-settings {
   margin-top: 18px;
   padding-top: 16px;
@@ -1161,6 +1301,54 @@ label {
 .toast.show {
   transform: translateY(0);
   opacity: 1;
+}
+
+.pwa-install-prompt {
+  position: fixed;
+  left: 14px;
+  right: 14px;
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  z-index: 35;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius);
+  background: var(--brand-strong);
+  color: #eff7f4;
+  box-shadow: var(--shadow);
+}
+
+.pwa-install-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.pwa-install-copy strong,
+.pwa-install-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pwa-install-copy span {
+  color: rgba(239, 247, 244, 0.78);
+  font-size: 0.88rem;
+}
+
+.pwa-install-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.install-help {
+  display: grid;
+  gap: 10px;
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .modal-backdrop {
@@ -1261,6 +1449,7 @@ label {
 :root[data-theme="dark"] .login-panel,
 :root[data-theme="dark"] .modal-card,
 :root[data-theme="dark"] .day-cell,
+:root[data-theme="dark"] .mobile-agenda-day,
 :root[data-theme="dark"] .table-card,
 :root[data-theme="dark"] .history-item,
 :root[data-theme="dark"] .settings-panel,
@@ -1294,6 +1483,7 @@ label {
 :root[data-theme="dark"] .calendar-grid,
 :root[data-theme="dark"] .calendar-weekdays,
 :root[data-theme="dark"] .day-cell,
+:root[data-theme="dark"] .mobile-agenda-day,
 :root[data-theme="dark"] .history-item,
 :root[data-theme="dark"] .detail-item,
 :root[data-theme="dark"] .access-box,
@@ -1302,6 +1492,7 @@ label {
 }
 
 :root[data-theme="dark"] .appt-row,
+:root[data-theme="dark"] .mobile-appt-row,
 :root[data-theme="dark"] .state-pill.active {
   background: rgba(104, 183, 173, 0.14);
 }
@@ -1449,15 +1640,6 @@ label {
     max-height: 260px;
   }
 
-  .calendar {
-    overflow-x: auto;
-  }
-
-  .calendar-weekdays,
-  .calendar-grid {
-    min-width: 760px;
-  }
-
   .day-cell {
     min-height: 118px;
   }
@@ -1485,8 +1667,76 @@ label {
     grid-template-columns: 1fr;
   }
 
+  .pwa-install-prompt {
+    grid-template-columns: 1fr;
+  }
+
+  .pwa-install-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
   .login-panel,
   .modal-card {
     border-radius: var(--radius);
+  }
+}
+
+@media (max-width: 760px), (max-width: 932px) and (max-height: 480px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .main {
+    padding: 12px;
+  }
+
+  .calendar-desktop {
+    display: none;
+  }
+
+  .mobile-agenda {
+    display: grid;
+    gap: 10px;
+  }
+
+  .modal-backdrop {
+    place-items: start center;
+    padding: 8px;
+    overflow-y: auto;
+  }
+
+  .modal-card {
+    width: 100%;
+    max-width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+
+  .modal-head,
+  .modal-body,
+  .modal-actions {
+    padding: 14px;
+  }
+
+  .modal-title-row h2 {
+    white-space: normal;
+  }
+
+  .modal-inline-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .modal-inline-actions .btn {
+    width: 100%;
+  }
+
+  .dog-detail-photo {
+    width: 100%;
+    max-height: none;
   }
 }

@@ -81,7 +81,10 @@ if (Test-Path -LiteralPath $linuxTar) {
 tar -czf $linuxTar -C $StageRoot $PackageBase
 
 if (-not $SkipUpdate) {
-  node (Join-Path $Root "scripts\create-update-package.mjs") --version $Version --out (Join-Path $Dist "$PackageBase.pgs-update")
+  $updateFile = Join-Path $Dist "$PackageBase.pgs-update"
+  $manifestFile = Join-Path $Dist "pet-grooming-update.json"
+  node (Join-Path $Root "scripts\create-update-package.mjs") --version $Version --out $updateFile
+  node (Join-Path $Root "scripts\create-update-manifest.mjs") --version $Version --out $manifestFile
 }
 
 Write-Host "Creati pacchetti release in $Dist"
@@ -89,4 +92,5 @@ Write-Host "- $windowsZip"
 Write-Host "- $linuxTar"
 if (-not $SkipUpdate) {
   Write-Host "- $(Join-Path $Dist "$PackageBase.pgs-update")"
+  Write-Host "- $(Join-Path $Dist "pet-grooming-update.json")"
 }

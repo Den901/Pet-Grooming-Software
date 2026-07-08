@@ -1,12 +1,13 @@
 {
   "name": "toilettatura-portal",
-  "version": "0.0.1-beta.1",
+  "version": "0.0.1-beta.2",
   "description": "Portale PWA per gestione appuntamenti e schede di toilettatura.",
   "private": true,
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
     "release:bump": "node scripts/bump-release.mjs",
+    "release:manifest": "node scripts/create-update-manifest.mjs",
     "release:update": "node scripts/create-update-package.mjs",
     "release:packages": "powershell -ExecutionPolicy Bypass -File scripts/build-release.ps1"
   },

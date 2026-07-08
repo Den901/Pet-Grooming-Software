@@ -18,10 +18,15 @@ const MAX_UPDATE_BODY_BYTES = 40 * 1024 * 1024;
 const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin123";
 const APP_ID = "pet-grooming-software";
-const APP_VERSION = packageInfo.version || "0.0.1-beta.1";
+const APP_VERSION = packageInfo.version || "0.0.1-beta.2";
 const UPDATE_FORMAT = "PET_GROOMING_SOFTWARE_UPDATE";
 const UPDATE_FORMAT_VERSION = 1;
 const UPDATE_EXTENSION = ".pgs-update";
+const UPDATE_MANIFEST_FORMAT = "PET_GROOMING_SOFTWARE_UPDATE_MANIFEST";
+const UPDATE_MANIFEST_VERSION = 1;
+const UPDATE_MANIFEST_URL =
+  process.env.UPDATE_MANIFEST_URL || "https://github.com/Den901/Pet-Grooming-Software/releases/latest/download/pet-grooming-update.json";
+const MAX_UPDATE_MANIFEST_BYTES = 256 * 1024;
 
 const sessions = new Map();
 
@@ -395,6 +400,17 @@ function publicBrandingSettings(db) {
   };
 }
 
+function showInitialAccessHint(db) {
+  return db.users.some(
+    (item) =>
+      item?.active &&
+      item.username === DEFAULT_ADMIN_USERNAME &&
+      item.role === "admin" &&
+      item.defaultPassword === true &&
+      isDefaultAdminUser(item)
+  );
+}
+
 function publicWhatsappSettings(db) {
   const whatsapp = ensureSettingsShape(db.settings).whatsapp;
   return {
@@ -687,6 +703,112 @@ function downloadUpdatePackage(updateUrl) {
   });
 }
 
+function compareVersions(a, b) {
+  const left = parseVersion(a);
+  const right = parseVersion(b);
+  for (let index = 0; index < 3; index += 1) {
+    if (left.numbers[index] !== right.numbers[index]) return left.numbers[index] > right.numbers[index] ? 1 : -1;
+  }
+  if (left.beta === right.beta) return 0;
+  if (left.beta === null) return 1;
+  if (right.beta === null) return -1;
+  return left.beta > right.beta ? 1 : -1;
+}
+
+function parseVersion(version) {
+  const match = String(version || "").match(/^(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$/);
+  if (!match) return { numbers: [0, 0, 0], beta: 0 };
+  return {
+    numbers: [Number(match[1]), Number(match[2]), Number(match[3])],
+    beta: match[4] ? Number(match[4]) : null
+  };
+}
+
+function downloadJson(updateUrl, maxBytes = MAX_UPDATE_MANIFEST_BYTES) {
+  return new Promise((resolve, reject) => {
+    let parsed;
+    try {
+      parsed = new URL(cleanString(updateUrl));
+    } catch {
+      reject(new Error("URL manifest update non valido"));
+      return;
+    }
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      reject(new Error("URL manifest update non valido"));
+      return;
+    }
+    const client = parsed.protocol === "https:" ? https : http;
+    const req = client.get(parsed, { timeout: 10000 }, (response) => {
+      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        downloadJson(new URL(response.headers.location, parsed).toString(), maxBytes).then(resolve, reject);
+        response.resume();
+        return;
+      }
+      if (response.statusCode !== 200) {
+        reject(new Error(`Controllo update fallito: ${response.statusCode}`));
+        response.resume();
+        return;
+      }
+      let size = 0;
+      const chunks = [];
+      response.on("data", (chunk) => {
+        size += chunk.length;
+        if (size > maxBytes) {
+          req.destroy(new Error("Manifest update troppo grande"));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      response.on("end", () => {
+        try {
+          resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+        } catch {
+          reject(new Error("Manifest update non valido"));
+        }
+      });
+    });
+    req.on("timeout", () => req.destroy(new Error("Timeout controllo update")));
+    req.on("error", reject);
+  });
+}
+
+function validateUpdateManifest(manifest, manifestUrl = UPDATE_MANIFEST_URL) {
+  if (!manifest || manifest.format !== UPDATE_MANIFEST_FORMAT || manifest.formatVersion !== UPDATE_MANIFEST_VERSION || manifest.app !== APP_ID) {
+    throw new Error("Manifest update non riconosciuto");
+  }
+  const latestVersion = cleanString(manifest.version);
+  const packageUrl = cleanString(manifest.packageUrl);
+  if (!latestVersion) throw new Error("Manifest update senza versione");
+  let parsedPackageUrl;
+  try {
+    parsedPackageUrl = new URL(packageUrl);
+  } catch {
+    throw new Error("URL pacchetto update non valido");
+  }
+  if (!["http:", "https:"].includes(parsedPackageUrl.protocol) || !isUpdateFileName(parsedPackageUrl.pathname)) {
+    throw new Error(`Manifest senza pacchetto ${UPDATE_EXTENSION}`);
+  }
+  return {
+    manifestUrl,
+    app: APP_ID,
+    currentVersion: APP_VERSION,
+    currentReleaseLabel: releaseLabel(APP_VERSION),
+    latestVersion,
+    latestReleaseLabel: cleanString(manifest.releaseLabel) || releaseLabel(latestVersion),
+    packageUrl,
+    releaseUrl: cleanString(manifest.releaseUrl),
+    notes: cleanString(manifest.notes),
+    createdAt: cleanString(manifest.createdAt),
+    updateAvailable: compareVersions(latestVersion, APP_VERSION) > 0
+  };
+}
+
+async function checkWebUpdate(manifestUrl = UPDATE_MANIFEST_URL) {
+  const url = cleanString(manifestUrl) || UPDATE_MANIFEST_URL;
+  const manifest = await downloadJson(url);
+  return validateUpdateManifest(manifest, url);
+}
+
 function normalizeDog(payload, existing = {}) {
   const now = new Date().toISOString();
   const id = existing.id || crypto.randomUUID();
@@ -785,12 +907,18 @@ async function handleApi(req, res, url) {
         app: APP_ID,
         version: APP_VERSION,
         releaseLabel: releaseLabel(APP_VERSION),
-        updateExtension: UPDATE_EXTENSION
+        updateExtension: UPDATE_EXTENSION,
+        updateManifestUrl: UPDATE_MANIFEST_URL
       });
     }
 
     if (url.pathname === "/api/public-settings" && method === "GET") {
-      return sendJson(res, 200, { branding: publicBrandingSettings(db) });
+      return sendJson(res, 200, {
+        branding: publicBrandingSettings(db),
+        setup: {
+          showInitialAccessHint: showInitialAccessHint(db)
+        }
+      });
     }
 
     if (url.pathname === "/api/login" && method === "POST") {
@@ -814,6 +942,13 @@ async function handleApi(req, res, url) {
     }
 
     if (!user) return sendError(res, 401, "Accesso richiesto");
+
+    if (parts[1] === "system" && parts[2] === "update-check" && ["GET", "POST"].includes(method)) {
+      if (user.role !== "admin") return sendError(res, 403, "Solo amministratore");
+      const body = method === "POST" ? await readBody(req) : {};
+      const update = await checkWebUpdate(body.manifestUrl);
+      return sendJson(res, 200, { update });
+    }
 
     if (parts[1] === "system" && parts[2] === "update" && method === "POST") {
       if (user.role !== "admin") return sendError(res, 403, "Solo amministratore");

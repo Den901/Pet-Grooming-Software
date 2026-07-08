@@ -1,6 +1,6 @@
 # Toilettatura Manager
 
-Release corrente: `0.0.1 beta 1` (`0.0.1-beta.1`).
+Release corrente: `0.0.1 beta 2` (`0.0.1-beta.2`).
 
 Portale web PWA in Node.js per gestire:
 
@@ -13,7 +13,8 @@ Portale web PWA in Node.js per gestire:
 - ricerca schede;
 - backup cifrato con password e import backup;
 - impostazioni WhatsApp per promemoria appuntamenti;
-- aggiornamento software da file locale o URL web con pacchetto `.pgs-update`;
+- aggiornamento software da file locale, URL web o release GitHub con pacchetto `.pgs-update`;
+- notifica nel pannello impostazioni quando e disponibile un nuovo update web;
 - layout desktop, mobile e iPad.
 
 ## Anteprime
@@ -37,6 +38,8 @@ Le immagini del portale sono salvate in `docs/screenshots/` e vanno aggiornate a
 - Operatore: `operatore` / `operatore123`
 
 Al primo accesso con la password admin di default il portale mostra un avviso e obbliga il cambio password.
+
+Il riquadro con le credenziali iniziali nella schermata login appare solo finche l'admin usa ancora la password di default. Dopo il primo cambio password non viene piu mostrato.
 
 ## Avvio rapido
 
@@ -76,9 +79,10 @@ npm.cmd run release:packages
 
 Il comando genera nella cartella `dist/`:
 
-- `Pet-Grooming-Software-0.0.1-beta.1-windows.zip`;
-- `Pet-Grooming-Software-0.0.1-beta.1-linux.tar.gz`;
-- `Pet-Grooming-Software-0.0.1-beta.1.pgs-update`.
+- `Pet-Grooming-Software-0.0.1-beta.2-windows.zip`;
+- `Pet-Grooming-Software-0.0.1-beta.2-linux.tar.gz`;
+- `Pet-Grooming-Software-0.0.1-beta.2.pgs-update`;
+- `pet-grooming-update.json`.
 
 Se `npm` non e bloccato dalla policy PowerShell puoi usare anche `npm run release:packages`.
 
@@ -86,7 +90,7 @@ Se `npm` non e bloccato dalla policy PowerShell puoi usare anche `npm run releas
 
 Prerequisito: Node.js 18 o superiore installato sul PC.
 
-1. Estrai `Pet-Grooming-Software-0.0.1-beta.1-windows.zip`.
+1. Estrai `Pet-Grooming-Software-0.0.1-beta.2-windows.zip`.
 2. Apri PowerShell nella cartella estratta. Per installare in `ProgramData` e creare l'avvio automatico e consigliato aprirlo come amministratore.
 3. Per installare in `C:\ProgramData\Pet Grooming Software` e creare l'avvio automatico all'accesso:
 
@@ -112,12 +116,12 @@ Per riavviare dopo un update, chiudi la finestra dove gira Node.js e rilancia lo
 
 Prerequisito: Node.js 18 o superiore installato sul server.
 
-1. Copia `Pet-Grooming-Software-0.0.1-beta.1-linux.tar.gz` sul server.
+1. Copia `Pet-Grooming-Software-0.0.1-beta.2-linux.tar.gz` sul server.
 2. Estrai il pacchetto e entra nella cartella:
 
 ```bash
-tar -xzf Pet-Grooming-Software-0.0.1-beta.1-linux.tar.gz
-cd Pet-Grooming-Software-0.0.1-beta.1
+tar -xzf Pet-Grooming-Software-0.0.1-beta.2-linux.tar.gz
+cd Pet-Grooming-Software-0.0.1-beta.2
 ```
 
 3. Installazione consigliata in `/opt` con servizio systemd:
@@ -183,20 +187,49 @@ Linux:
 PORT=8080 node server.js
 ```
 
+## HTTPS e certificato
+
+Il portale Node.js ascolta in HTTP locale, ad esempio `http://127.0.0.1:3017`. Per usarlo da internet con DuckDNS, installazione PWA e iPhone serve invece HTTPS con un certificato TLS valido e riconosciuto dal browser.
+
+La soluzione consigliata e mettere davanti al portale un reverse proxy come Caddy o Nginx:
+
+```text
+browser -> https://toilettatura-fuoriporta.duckdns.org -> reverse proxy HTTPS -> http://127.0.0.1:3017
+```
+
+Con Caddy, quando le porte standard `80` e `443` sono raggiungibili da internet, il certificato Let's Encrypt viene richiesto e rinnovato automaticamente. Esempio Caddyfile:
+
+```text
+toilettatura-fuoriporta.duckdns.org {
+  reverse_proxy 127.0.0.1:3017
+}
+```
+
+Su Linux il file di solito e `/etc/caddy/Caddyfile`; dopo la modifica:
+
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+Se vuoi restare su una porta esterna non standard, ad esempio `30443`, il browser puo comunque usare HTTPS, ma il certificato automatico richiede comunque una verifica valida del dominio. Di solito servono le porte `80/443` aperte oppure una verifica DNS DuckDNS.
+
 ## PWA
 
 Il portale include `manifest.json` e `service worker`, quindi puo essere installato dal browser come app. Su dominio pubblico con DuckDNS e dispositivi iPad e consigliato usare HTTPS, perche i browser moderni richiedono HTTPS per installazione PWA completa fuori da `localhost`.
 
 ## Release e aggiornamenti
 
-La versione iniziale e `0.0.1 beta 1`. A ogni modifica di release fai avanzare la beta di 1:
+La release corrente e `0.0.1 beta 2`. A ogni modifica di release fai avanzare la beta di 1:
 
 ```powershell
-npm run release:bump
-npm run release:packages
+npm.cmd run release:bump
+npm.cmd run release:packages
 ```
 
 Il file `.pgs-update` puo essere caricato in una release GitHub oppure scelto localmente da `Impostazioni > Aggiornamento portale`. Il portale accetta solo il formato personalizzato `PET_GROOMING_SOFTWARE_UPDATE` con estensione `.pgs-update`, app id corretto, hash dei file e percorsi software ammessi.
+
+Per l'update web carica nella stessa release GitHub anche `pet-grooming-update.json`. Il portale controlla di default `https://github.com/Den901/Pet-Grooming-Software/releases/latest/download/pet-grooming-update.json` e mostra un avviso nel pannello impostazioni quando trova una versione piu recente. Se un domani vuoi usare un altro server puoi avviare Node.js con la variabile `UPDATE_MANIFEST_URL`.
 
 L'aggiornamento non modifica database, foto, backup o `node_modules`. Dopo l'installazione dell'update bisogna riavviare il servizio Node.js.
 

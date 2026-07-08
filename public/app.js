@@ -11,6 +11,11 @@ const state = {
   branding: null,
   whatsapp: null,
   version: null,
+  initialAccessHint: false,
+  updateCheck: null,
+  updateCheckLoading: false,
+  deferredInstallPrompt: null,
+  pwaPromptHidden: false,
   view: new URLSearchParams(window.location.search).get("view") || "calendar",
   calendarDate: new Date(),
   calendarMode: "month",
@@ -39,6 +44,19 @@ const THEME_PRESETS = {
   }
 };
 
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  state.deferredInstallPrompt = event;
+  renderPwaInstallPrompt();
+});
+
+window.addEventListener("appinstalled", () => {
+  state.pwaPromptHidden = true;
+  state.deferredInstallPrompt = null;
+  renderPwaInstallPrompt();
+  notify("App installata");
+});
+
 boot();
 
 async function boot() {
@@ -53,6 +71,7 @@ async function boot() {
     state.me = response.user;
     if (!state.me) {
       renderLogin();
+      renderPwaInstallPrompt();
       return;
     }
     await loadData();
@@ -60,6 +79,7 @@ async function boot() {
     promptDefaultPasswordChange();
   } catch {
     renderLogin();
+    renderPwaInstallPrompt();
   }
 }
 
@@ -67,6 +87,7 @@ async function loadPublicSettings() {
   try {
     const response = await api("/api/public-settings");
     state.branding = response.branding || state.branding;
+    state.initialAccessHint = Boolean(response.setup?.showInitialAccessHint);
     applyBranding();
   } catch {
     applyBranding();
@@ -257,6 +278,7 @@ async function loadData() {
 
 function renderLogin(error = "") {
   const branding = getBranding();
+  const initialAccessHint = state.initialAccessHint;
   app.className = "login-screen";
   app.innerHTML = `
     <section class="login-panel">
@@ -273,10 +295,14 @@ function renderLogin(error = "") {
         </label>
         <button class="btn" type="submit">Entra</button>
       </form>
-      <div class="hint-box">
-        Accesso iniziale admin: <strong>admin</strong> / <strong>admin123</strong><br />
-        Operatore demo: <strong>operatore</strong> / <strong>operatore123</strong>
-      </div>
+      ${
+        initialAccessHint
+          ? `<div class="hint-box">
+              Accesso iniziale admin: <strong>admin</strong> / <strong>admin123</strong><br />
+              Operatore demo: <strong>operatore</strong> / <strong>operatore123</strong>
+            </div>`
+          : ""
+      }
     </section>
   `;
   document.getElementById("loginForm").addEventListener("submit", async (event) => {
@@ -291,6 +317,7 @@ function renderLogin(error = "") {
         })
       });
       state.me = response.user;
+      state.initialAccessHint = false;
       await loadData();
       renderShell();
       notify("Accesso effettuato");
@@ -392,6 +419,7 @@ function renderShell() {
   });
   document.getElementById("logoutBtn").addEventListener("click", logout);
   renderView();
+  renderPwaInstallPrompt();
 }
 
 function navItems() {
@@ -418,7 +446,11 @@ async function logout() {
   state.users = [];
   state.duckdns = null;
   state.whatsapp = null;
+  state.version = null;
+  state.updateCheck = null;
+  state.updateCheckLoading = false;
   renderLogin();
+  renderPwaInstallPrompt();
 }
 
 function renderView() {
@@ -432,6 +464,78 @@ function renderView() {
   if (state.view === "dogs") bindDogs();
   if (state.view === "users") bindUsers();
   if (state.view === "settings") bindSettings();
+  renderPwaInstallPrompt();
+}
+
+function shouldShowPwaInstallPrompt() {
+  const standalone = mediaMatches("(display-mode: standalone)") || window.navigator.standalone === true;
+  const mobileSurface = mediaMatches("(max-width: 1024px)") && (mediaMatches("(pointer: coarse)") || isAppleMobile());
+  return !standalone && !state.pwaPromptHidden && mobileSurface;
+}
+
+function renderPwaInstallPrompt() {
+  let prompt = document.getElementById("pwaInstallPrompt");
+  if (!shouldShowPwaInstallPrompt()) {
+    prompt?.remove();
+    return;
+  }
+  const isNativeInstall = Boolean(state.deferredInstallPrompt);
+  if (!prompt) {
+    prompt = document.createElement("div");
+    prompt.id = "pwaInstallPrompt";
+    document.body.appendChild(prompt);
+  }
+  prompt.className = "pwa-install-prompt";
+  prompt.innerHTML = `
+    <div class="pwa-install-copy">
+      <strong>Installa il portale</strong>
+      <span>${isNativeInstall ? "Aprilo come app dalla schermata Home." : "Su iPhone usa Condividi e poi Aggiungi alla schermata Home."}</span>
+    </div>
+    <div class="pwa-install-actions">
+      <button class="btn small" type="button" data-pwa-install>${isNativeInstall ? "Installa app" : "Mostra passaggi"}</button>
+      <button class="btn ghost small" type="button" data-pwa-dismiss>Piu tardi</button>
+    </div>
+  `;
+  prompt.querySelector("[data-pwa-install]").addEventListener("click", handlePwaInstallClick);
+  prompt.querySelector("[data-pwa-dismiss]").addEventListener("click", () => {
+    state.pwaPromptHidden = true;
+    renderPwaInstallPrompt();
+  });
+}
+
+async function handlePwaInstallClick() {
+  if (!state.deferredInstallPrompt) {
+    openPwaInstallHelp();
+    return;
+  }
+  const installPrompt = state.deferredInstallPrompt;
+  state.deferredInstallPrompt = null;
+  await installPrompt.prompt();
+  const choice = await installPrompt.userChoice.catch(() => ({}));
+  if (choice.outcome === "accepted") state.pwaPromptHidden = true;
+  renderPwaInstallPrompt();
+}
+
+function openPwaInstallHelp() {
+  openModal({
+    title: "Installa app",
+    submitLabel: "Ho capito",
+    content: `
+      <div class="install-help">
+        <p>Su iPhone o iPad apri il menu Condividi di Safari e scegli Aggiungi alla schermata Home.</p>
+        <p>Quando apri il portale dall'icona salvata, si comporta come una app.</p>
+      </div>
+    `,
+    onSubmit: async () => {}
+  });
+}
+
+function isAppleMobile() {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function mediaMatches(query) {
+  return typeof window.matchMedia === "function" && window.matchMedia(query).matches;
 }
 
 function renderCalendar() {
@@ -489,10 +593,11 @@ function renderMonthCalendar() {
     cursor = addDays(cursor, 1);
   }
   return `
-    <section class="calendar">
+    <section class="calendar calendar-desktop">
       <div class="calendar-weekdays">${weekdayShort.map((day) => `<div>${day}</div>`).join("")}</div>
       <div class="calendar-grid">${cells.join("")}</div>
     </section>
+    ${renderMobileCalendarList()}
   `;
 }
 
@@ -500,7 +605,7 @@ function renderWeekCalendar() {
   const start = startOfWeek(state.calendarDate);
   const days = Array.from({ length: 7 }, (_, index) => addDays(start, index));
   return `
-    <section class="week-grid">
+    <section class="week-grid calendar-desktop">
       ${days
         .map((day) => {
           const iso = toISODate(day);
@@ -519,6 +624,62 @@ function renderWeekCalendar() {
         })
         .join("")}
     </section>
+    ${renderMobileCalendarList()}
+  `;
+}
+
+function renderMobileCalendarList() {
+  const days =
+    state.calendarMode === "month"
+      ? Array.from(
+          { length: new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() + 1, 0).getDate() },
+          (_, index) => new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), index + 1)
+        )
+      : Array.from({ length: 7 }, (_, index) => addDays(startOfWeek(state.calendarDate), index));
+  return `
+    <section class="mobile-agenda" aria-label="Agenda mobile">
+      ${days.map(renderMobileAgendaDay).join("")}
+    </section>
+  `;
+}
+
+function renderMobileAgendaDay(day) {
+  const iso = toISODate(day);
+  const dayAppointments = appointmentsForDate(iso);
+  const title = capitalize(formatter.format(day));
+  return `
+    <article class="mobile-agenda-day ${iso === todayISO() ? "today" : ""}">
+      <div class="mobile-day-head">
+        <div>
+          <strong>${escapeHtml(title)}</strong>
+          <span>${dayAppointments.length ? `${dayAppointments.length} appuntamenti` : "Libero"}</span>
+        </div>
+        <button class="add-day" type="button" title="Aggiungi appuntamento" data-day-add="${iso}">+</button>
+      </div>
+      <div class="mobile-appointment-list">
+        ${dayAppointments.length ? dayAppointments.map(renderMobileAppointmentCard).join("") : `<span class="mobile-empty">Nessun appuntamento</span>`}
+      </div>
+    </article>
+  `;
+}
+
+function renderMobileAppointmentCard(appointment) {
+  const isCompleted = appointment.status === "completato";
+  const timeRange = [appointment.startTime, appointment.endTime].filter(Boolean).join(" - ") || "--";
+  const subtitle = [appointment.service, appointment.ownerName].filter(Boolean).join(" - ");
+  return `
+    <div class="mobile-appt-row status-${escapeAttr(appointment.status)}">
+      <button class="mobile-appt-card" type="button" data-appointment-id="${appointment.id}">
+        <span>${escapeHtml(timeRange)}</span>
+        <strong>${escapeHtml(appointment.dogName || "Senza nome")}</strong>
+        <small>${escapeHtml(subtitle || statusLabel(appointment.status))}</small>
+      </button>
+      ${
+        isCompleted
+          ? `<span class="appt-complete done" title="Prestazione completata" aria-label="Prestazione completata">&#10003;</span>`
+          : `<button class="appt-complete" type="button" data-complete-appointment-id="${appointment.id}" title="Concludi prestazione" aria-label="Concludi prestazione">&#10003;</button>`
+      }
+    </div>
   `;
 }
 
@@ -696,6 +857,7 @@ function renderSettings() {
   const whatsapp = state.whatsapp || {};
   const duckdns = state.duckdns || {};
   const version = state.version || {};
+  const updateCheck = state.updateCheck;
   const localUrls = duckdns.localUrls || [];
   const localLinks = localUrls.length
     ? localUrls.map((item) => `<a href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.label)}: ${escapeHtml(item.url)}</a>`).join("")
@@ -942,6 +1104,9 @@ function renderSettings() {
           </div>
           <span class="badge">Beta</span>
         </div>
+        <div class="update-status" id="updateStatus">
+          ${renderUpdateStatus(updateCheck)}
+        </div>
         <div class="form-grid">
           <label>File update locale
             <input name="updateFile" type="file" accept=".pgs-update" />
@@ -951,10 +1116,39 @@ function renderSettings() {
           </label>
         </div>
         <p class="settings-note">L'update aggiorna solo il software. Database, foto e backup non vengono toccati. Dopo l'installazione serve riavviare il servizio.</p>
-        <button class="btn" type="submit">Installa update</button>
+        <div class="settings-actions">
+          <button class="btn" type="submit">Installa update</button>
+          <button class="btn secondary" type="button" id="checkUpdateBtn">Controlla update web</button>
+          ${
+            updateCheck?.updateAvailable && updateCheck.packageUrl
+              ? `<button class="btn secondary" type="button" id="installWebUpdateBtn">Installa update disponibile</button>`
+              : ""
+          }
+        </div>
       </form>
     </section>
   `;
+}
+
+function renderUpdateStatus(updateCheck) {
+  if (state.updateCheckLoading) {
+    return `<p class="settings-note">Controllo update web in corso...</p>`;
+  }
+  if (!updateCheck) {
+    return `<p class="settings-note">Il portale controlla la release web pubblicata su GitHub quando apri queste impostazioni.</p>`;
+  }
+  if (updateCheck.error) {
+    return `<p class="settings-note danger-note">Update web non verificabile: ${escapeHtml(updateCheck.error)}</p>`;
+  }
+  if (updateCheck.updateAvailable) {
+    return `
+      <div class="update-available">
+        <strong>Nuovo update disponibile: ${escapeHtml(updateCheck.latestReleaseLabel || updateCheck.latestVersion)}</strong>
+        <span>Installata: ${escapeHtml(updateCheck.currentReleaseLabel || updateCheck.currentVersion)}. Dopo l'installazione serve riavviare il servizio.</span>
+      </div>
+    `;
+  }
+  return `<p class="settings-note">Nessun update web disponibile. Versione online: ${escapeHtml(updateCheck.latestReleaseLabel || updateCheck.latestVersion || "-")}.</p>`;
 }
 
 function bindSettings() {
@@ -1149,6 +1343,39 @@ function bindSettings() {
       notify(err.message);
     }
   });
+
+  document.getElementById("checkUpdateBtn")?.addEventListener("click", () => refreshUpdateCheck(true));
+  document.getElementById("installWebUpdateBtn")?.addEventListener("click", async () => {
+    if (!state.updateCheck?.packageUrl) return;
+    try {
+      const response = await api("/api/system/update", {
+        method: "POST",
+        body: JSON.stringify({ url: state.updateCheck.packageUrl })
+      });
+      notify(`Update ${response.update.installedVersion || ""} installato: riavvia il servizio`);
+    } catch (err) {
+      notify(err.message);
+    }
+  });
+
+  if (!state.updateCheck && !state.updateCheckLoading) refreshUpdateCheck(false);
+}
+
+async function refreshUpdateCheck(showToast = false) {
+  const statusBox = document.getElementById("updateStatus");
+  state.updateCheckLoading = true;
+  if (statusBox) statusBox.innerHTML = renderUpdateStatus(state.updateCheck);
+  try {
+    const response = await api("/api/system/update-check");
+    state.updateCheck = response.update;
+    if (showToast) notify(response.update.updateAvailable ? "Nuovo update disponibile" : "Nessun update disponibile");
+  } catch (err) {
+    state.updateCheck = { error: err.message };
+    if (showToast) notify(err.message);
+  } finally {
+    state.updateCheckLoading = false;
+    if (state.view === "settings") renderView();
+  }
 }
 
 function bindThemePreset(form) {
@@ -1190,6 +1417,7 @@ function bindLoginBackgroundMode(form) {
 
 function openDogDetailsDialog(dog = {}) {
   const history = dogAppointmentHistory(dog);
+  const scheduledCount = history.filter(isScheduledAppointment).length;
   const photo = dog.photoUrl
     ? `<img src="${escapeAttr(dog.photoUrl)}" alt="Foto di ${escapeAttr(dog.dogName)}" />`
     : `<span>${escapeHtml(initials(dog.dogName))}</span>`;
@@ -1201,6 +1429,10 @@ function openDogDetailsDialog(dog = {}) {
       <section class="dog-detail">
         <div class="dog-detail-photo">${photo}</div>
         <div class="dog-detail-body">
+          <div class="dog-detail-heading">
+            <strong>${escapeHtml(dog.dogName || "Scheda cane")}</strong>
+            ${scheduledCount ? `<span>${escapeHtml(scheduledAppointmentLabel(scheduledCount))}</span>` : ""}
+          </div>
           <div class="detail-list">
             <div class="detail-item">
               <span>Proprietario</span>
@@ -1416,10 +1648,14 @@ function openAppointmentDialog(appointment = {}, options = {}) {
               .join("")}
           </select>
         </label>
-        <label class="checkbox-line full" data-create-dog-row>
-          <input name="createDogProfile" type="checkbox" ${!appointment.dogId ? "checked" : ""} />
-          Crea subito la scheda cane con questi dati
-        </label>
+        ${
+          appointment.dogId
+            ? ""
+            : `<label class="checkbox-line full" data-create-dog-row>
+                <input name="createDogProfile" type="checkbox" checked />
+                Crea subito la scheda cane con questi dati
+              </label>`
+        }
         <label>Nome cane
           <input name="dogName" value="${escapeAttr(selectedDog?.dogName || appointment.dogName || "")}" required />
         </label>
@@ -1432,10 +1668,10 @@ function openAppointmentDialog(appointment = {}, options = {}) {
         <label>Trattamento previsto
           <input name="service" value="${escapeAttr(appointment.service || "Toilettatura")}" />
         </label>
-        <label>Importo pagato
+        <label data-completion-field>Importo pagato
           <input name="paidAmount" type="number" min="0" step="0.01" value="${escapeAttr(appointment.paidAmount || "")}" inputmode="decimal" />
         </label>
-        <label class="full">Trattamento eseguito
+        <label class="full" data-completion-field>Trattamento eseguito
           <input name="treatmentDone" value="${escapeAttr(appointment.treatmentDone || "")}" placeholder="Es. bagno, taglio, snodatura, stripping" />
         </label>
         <label class="full">Note appuntamento
@@ -1448,17 +1684,30 @@ function openAppointmentDialog(appointment = {}, options = {}) {
         form.elements.treatmentDone.value = form.elements.service.value || "Toilettatura";
       }
       const createDogRow = form.querySelector("[data-create-dog-row]");
+      const completionFields = form.querySelectorAll("[data-completion-field]");
+      const syncCompletionFields = () => {
+        const isCompleted = form.elements.status.value === "completato";
+        completionFields.forEach((field) => {
+          field.hidden = !isCompleted;
+          field.querySelectorAll("input").forEach((input) => {
+            input.disabled = !isCompleted;
+          });
+        });
+      };
       const syncCreateDogRow = () => {
         const hasLinkedDog = Boolean(form.elements.dogId.value);
+        if (!createDogRow) return;
         createDogRow.hidden = hasLinkedDog;
-        if (hasLinkedDog) form.elements.createDogProfile.checked = false;
+        if (hasLinkedDog && form.elements.createDogProfile) form.elements.createDogProfile.checked = false;
       };
       modalRoot.querySelector("[data-complete-form]")?.addEventListener("click", () => {
         form.elements.status.value = "completato";
+        syncCompletionFields();
         if (!form.elements.treatmentDone.value) form.elements.treatmentDone.value = form.elements.service.value || "Toilettatura";
         form.elements.treatmentDone.focus();
         notify("Completa trattamento e importo, poi salva la prestazione");
       });
+      form.elements.status.addEventListener("change", syncCompletionFields);
       form.elements.dogId.addEventListener("change", () => {
         syncCreateDogRow();
         const dog = state.dogs.find((item) => item.id === form.elements.dogId.value);
@@ -1468,6 +1717,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
         form.elements.contact.value = dog.contact || "";
       });
       syncCreateDogRow();
+      syncCompletionFields();
     },
     onDanger: async () => {
       await api(`/api/appointments/${appointment.id}`, { method: "DELETE", body: "{}" });
@@ -1480,6 +1730,10 @@ function openAppointmentDialog(appointment = {}, options = {}) {
       payload.createDogProfile = formData.get("createDogProfile") === "on";
       if (completionMode) payload.status = "completato";
       if (payload.status === "completato" && !payload.treatmentDone) payload.treatmentDone = payload.service || "Toilettatura";
+      if (payload.status !== "completato") {
+        payload.treatmentDone = "";
+        payload.paidAmount = "";
+      }
       await api(isEdit ? `/api/appointments/${appointment.id}` : "/api/appointments", {
         method: isEdit ? "PUT" : "POST",
         body: JSON.stringify(payload)
@@ -1654,6 +1908,14 @@ function dogAppointmentHistory(dog) {
       return lowerText(appointment.dogName) === dogName && (!ownerName || lowerText(appointment.ownerName) === ownerName);
     })
     .sort((a, b) => `${b.date || ""} ${b.startTime || ""}`.localeCompare(`${a.date || ""} ${a.startTime || ""}`));
+}
+
+function isScheduledAppointment(appointment) {
+  return ["programmato", "confermato"].includes(appointment.status) && (!appointment.date || appointment.date >= todayISO());
+}
+
+function scheduledAppointmentLabel(count) {
+  return count === 1 ? "1 appuntamento programmato" : `${count} appuntamenti programmati`;
 }
 
 function lowerText(value) {
