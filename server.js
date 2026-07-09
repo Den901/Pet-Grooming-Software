@@ -21,7 +21,7 @@ const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin123";
 const SIDEBAR_ITEM_IDS = ["calendar", "dashboard", "dogs", "users"];
 const APP_ID = "pet-grooming-software";
-const APP_VERSION = packageInfo.version || "0.0.1-beta.8";
+const APP_VERSION = packageInfo.version || "0.0.1-beta.9";
 const UPDATE_FORMAT = "PET_GROOMING_SOFTWARE_UPDATE";
 const UPDATE_FORMAT_VERSION = 1;
 const UPDATE_EXTENSION = ".pgs-update";
@@ -99,6 +99,7 @@ function defaultSettings() {
     animal: {
       breeds: ["Meticcio"],
       services: ["Bagno", "Taglio", "Snodatura", "Stripping"],
+      colors: ["Nero", "Bianco", "Marrone", "Fulvo", "Grigio", "Beige", "Crema", "Rosso", "Dorato", "Tricolore", "Pezzato", "Tigrato", "Merle"],
       loyaltyTopVisitsPerYear: 8
     },
     navigation: {
@@ -122,6 +123,7 @@ function ensureSettingsShape(settings = {}) {
     ...(settings.animal || {}),
     breeds: cleanStringList(settings.animal?.breeds, defaults.animal.breeds),
     services: cleanStringList(settings.animal?.services, defaults.animal.services),
+    colors: cleanStringList(settings.animal?.colors, defaults.animal.colors),
     loyaltyTopVisitsPerYear: cleanNumber(settings.animal?.loyaltyTopVisitsPerYear, defaults.animal.loyaltyTopVisitsPerYear)
   };
   const navigation = {
@@ -496,6 +498,7 @@ function publicAnimalSettings(db) {
   return {
     breeds: cleanStringList(animal.breeds, defaultSettings().animal.breeds),
     services: cleanStringList(animal.services, defaultSettings().animal.services),
+    colors: cleanStringList(animal.colors, defaultSettings().animal.colors),
     loyaltyTopVisitsPerYear: cleanNumber(animal.loyaltyTopVisitsPerYear, defaultSettings().animal.loyaltyTopVisitsPerYear)
   };
 }
@@ -1014,11 +1017,13 @@ function updateAnimalOptionsFromDog(db, dog) {
   const current = publicAnimalSettings(db);
   const breeds = cleanStringList([...current.breeds, dog.breed], current.breeds);
   const services = cleanStringList([...current.services, ...(dog.services || [])], current.services);
+  const colors = cleanStringList([...current.colors, dog.color], current.colors);
   db.settings.animal = {
     ...current,
     ...(db.settings.animal || {}),
     breeds,
     services,
+    colors,
     loyaltyTopVisitsPerYear: cleanNumber(db.settings.animal?.loyaltyTopVisitsPerYear, current.loyaltyTopVisitsPerYear)
   };
 }
@@ -1303,6 +1308,7 @@ async function handleApi(req, res, url) {
         db.settings.animal = {
           breeds: cleanStringList(body.breeds, defaultSettings().animal.breeds),
           services: cleanStringList(body.services, defaultSettings().animal.services),
+          colors: cleanStringList(body.colors, defaultSettings().animal.colors),
           loyaltyTopVisitsPerYear: Math.max(1, cleanNumber(body.loyaltyTopVisitsPerYear, 8)),
           updatedAt: new Date().toISOString()
         };
@@ -1588,7 +1594,7 @@ function serveStatic(req, res, url) {
             res.writeHead(404);
             return res.end("Not found");
           }
-          res.writeHead(200, { "Content-Type": mimeTypes[".html"] });
+          res.writeHead(200, { "Content-Type": mimeTypes[".html"], "Cache-Control": staticCacheControl("/index.html", PUBLIC_DIR) });
           res.end(fallbackData);
         });
       }
@@ -1599,10 +1605,25 @@ function serveStatic(req, res, url) {
     const extension = path.extname(filePath).toLowerCase();
     res.writeHead(200, {
       "Content-Type": mimeTypes[extension] || "application/octet-stream",
-      "Cache-Control": requestedPath.includes("sw.js") ? "no-cache" : "public, max-age=3600"
+      "Cache-Control": staticCacheControl(requestedPath, baseDir)
     });
     res.end(data);
   });
+}
+
+function staticCacheControl(requestedPath, baseDir) {
+  if (baseDir !== PUBLIC_DIR) return "public, max-age=3600";
+  const noCacheFiles = new Set([
+    "/index.html",
+    "/app.js",
+    "/styles.css",
+    "/manifest.json",
+    "/sw.js",
+    "/apple-touch-icon.png",
+    "/apple-touch-icon-precomposed.png",
+    "/favicon.png"
+  ]);
+  return noCacheFiles.has(requestedPath) ? "no-cache, no-transform" : "public, max-age=3600";
 }
 
 const server = http.createServer((req, res) => {

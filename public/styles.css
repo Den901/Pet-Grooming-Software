@@ -1618,8 +1618,7 @@ label {
   gap: 10px;
 }
 
-.pie-legend div,
-.stat-list div {
+.pie-legend div {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -1632,18 +1631,56 @@ label {
   border-radius: 50%;
 }
 
-.pie-legend strong,
-.stat-list span {
+.pie-legend strong {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.pie-legend small,
-.stat-list strong {
+.pie-legend small {
   color: var(--brand);
   font-weight: 850;
+}
+
+.stat-bar-row {
+  display: grid;
+  gap: 6px;
+}
+
+.stat-bar-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.stat-bar-head span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+  font-weight: 750;
+}
+
+.stat-bar-head strong {
+  color: var(--brand);
+  font-weight: 900;
+}
+
+.stat-bar-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(35, 67, 68, 0.1);
+}
+
+.stat-bar-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--brand), var(--accent));
 }
 
 .empty-chart {
@@ -1812,6 +1849,46 @@ label {
   opacity: 1;
 }
 
+.app-update-popup {
+  position: fixed;
+  inset: auto 18px 18px auto;
+  z-index: 95;
+  width: min(420px, calc(100vw - 36px));
+}
+
+.app-update-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius);
+  background: var(--brand-strong);
+  color: #eff7f4;
+  box-shadow: var(--shadow);
+}
+
+.app-update-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.app-update-copy strong {
+  font-size: 1rem;
+}
+
+.app-update-copy span {
+  color: rgba(239, 247, 244, 0.78);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.app-update-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .pwa-install-prompt {
   position: fixed;
   left: 14px;
@@ -1963,6 +2040,7 @@ label {
 :root[data-theme="dark"] .login-panel,
 :root[data-theme="dark"] .modal-card,
 :root[data-theme="dark"] .day-cell,
+:root[data-theme="dark"] .week-day,
 :root[data-theme="dark"] .mobile-agenda-day,
 :root[data-theme="dark"] .table-card,
 :root[data-theme="dark"] .history-item,
@@ -2004,6 +2082,7 @@ label {
 :root[data-theme="dark"] .calendar-grid,
 :root[data-theme="dark"] .calendar-weekdays,
 :root[data-theme="dark"] .day-cell,
+:root[data-theme="dark"] .week-day,
 :root[data-theme="dark"] .mobile-agenda-day,
 :root[data-theme="dark"] .history-item,
 :root[data-theme="dark"] .detail-item,
@@ -2047,6 +2126,15 @@ label {
 :root[data-theme="dark"] .top-badge {
   background: rgba(225, 166, 61, 0.18);
   color: #ffd889 !important;
+}
+
+:root[data-theme="dark"] .week-day.today {
+  background: linear-gradient(180deg, rgba(225, 166, 61, 0.13), var(--panel) 48%);
+  border-color: var(--gold);
+}
+
+:root[data-theme="dark"] .week-day h3 {
+  color: #dff4ef;
 }
 
 :root[data-theme="dark"] .sidebar {
@@ -2103,6 +2191,14 @@ label {
 
 :root[data-theme="dark"] .update-changelog {
   background: rgba(93, 143, 183, 0.12);
+}
+
+:root[data-theme="dark"] .stat-bar-track {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="dark"] .stat-bar-track span {
+  background: linear-gradient(90deg, var(--green), var(--gold));
 }
 
 @media (max-width: 1024px) {
@@ -2413,6 +2509,13 @@ label {
 
   .toast {
     bottom: calc(94px + env(safe-area-inset-bottom));
+  }
+
+  .app-update-popup {
+    left: 12px;
+    right: 12px;
+    bottom: calc(100px + env(safe-area-inset-bottom));
+    width: auto;
   }
 
   .pwa-install-prompt {

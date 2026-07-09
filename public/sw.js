@@ -1,4 +1,4 @@
-const CACHE_NAME = "toelettatura-pwa-v19";
+const CACHE_NAME = "toelettatura-pwa-v20";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -28,8 +28,26 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+});
+
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/uploads/")) return;
-  event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));
+  if (event.request.method !== "GET") return;
+  if (event.request.mode === "navigate" || APP_SHELL.includes(url.pathname)) {
+    event.respondWith(fetchAndCache(event.request).catch(() => caches.match(event.request).then((cached) => cached || caches.match("/index.html"))));
+    return;
+  }
+  event.respondWith(caches.match(event.request).then((cached) => cached || fetchAndCache(event.request)));
 });
+
+async function fetchAndCache(request) {
+  const response = await fetch(request);
+  if (response && response.ok) {
+    const cache = await caches.open(CACHE_NAME);
+    cache.put(request, response.clone());
+  }
+  return response;
+}

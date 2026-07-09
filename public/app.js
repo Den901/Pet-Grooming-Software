@@ -19,6 +19,10 @@ const state = {
   updateCheckLoading: false,
   eventSource: null,
   liveRefreshTimer: null,
+  serviceWorkerRegistration: null,
+  appUpdateReady: false,
+  appUpdatePromptDismissed: false,
+  appUpdateReloading: false,
   dashboardFocus: "breeds",
   deferredInstallPrompt: null,
   pwaPromptHidden: false,
@@ -81,9 +85,7 @@ window.addEventListener("appinstalled", () => {
 boot();
 
 async function boot() {
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js").catch(() => {});
-  }
+  setupServiceWorkerUpdates();
 
   await loadPublicSettings();
 
@@ -102,6 +104,98 @@ async function boot() {
     renderLogin();
     renderPwaInstallPrompt();
   }
+}
+
+function setupServiceWorkerUpdates() {
+  if (!("serviceWorker" in navigator)) return;
+  let hasController = Boolean(navigator.serviceWorker.controller);
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hasController) {
+      hasController = true;
+      return;
+    }
+    if (state.appUpdateReloading) {
+      window.location.reload();
+      return;
+    }
+    showAppUpdatePopup();
+  });
+  navigator.serviceWorker
+    .register("/sw.js", { updateViaCache: "none" })
+    .then((registration) => {
+      state.serviceWorkerRegistration = registration;
+      watchServiceWorkerRegistration(registration);
+      registration.update().catch(() => {});
+      setInterval(() => registration.update().catch(() => {}), 5 * 60 * 1000);
+    })
+    .catch(() => {});
+  window.addEventListener("focus", checkServiceWorkerUpdate);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") checkServiceWorkerUpdate();
+  });
+}
+
+function watchServiceWorkerRegistration(registration) {
+  if (registration.waiting && navigator.serviceWorker.controller) showAppUpdatePopup();
+  registration.addEventListener("updatefound", () => {
+    const worker = registration.installing;
+    if (!worker) return;
+    worker.addEventListener("statechange", () => {
+      if (worker.state === "installed" && navigator.serviceWorker.controller) showAppUpdatePopup();
+    });
+  });
+}
+
+function checkServiceWorkerUpdate() {
+  state.serviceWorkerRegistration?.update().catch(() => {});
+}
+
+function showAppUpdatePopup() {
+  state.appUpdateReady = true;
+  state.appUpdatePromptDismissed = false;
+  renderAppUpdatePopup();
+}
+
+function renderAppUpdatePopup() {
+  let popup = document.getElementById("appUpdatePopup");
+  if (!state.appUpdateReady || state.appUpdatePromptDismissed) {
+    popup?.remove();
+    return;
+  }
+  if (!popup) {
+    popup = document.createElement("div");
+    popup.id = "appUpdatePopup";
+    document.body.appendChild(popup);
+  }
+  popup.className = "app-update-popup";
+  popup.innerHTML = `
+    <div class="app-update-card" role="dialog" aria-live="polite" aria-label="Nuova versione pronta">
+      <div class="app-update-copy">
+        <strong>Nuova versione pronta</strong>
+        <span>Aggiorna il portale senza reinstallare la PWA.</span>
+      </div>
+      <div class="app-update-actions">
+        <button class="btn small" type="button" data-app-update-reload>Aggiorna ora</button>
+        <button class="btn ghost small" type="button" data-app-update-dismiss>Piu tardi</button>
+      </div>
+    </div>
+  `;
+  popup.querySelector("[data-app-update-reload]").addEventListener("click", applyAppShellUpdate);
+  popup.querySelector("[data-app-update-dismiss]").addEventListener("click", () => {
+    state.appUpdatePromptDismissed = true;
+    renderAppUpdatePopup();
+  });
+}
+
+async function applyAppShellUpdate() {
+  state.appUpdateReloading = true;
+  const registration = state.serviceWorkerRegistration || (await navigator.serviceWorker.getRegistration().catch(() => null));
+  if (registration?.waiting) {
+    registration.waiting.postMessage({ type: "SKIP_WAITING" });
+    setTimeout(() => window.location.reload(), 900);
+    return;
+  }
+  window.location.reload();
 }
 
 async function loadPublicSettings() {
@@ -187,6 +281,7 @@ function getAnimalSettings() {
   return {
     breeds: ["Meticcio"],
     services: ["Bagno", "Taglio", "Snodatura", "Stripping"],
+    colors: ["Nero", "Bianco", "Marrone", "Fulvo", "Grigio", "Beige", "Crema", "Rosso", "Dorato", "Tricolore", "Pezzato", "Tigrato", "Merle"],
     loyaltyTopVisitsPerYear: 8,
     ...(state.animalSettings || {})
   };
@@ -1202,6 +1297,9 @@ function renderSettings() {
           <label class="full">Prestazioni disponibili
             <textarea name="services" placeholder="Una prestazione per riga">${escapeHtml((animal.services || []).join("\n"))}</textarea>
           </label>
+          <label class="full">Colori cane
+            <textarea name="colors" placeholder="Un colore per riga">${escapeHtml((animal.colors || []).join("\n"))}</textarea>
+          </label>
           <label>Prestazioni annue per cliente top
             <input name="loyaltyTopVisitsPerYear" type="number" min="1" step="1" value="${escapeAttr(animal.loyaltyTopVisitsPerYear || 8)}" />
           </label>
@@ -1528,6 +1626,7 @@ function bindSettings() {
         body: JSON.stringify({
           breeds: parseTextareaList(data.get("breeds")),
           services: parseTextareaList(data.get("services")),
+          colors: parseTextareaList(data.get("colors")),
           loyaltyTopVisitsPerYear: data.get("loyaltyTopVisitsPerYear")
         })
       });
@@ -1953,22 +2052,51 @@ function renderHistoryAppointment(appointment) {
 }
 
 function renderBreedField(dog, animal) {
-  const breeds = uniqueValues([...(animal.breeds || []), dog.breed].filter(Boolean));
-  const current = String(dog.breed || "").trim();
-  const matched = breeds.find((breed) => breed.toLowerCase() === current.toLowerCase());
+  return renderChoiceField({
+    name: "breed",
+    label: "Razza",
+    customLabel: "Nuova razza",
+    placeholder: "Seleziona razza",
+    addLabel: "+ Aggiungi razza",
+    customPlaceholder: "Scrivi nuova razza",
+    current: dog.breed,
+    options: animal.breeds || []
+  });
+}
+
+function renderColorField(dog, animal, required = true, quickRequired = false) {
+  return renderChoiceField({
+    name: "color",
+    label: "Colore cane",
+    customLabel: "Nuovo colore",
+    placeholder: "Seleziona colore",
+    addLabel: "+ Aggiungi colore",
+    customPlaceholder: "Scrivi nuovo colore",
+    current: dog.color,
+    options: animal.colors || [],
+    required,
+    quickRequired
+  });
+}
+
+function renderChoiceField({ name, label, customLabel, placeholder, addLabel, customPlaceholder, current = "", options = [], required = false, quickRequired = false }) {
+  const values = uniqueValues([...(options || []), current].filter(Boolean));
+  const selected = String(current || "").trim();
+  const matched = values.find((value) => value.toLowerCase() === selected.toLowerCase());
   const customSelected = Boolean(current && !matched);
+  const quickRequiredAttr = quickRequired ? "data-quick-required" : "";
   return `
-    <label>Razza
-      <select name="breedChoice" data-choice-select data-choice-custom="breedCustom">
-        <option value="">Seleziona razza</option>
-        ${breeds
-          .map((breed) => `<option value="${escapeAttr(breed)}" ${matched === breed ? "selected" : ""}>${escapeHtml(breed)}</option>`)
+    <label>${escapeHtml(label)}
+      <select name="${escapeAttr(name)}Choice" data-choice-select data-choice-custom="${escapeAttr(`${name}Custom`)}" ${required ? "required" : ""} ${quickRequiredAttr}>
+        <option value="">${escapeHtml(placeholder)}</option>
+        ${values
+          .map((value) => `<option value="${escapeAttr(value)}" ${matched === value ? "selected" : ""}>${escapeHtml(value)}</option>`)
           .join("")}
-        <option value="${CUSTOM_OPTION_VALUE}" ${customSelected ? "selected" : ""}>+ Aggiungi razza</option>
+        <option value="${CUSTOM_OPTION_VALUE}" ${customSelected ? "selected" : ""}>${escapeHtml(addLabel)}</option>
       </select>
     </label>
-    <label class="choice-custom" data-choice-custom-row="breedCustom" ${customSelected ? "" : "hidden"}>Nuova razza
-      <input name="breedCustom" value="${customSelected ? escapeAttr(current) : ""}" placeholder="Scrivi nuova razza" ${customSelected ? "" : "disabled"} />
+    <label class="choice-custom" data-choice-custom-row="${escapeAttr(`${name}Custom`)}" ${customSelected ? "" : "hidden"}>${escapeHtml(customLabel)}
+      <input name="${escapeAttr(`${name}Custom`)}" value="${customSelected ? escapeAttr(selected) : ""}" placeholder="${escapeAttr(customPlaceholder)}" ${customSelected ? "" : "disabled"} ${quickRequiredAttr} data-choice-custom-input />
     </label>
   `;
 }
@@ -2013,13 +2141,14 @@ function bindChoiceSelects(form) {
     const input = row?.querySelector("input");
     const sync = () => {
       const custom = select.value === CUSTOM_OPTION_VALUE;
-      if (row) row.hidden = !custom;
+      if (row) row.hidden = !custom || select.disabled;
       if (input) {
-        input.disabled = !custom;
-        input.required = custom && select.required;
+        input.disabled = select.disabled || !custom;
+        input.required = !select.disabled && custom && select.required;
         if (!custom) input.value = "";
       }
     };
+    select._syncChoiceCustom = sync;
     select.addEventListener("change", sync);
     sync();
   });
@@ -2126,9 +2255,7 @@ function openDogDialog(dog = {}) {
         <label>Anno nascita
           <input name="birthYear" type="number" min="1980" max="${new Date().getFullYear()}" value="${escapeAttr(dog.birthYear || "")}" />
         </label>
-        <label>Colore cane
-          <input name="color" value="${escapeAttr(dog.color || "")}" required />
-        </label>
+        ${renderColorField(dog, animal)}
         <fieldset class="field-group">
           <legend>Sesso cane</legend>
           <label class="choice-line"><input name="sex" type="radio" value="M" ${dog.sex === "M" ? "checked" : ""} required /> Maschio</label>
@@ -2200,6 +2327,7 @@ function openDogDialog(dog = {}) {
       const photo = form.elements.photo.files[0];
       const services = collectServicesFromForm(formData, form);
       const breed = selectedChoiceValue(formData, "breed");
+      const color = selectedChoiceValue(formData, "color");
       const payload = {
         dogName: formData.get("dogName"),
         ownerName: formData.get("ownerName"),
@@ -2208,7 +2336,7 @@ function openDogDialog(dog = {}) {
         alternateContact: formData.get("alternateContact"),
         breed,
         birthYear: formData.get("birthYear"),
-        color: formData.get("color"),
+        color,
         sex: formData.get("sex"),
         imageConsent: formData.get("imageConsent"),
         pathologies: formData.get("pathologies"),
@@ -2288,9 +2416,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
                   <input name="contactMissing" type="checkbox" />
                   Numero non presente
                 </label>
-                <label>Colore cane
-                  <input name="color" data-quick-required />
-                </label>
+                ${renderColorField({}, animal, false, true)}
                 <fieldset class="field-group compact">
                   <legend>Sesso cane</legend>
                   <label class="choice-line"><input name="sex" type="radio" value="M" data-quick-required /> Maschio</label>
@@ -2339,6 +2465,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
       </div>
     `,
     onOpen: (form) => {
+      bindChoiceSelects(form);
       bindServicePickers(form);
       const createDogRows = form.querySelectorAll("[data-create-dog-row]");
       const completionFields = form.querySelectorAll("[data-completion-field]");
@@ -2364,10 +2491,12 @@ function openAppointmentDialog(appointment = {}, options = {}) {
               if (hasLinkedDog) input.checked = false;
               return;
             }
+            if (input.hasAttribute("data-choice-custom-input")) return;
             input.disabled = hasLinkedDog || !wantsProfile;
             input.required = !hasLinkedDog && wantsProfile && input.hasAttribute("data-quick-required");
           });
         });
+        form.querySelectorAll("[data-choice-select]").forEach((select) => select._syncChoiceCustom?.());
         if (form.elements.contactMissing) {
           const missing = form.elements.contactMissing.checked && !hasLinkedDog && wantsProfile;
           form.elements.contact.disabled = missing;
@@ -2408,6 +2537,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
       if (!services.length) services.push("Toelettatura");
       payload.services = services;
       payload.service = services.join(", ");
+      payload.color = selectedChoiceValue(formData, "color");
       payload.createDogProfile = formData.get("createDogProfile") === "on";
       if (completionMode) payload.status = "completato";
       if (payload.status === "completato") payload.treatmentDone = payload.service || "Toelettatura";
@@ -2857,12 +2987,29 @@ function topStatLabel(stats) {
 
 function renderStatList(title, stats) {
   const rows = (stats || []).slice(0, 6);
+  const max = Math.max(...rows.map((item) => Number(item.count || 0)), 0);
   return `
     <div class="stat-list">
       <h3>${escapeHtml(title)}</h3>
       ${
         rows.length
-          ? rows.map((item) => `<div><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.count)}</strong></div>`).join("")
+          ? rows
+              .map((item) => {
+                const count = Number(item.count || 0);
+                const width = max ? Math.max(6, Math.round((count / max) * 100)) : 0;
+                return `
+                  <div class="stat-bar-row">
+                    <div class="stat-bar-head">
+                      <span>${escapeHtml(item.label)}</span>
+                      <strong>${escapeHtml(count)}</strong>
+                    </div>
+                    <div class="stat-bar-track" aria-hidden="true">
+                      <span style="width: ${escapeAttr(width)}%;"></span>
+                    </div>
+                  </div>
+                `;
+              })
+              .join("")
           : `<p class="muted">Nessun dato.</p>`
       }
     </div>
