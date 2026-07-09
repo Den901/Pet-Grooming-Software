@@ -11,6 +11,7 @@ const state = {
   branding: null,
   whatsapp: null,
   animalSettings: null,
+  navigation: null,
   version: null,
   initialAccessHint: false,
   updateCheck: null,
@@ -29,6 +30,14 @@ const state = {
 const weekdayShort = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 const formatter = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "2-digit", month: "short" });
 const monthFormatter = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" });
+const CUSTOM_OPTION_VALUE = "__add_new__";
+const SIDEBAR_DEFINITIONS = {
+  calendar: { id: "calendar", label: "Calendario", symbol: "CA" },
+  dashboard: { id: "dashboard", label: "Dashboard", symbol: "DA" },
+  dogs: { id: "dogs", label: "Schede", symbol: "SC" },
+  users: { id: "users", label: "Utenti", symbol: "UT", adminOnly: true }
+};
+const DEFAULT_SIDEBAR_ORDER = ["calendar", "dashboard", "dogs", "users"];
 const THEME_PRESETS = {
   light: {
     brand: "#234344",
@@ -91,6 +100,7 @@ async function loadPublicSettings() {
   try {
     const response = await api("/api/public-settings");
     state.branding = response.branding || state.branding;
+    state.navigation = response.navigation || state.navigation;
     state.initialAccessHint = Boolean(response.setup?.showInitialAccessHint);
     applyBranding();
   } catch {
@@ -171,6 +181,23 @@ function getAnimalSettings() {
     loyaltyTopVisitsPerYear: 8,
     ...(state.animalSettings || {})
   };
+}
+
+function sidebarOrder(order = state.navigation?.sidebarOrder) {
+  const seen = new Set();
+  const result = [];
+  const source = Array.isArray(order) ? order : DEFAULT_SIDEBAR_ORDER;
+  for (const id of source) {
+    if (!SIDEBAR_DEFINITIONS[id] || seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+  }
+  for (const id of DEFAULT_SIDEBAR_ORDER) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+  }
+  return result;
 }
 
 function applyBranding() {
@@ -264,16 +291,18 @@ function renderBrandMark(className) {
 }
 
 async function loadData() {
-  const [meResponse, dogsResponse, appointmentsResponse, animalResponse] = await Promise.all([
+  const [meResponse, dogsResponse, appointmentsResponse, animalResponse, navigationResponse] = await Promise.all([
     api("/api/me"),
     api("/api/dogs"),
     api("/api/appointments"),
-    api("/api/settings/animal")
+    api("/api/settings/animal"),
+    api("/api/settings/navigation")
   ]);
   state.me = meResponse.user || state.me;
   state.dogs = dogsResponse.dogs || [];
   state.appointments = appointmentsResponse.appointments || [];
   state.animalSettings = animalResponse.animal || state.animalSettings;
+  state.navigation = navigationResponse.navigation || state.navigation;
   if (state.me?.role === "admin") {
     const [usersResponse, duckdnsResponse, brandingResponse, whatsappResponse, versionResponse] = await Promise.all([
       api("/api/users"),
@@ -450,6 +479,14 @@ function renderShell() {
               <span>${state.me.role === "admin" ? "Amministratore" : "Operatore"}</span>
             </div>
           </div>
+          ${
+            state.me.role === "admin"
+              ? `<button class="nav-item nav-item-bottom ${state.view === "settings" ? "active" : ""}" data-nav="settings" type="button">
+                  <span class="nav-symbol gear" aria-hidden="true">&#9881;</span>
+                  <span>Impostazioni</span>
+                </button>`
+              : ""
+          }
           <button class="btn ghost" type="button" id="logoutBtn">Esci</button>
         </div>
       </aside>
@@ -470,20 +507,13 @@ function renderShell() {
 }
 
 function navItems() {
-  const items = [
-    { id: "calendar", label: "Calendario", symbol: "CA" },
-    { id: "dashboard", label: "Dashboard", symbol: "DA" },
-    { id: "dogs", label: "Schede", symbol: "SC" }
-  ];
-  if (state.me?.role === "admin") {
-    items.push({ id: "users", label: "Utenti", symbol: "UT" });
-    items.push({ id: "settings", label: "Impostazioni", symbol: "IM" });
-  }
-  return items;
+  return sidebarOrder()
+    .map((id) => SIDEBAR_DEFINITIONS[id])
+    .filter((item) => item && (!item.adminOnly || state.me?.role === "admin"));
 }
 
 function canAccessView(view) {
-  return navItems().some((item) => item.id === view);
+  return navItems().some((item) => item.id === view) || (view === "settings" && state.me?.role === "admin");
 }
 
 async function logout() {
@@ -495,6 +525,7 @@ async function logout() {
   state.duckdns = null;
   state.whatsapp = null;
   state.animalSettings = null;
+  state.navigation = null;
   state.version = null;
   state.updateCheck = null;
   state.updateCheckLoading = false;
@@ -972,6 +1003,7 @@ function renderSettings() {
   const version = state.version || {};
   const updateCheck = state.updateCheck;
   const localUrls = duckdns.localUrls || [];
+  const navigationOrder = sidebarOrder();
   const localLinks = localUrls.length
     ? localUrls.map((item) => `<a href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.label)}: ${escapeHtml(item.url)}</a>`).join("")
     : `<span class="muted">Indirizzi locali non disponibili</span>`;
@@ -1092,23 +1124,38 @@ function renderSettings() {
         <div class="settings-heading-row">
           <div>
             <h2>Scheda animale</h2>
-            <p class="settings-note">Gestisci razze, servizi selezionabili e soglia cliente top.</p>
+            <p class="settings-note">Gestisci la lista master: qui finiscono anche razze e prestazioni aggiunte da schede e appuntamenti.</p>
           </div>
-          <span class="badge">${escapeHtml(animal.loyaltyTopVisitsPerYear)} servizi/anno</span>
+          <span class="badge">${escapeHtml(animal.loyaltyTopVisitsPerYear)} prestazioni/anno</span>
         </div>
         <div class="form-grid">
           <label class="full">Razze disponibili
             <textarea name="breeds" placeholder="Una razza per riga">${escapeHtml((animal.breeds || []).join("\n"))}</textarea>
           </label>
-          <label class="full">Servizi disponibili
-            <textarea name="services" placeholder="Un servizio per riga">${escapeHtml((animal.services || []).join("\n"))}</textarea>
+          <label class="full">Prestazioni disponibili
+            <textarea name="services" placeholder="Una prestazione per riga">${escapeHtml((animal.services || []).join("\n"))}</textarea>
           </label>
-          <label>Servizi annui per cliente top
+          <label>Prestazioni annue per cliente top
             <input name="loyaltyTopVisitsPerYear" type="number" min="1" step="1" value="${escapeAttr(animal.loyaltyTopVisitsPerYear || 8)}" />
           </label>
         </div>
         <div class="settings-actions">
           <button class="btn" type="submit">Salva scheda animale</button>
+        </div>
+      </form>
+      <form class="settings-panel wide" id="navigationSettingsForm">
+        <div class="settings-heading-row">
+          <div>
+            <h2>Menu laterale</h2>
+            <p class="settings-note">Riordina le voci principali della sidebar. Impostazioni resta fissa sotto al profilo.</p>
+          </div>
+          <span class="badge">Sidebar</span>
+        </div>
+        <div class="order-list" data-sidebar-order-list>
+          ${renderSidebarOrderRows(navigationOrder)}
+        </div>
+        <div class="settings-actions">
+          <button class="btn" type="submit">Salva menu</button>
         </div>
       </form>
       <form class="settings-panel wide" id="whatsappForm">
@@ -1236,31 +1283,36 @@ function renderSettings() {
         <div class="settings-heading-row">
           <div>
             <h2>Aggiornamento portale</h2>
-            <p class="settings-note">Versione installata: ${escapeHtml(version.releaseLabel || version.version || "non disponibile")}. Accetta solo pacchetti ${escapeHtml(version.updateExtension || ".pgs-update")}.</p>
+            <p class="settings-note">Controllo automatico update web e installazione da pacchetto locale.</p>
           </div>
           <span class="badge">Beta</span>
         </div>
-        <div class="update-status" id="updateStatus">
-          ${renderUpdateStatus(updateCheck)}
+        <div class="update-layout">
+          <div class="update-block">
+            <span class="update-label">Versione installata</span>
+            <strong>${escapeHtml(version.releaseLabel || version.version || "non disponibile")}</strong>
+            <small>Pacchetti accettati: ${escapeHtml(version.updateExtension || ".pgs-update")}</small>
+          </div>
+          <div class="update-block update-block-main" id="updateStatus">
+            ${renderUpdateStatus(updateCheck)}
+          </div>
+          <div class="update-block">
+            <span class="update-label">Update da file locale</span>
+            <label>File update
+              <input name="updateFile" type="file" accept=".pgs-update" />
+            </label>
+            <button class="btn" type="submit">Installa file locale</button>
+          </div>
         </div>
-        <div class="form-grid">
-          <label>File update locale
-            <input name="updateFile" type="file" accept=".pgs-update" />
-          </label>
-          <label class="full">URL update web
-            <input name="updateUrl" type="url" value="${escapeAttr(updateCheck?.updateAvailable && updateCheck.packageUrl ? updateCheck.packageUrl : "")}" placeholder="https://.../Pet-Grooming-Software-0.0.1-beta.5.pgs-update" />
-          </label>
-        </div>
-        <p class="settings-note">L'update aggiorna solo il software. Database, foto e backup non vengono toccati. Dopo l'installazione serve riavviare il servizio.</p>
+        <p class="settings-note">L'update aggiorna solo il software. Database, foto e backup non vengono toccati.</p>
         <div class="settings-actions">
-          <button class="btn" type="submit">Installa update</button>
           <button class="btn secondary" type="button" id="checkUpdateBtn">Controlla update web</button>
-          <button class="btn secondary" type="button" id="restartPortalBtn">Riavvia servizio</button>
           ${
             updateCheck?.updateAvailable && updateCheck.packageUrl
-              ? `<button class="btn secondary" type="button" id="installWebUpdateBtn">Installa update disponibile</button>`
+              ? `<button class="btn" type="button" id="installWebUpdateBtn">Installa update disponibile</button>`
               : ""
           }
+          <button class="btn secondary" type="button" id="restartPortalBtn">Riavvia servizio</button>
         </div>
       </form>
     </section>
@@ -1269,23 +1321,68 @@ function renderSettings() {
 
 function renderUpdateStatus(updateCheck) {
   if (state.updateCheckLoading) {
-    return `<p class="settings-note">Controllo update web in corso...</p>`;
+    return `
+      <span class="update-label">Update web</span>
+      <strong>Controllo in corso...</strong>
+      <small>Sto verificando la release pubblicata su GitHub.</small>
+    `;
   }
   if (!updateCheck) {
-    return `<p class="settings-note">Il portale controlla la release web pubblicata su GitHub quando apri queste impostazioni.</p>`;
+    return `
+      <span class="update-label">Update web</span>
+      <strong>Controllo automatico</strong>
+      <small>Il portale verifica la release web quando apri queste impostazioni.</small>
+    `;
   }
   if (updateCheck.error) {
-    return `<p class="settings-note danger-note">Update web non verificabile: ${escapeHtml(updateCheck.error)}</p>`;
+    return `
+      <span class="update-label">Update web</span>
+      <strong class="danger-note">Non verificabile</strong>
+      <small>${escapeHtml(updateCheck.error)}</small>
+    `;
   }
   if (updateCheck.updateAvailable) {
     return `
-      <div class="update-available">
-        <strong>Nuovo update disponibile: ${escapeHtml(updateCheck.latestReleaseLabel || updateCheck.latestVersion)}</strong>
-        <span>Installata: ${escapeHtml(updateCheck.currentReleaseLabel || updateCheck.currentVersion)}. Dopo l'installazione serve riavviare il servizio.</span>
-      </div>
+      <span class="update-label">Update web</span>
+      <strong>Disponibile: ${escapeHtml(updateCheck.latestReleaseLabel || updateCheck.latestVersion)}</strong>
+      <small>Installata: ${escapeHtml(updateCheck.currentReleaseLabel || updateCheck.currentVersion)}. Premi "Installa update disponibile", poi riavvia il servizio.</small>
     `;
   }
-  return `<p class="settings-note">Nessun update web disponibile. Versione online: ${escapeHtml(updateCheck.latestReleaseLabel || updateCheck.latestVersion || "-")}.</p>`;
+  return `
+    <span class="update-label">Update web</span>
+    <strong>Portale aggiornato</strong>
+    <small>Versione online: ${escapeHtml(updateCheck.latestReleaseLabel || updateCheck.latestVersion || "-")}.</small>
+  `;
+}
+
+function renderSidebarOrderRows(order = sidebarOrder()) {
+  return order
+    .map((id) => SIDEBAR_DEFINITIONS[id])
+    .filter(Boolean)
+    .map(
+      (item) => `
+        <div class="order-row" data-sidebar-order-row>
+          <input type="hidden" name="sidebarOrder" value="${escapeAttr(item.id)}" />
+          <span class="nav-symbol">${escapeHtml(item.symbol)}</span>
+          <strong>${escapeHtml(item.label)}</strong>
+          <div class="order-actions">
+            <button class="icon-btn" type="button" data-order-move="-1" title="Sposta su" aria-label="Sposta ${escapeAttr(item.label)} su">&#8593;</button>
+            <button class="icon-btn" type="button" data-order-move="1" title="Sposta giu" aria-label="Sposta ${escapeAttr(item.label)} giu">&#8595;</button>
+          </div>
+        </div>
+      `
+    )
+    .join("");
+}
+
+function syncSidebarOrderButtons(list) {
+  const rows = Array.from(list.querySelectorAll("[data-sidebar-order-row]"));
+  rows.forEach((row, index) => {
+    const up = row.querySelector('[data-order-move="-1"]');
+    const down = row.querySelector('[data-order-move="1"]');
+    if (up) up.disabled = index === 0;
+    if (down) down.disabled = index === rows.length - 1;
+  });
 }
 
 function bindSettings() {
@@ -1357,6 +1454,40 @@ function bindSettings() {
       state.animalSettings = response.animal;
       renderView();
       notify("Impostazioni scheda animale salvate");
+    } catch (err) {
+      notify(err.message);
+    }
+  });
+
+  const navigationForm = document.getElementById("navigationSettingsForm");
+  const orderList = navigationForm.querySelector("[data-sidebar-order-list]");
+  orderList.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-order-move]");
+    if (!button) return;
+    const row = button.closest("[data-sidebar-order-row]");
+    const direction = Number(button.dataset.orderMove);
+    if (direction < 0 && row.previousElementSibling) {
+      orderList.insertBefore(row, row.previousElementSibling);
+    }
+    if (direction > 0 && row.nextElementSibling) {
+      orderList.insertBefore(row.nextElementSibling, row);
+    }
+    syncSidebarOrderButtons(orderList);
+  });
+  syncSidebarOrderButtons(orderList);
+  navigationForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    try {
+      const response = await api("/api/settings/navigation", {
+        method: "PUT",
+        body: JSON.stringify({
+          sidebarOrder: data.getAll("sidebarOrder")
+        })
+      });
+      state.navigation = response.navigation;
+      renderShell();
+      notify("Menu laterale salvato");
     } catch (err) {
       notify(err.message);
     }
@@ -1471,27 +1602,14 @@ function bindSettings() {
   document.getElementById("updateForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
-    const data = new FormData(form);
     const file = form.elements.updateFile.files[0];
-    const updateUrl = String(data.get("updateUrl") || "").trim();
     try {
-      let payload;
-      if (file) {
-        if (!file.name.toLowerCase().endsWith(".pgs-update")) throw new Error("Seleziona un file .pgs-update");
-        payload = {
-          fileName: file.name,
-          package: JSON.parse(await file.text())
-        };
-      } else if (updateUrl) {
-        if (!new URL(updateUrl).pathname.toLowerCase().endsWith(".pgs-update")) {
-          throw new Error("L'URL deve puntare a un file .pgs-update");
-        }
-        payload = { url: updateUrl };
-      } else if (state.updateCheck?.updateAvailable && state.updateCheck.packageUrl) {
-        payload = { url: state.updateCheck.packageUrl };
-      } else {
-        throw new Error("Seleziona un file update o inserisci un URL");
-      }
+      if (!file) throw new Error("Seleziona un file update locale");
+      if (!file.name.toLowerCase().endsWith(".pgs-update")) throw new Error("Seleziona un file .pgs-update");
+      const payload = {
+        fileName: file.name,
+        package: JSON.parse(await file.text())
+      };
       const response = await api("/api/system/update", {
         method: "POST",
         body: JSON.stringify(payload)
@@ -1754,6 +1872,161 @@ function renderHistoryAppointment(appointment) {
   `;
 }
 
+function renderBreedField(dog, animal) {
+  const breeds = uniqueValues([...(animal.breeds || []), dog.breed].filter(Boolean));
+  const current = String(dog.breed || "").trim();
+  const matched = breeds.find((breed) => breed.toLowerCase() === current.toLowerCase());
+  const customSelected = Boolean(current && !matched);
+  return `
+    <label>Razza
+      <select name="breedChoice" data-choice-select data-choice-custom="breedCustom">
+        <option value="">Seleziona razza</option>
+        ${breeds
+          .map((breed) => `<option value="${escapeAttr(breed)}" ${matched === breed ? "selected" : ""}>${escapeHtml(breed)}</option>`)
+          .join("")}
+        <option value="${CUSTOM_OPTION_VALUE}" ${customSelected ? "selected" : ""}>+ Aggiungi razza</option>
+      </select>
+    </label>
+    <label class="choice-custom" data-choice-custom-row="breedCustom" ${customSelected ? "" : "hidden"}>Nuova razza
+      <input name="breedCustom" value="${customSelected ? escapeAttr(current) : ""}" placeholder="Scrivi nuova razza" ${customSelected ? "" : "disabled"} />
+    </label>
+  `;
+}
+
+function renderServicePicker(selected = [], options = []) {
+  const selectedServices = normalizeServiceList(selected);
+  const serviceOptions = uniqueValues([...(options || []), ...selectedServices]);
+  return `
+    <div class="service-picker" data-service-picker>
+      <div class="service-selected" data-service-selected>
+        ${selectedServices.map(renderServiceChip).join("")}
+      </div>
+      <div class="service-picker-controls">
+        <select data-service-select aria-label="Seleziona prestazione">
+          <option value="">Seleziona prestazione</option>
+          ${serviceOptions.map((service) => `<option value="${escapeAttr(service)}">${escapeHtml(service)}</option>`).join("")}
+          <option value="${CUSTOM_OPTION_VALUE}">+ Aggiungi prestazione</option>
+        </select>
+      </div>
+      <div class="service-custom-row" data-service-custom hidden>
+        <input data-service-custom-input placeholder="Nome nuova prestazione" />
+        <button class="btn secondary slim" type="button" data-service-custom-add>Aggiungi</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderServiceChip(service) {
+  return `
+    <span class="service-chip" data-service-chip>
+      <input type="hidden" name="services" value="${escapeAttr(service)}" />
+      <span>${escapeHtml(service)}</span>
+      <button type="button" data-service-remove title="Rimuovi prestazione" aria-label="Rimuovi ${escapeAttr(service)}">&times;</button>
+    </span>
+  `;
+}
+
+function bindChoiceSelects(form) {
+  form.querySelectorAll("[data-choice-select]").forEach((select) => {
+    const customName = select.dataset.choiceCustom;
+    const row = form.querySelector(`[data-choice-custom-row="${customName}"]`);
+    const input = row?.querySelector("input");
+    const sync = () => {
+      const custom = select.value === CUSTOM_OPTION_VALUE;
+      if (row) row.hidden = !custom;
+      if (input) {
+        input.disabled = !custom;
+        input.required = custom && select.required;
+        if (!custom) input.value = "";
+      }
+    };
+    select.addEventListener("change", sync);
+    sync();
+  });
+}
+
+function bindServicePickers(form) {
+  form.querySelectorAll("[data-service-picker]").forEach((picker) => {
+    const select = picker.querySelector("[data-service-select]");
+    const customRow = picker.querySelector("[data-service-custom]");
+    const customInput = picker.querySelector("[data-service-custom-input]");
+    const customAdd = picker.querySelector("[data-service-custom-add]");
+    const addService = (service) => {
+      const label = String(service || "").trim();
+      if (!label) return;
+      const existing = collectServicesFromPicker(picker).map((item) => item.toLowerCase());
+      if (!existing.includes(label.toLowerCase())) {
+        picker.querySelector("[data-service-selected]").insertAdjacentHTML("beforeend", renderServiceChip(label));
+      }
+      updateServicePickerEmpty(picker);
+      select.value = "";
+    };
+    select.addEventListener("change", () => {
+      if (select.value === CUSTOM_OPTION_VALUE) {
+        customRow.hidden = false;
+        customInput.focus();
+        return;
+      }
+      addService(select.value);
+      customRow.hidden = true;
+      customInput.value = "";
+    });
+    customAdd.addEventListener("click", () => {
+      addService(customInput.value);
+      customInput.value = "";
+      customRow.hidden = true;
+      select.value = "";
+    });
+    customInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      customAdd.click();
+    });
+    picker.querySelector("[data-service-selected]").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-service-remove]");
+      if (!button) return;
+      button.closest("[data-service-chip]")?.remove();
+      updateServicePickerEmpty(picker);
+    });
+    updateServicePickerEmpty(picker);
+  });
+}
+
+function collectServicesFromPicker(picker) {
+  return normalizeServiceList(Array.from(picker.querySelectorAll('input[name="services"]')).map((input) => input.value));
+}
+
+function collectServicesFromForm(formData, form) {
+  const services = formData.getAll("services");
+  form?.querySelectorAll("[data-service-custom-input]")?.forEach((input) => {
+    const value = String(input.value || "").trim();
+    if (value && !input.closest("[data-service-custom]")?.hidden) services.push(value);
+  });
+  return normalizeServiceList(services);
+}
+
+function setServicePickerValues(form, services) {
+  const picker = form.querySelector("[data-service-picker]");
+  if (!picker) return;
+  picker.querySelector("[data-service-selected]").innerHTML = normalizeServiceList(services).map(renderServiceChip).join("");
+  updateServicePickerEmpty(picker);
+}
+
+function updateServicePickerEmpty(picker) {
+  const selected = picker.querySelector("[data-service-selected]");
+  const hasServices = selected.querySelector('input[name="services"]');
+  selected.querySelector("[data-empty-services]")?.remove();
+  if (!hasServices) {
+    selected.insertAdjacentHTML("beforeend", `<span class="muted" data-empty-services>Nessuna prestazione selezionata</span>`);
+  }
+}
+
+function selectedChoiceValue(formData, name) {
+  const choice = String(formData.get(`${name}Choice`) || "").trim();
+  if (choice === CUSTOM_OPTION_VALUE) return String(formData.get(`${name}Custom`) || "").trim();
+  return choice;
+}
+
 function openDogDialog(dog = {}) {
   const isEdit = Boolean(dog.id);
   const animal = getAnimalSettings();
@@ -1769,10 +2042,7 @@ function openDogDialog(dog = {}) {
         <label>Tempo stimato
           <input name="estimatedTime" type="time" step="300" value="${escapeAttr(minutesToTimeInput(dog.estimatedMinutes))}" />
         </label>
-        <label>Razza
-          <input name="breed" list="breedOptions" value="${escapeAttr(dog.breed || "")}" placeholder="Seleziona o scrivi razza" />
-          <datalist id="breedOptions">${animal.breeds.map((breed) => `<option value="${escapeAttr(breed)}"></option>`).join("")}</datalist>
-        </label>
+        ${renderBreedField(dog, animal)}
         <label>Anno nascita
           <input name="birthYear" type="number" min="1980" max="${new Date().getFullYear()}" value="${escapeAttr(dog.birthYear || "")}" />
         </label>
@@ -1803,15 +2073,8 @@ function openDogDialog(dog = {}) {
           Numero non presente
         </label>
         <fieldset class="field-group full">
-          <legend>Servizi</legend>
-          <div class="check-grid">
-            ${animal.services
-              .map((service) => `<label class="choice-line"><input name="services" type="checkbox" value="${escapeAttr(service)}" ${dogServices.includes(service) ? "checked" : ""} /> ${escapeHtml(service)}</label>`)
-              .join("")}
-          </div>
-          <label>Aggiungi servizio
-            <input name="extraService" placeholder="Es. taglio unghie" />
-          </label>
+          <legend>Prestazioni</legend>
+          ${renderServicePicker(dogServices, animal.services)}
         </fieldset>
         <fieldset class="field-group full">
           <legend>Consenso utilizzo immagini</legend>
@@ -1833,6 +2096,8 @@ function openDogDialog(dog = {}) {
       </div>
     `,
     onOpen: (form) => {
+      bindChoiceSelects(form);
+      bindServicePickers(form);
       const fileInput = form.elements.photo;
       const preview = document.getElementById("photoPreview");
       if (!dog.photoUrl) preview.style.display = "none";
@@ -1853,16 +2118,15 @@ function openDogDialog(dog = {}) {
     },
     onSubmit: async (formData, form) => {
       const photo = form.elements.photo.files[0];
-      const services = formData.getAll("services").map(String).filter(Boolean);
-      const extraService = String(formData.get("extraService") || "").trim();
-      if (extraService) services.push(extraService);
+      const services = collectServicesFromForm(formData, form);
+      const breed = selectedChoiceValue(formData, "breed");
       const payload = {
         dogName: formData.get("dogName"),
         ownerName: formData.get("ownerName"),
         contact: formData.get("contact"),
         contactMissing: formData.get("contactMissing") === "on",
         alternateContact: formData.get("alternateContact"),
-        breed: formData.get("breed"),
+        breed,
         birthYear: formData.get("birthYear"),
         color: formData.get("color"),
         sex: formData.get("sex"),
@@ -1967,15 +2231,8 @@ function openAppointmentDialog(appointment = {}, options = {}) {
           <input name="contact" value="${escapeAttr(selectedDog?.contact || appointment.contact || "")}" inputmode="tel" />
         </label>
         <fieldset class="field-group full">
-          <legend>Servizi previsti</legend>
-          <div class="check-grid">
-            ${serviceOptions
-              .map((service) => `<label class="choice-line"><input name="services" type="checkbox" value="${escapeAttr(service)}" ${selectedServices.includes(service) ? "checked" : ""} /> ${escapeHtml(service)}</label>`)
-              .join("")}
-          </div>
-          <label>Aggiungi servizio
-            <input name="extraService" placeholder="Es. taglio unghie" />
-          </label>
+          <legend>Prestazioni previste</legend>
+          ${renderServicePicker(selectedServices, serviceOptions)}
         </fieldset>
         <label data-completion-field>Importo pagato
           <input name="paidAmount" type="number" min="0" step="0.01" value="${escapeAttr(appointment.paidAmount || "")}" inputmode="decimal" />
@@ -2003,19 +2260,12 @@ function openAppointmentDialog(appointment = {}, options = {}) {
       </div>
     `,
     onOpen: (form) => {
+      bindServicePickers(form);
       if (completionMode && !form.elements.treatmentDone.value) {
         form.elements.treatmentDone.value = selectedServiceLabelsFromForm(form) || "Toelettatura";
       }
       const createDogRows = form.querySelectorAll("[data-create-dog-row]");
       const completionFields = form.querySelectorAll("[data-completion-field]");
-      const serviceInputs = Array.from(form.querySelectorAll('input[name="services"]'));
-      const setServiceChecks = (services) => {
-        const serviceNames = normalizeServiceList(services);
-        if (!serviceNames.length) return;
-        serviceInputs.forEach((input) => {
-          input.checked = serviceNames.includes(input.value);
-        });
-      };
       const syncCompletionFields = () => {
         const isCompleted = form.elements.status.value === "completato";
         completionFields.forEach((field) => {
@@ -2064,7 +2314,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
         form.elements.dogName.value = dog.dogName || "";
         form.elements.ownerName.value = dog.ownerName || "";
         form.elements.contact.value = dog.contact || "";
-        setServiceChecks(dog.services);
+        setServicePickerValues(form, dog.services);
       });
       syncCreateDogRow();
       syncCompletionFields();
@@ -2077,9 +2327,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
     },
     onSubmit: async (formData, form) => {
       const payload = Object.fromEntries(formData.entries());
-      const services = formData.getAll("services").map(String).filter(Boolean);
-      const extraService = String(formData.get("extraService") || "").trim();
-      if (extraService) services.push(extraService);
+      const services = collectServicesFromForm(formData, form);
       if (!services.length) services.push("Toelettatura");
       payload.services = services;
       payload.service = services.join(", ");
@@ -2592,10 +2840,8 @@ function renderAppointmentGallery(appointment) {
 }
 
 function selectedServiceLabelsFromForm(form) {
-  const selected = Array.from(form.querySelectorAll('input[name="services"]:checked')).map((input) => input.value);
-  const extra = String(form.elements.extraService?.value || "").trim();
-  if (extra) selected.push(extra);
-  return normalizeServiceList(selected).join(", ");
+  const formData = new FormData(form);
+  return collectServicesFromForm(formData, form).join(", ");
 }
 
 async function filesToDataUrls(fileList, limit = 5) {

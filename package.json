@@ -1,6 +1,6 @@
 {
   "name": "toelettatura-portal",
-  "version": "0.0.1-beta.5",
+  "version": "0.0.1-beta.6",
   "description": "Portale PWA per gestione appuntamenti e schede di toelettatura.",
   "private": true,
   "type": "commonjs",

@@ -19,8 +19,9 @@ const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const MAX_GALLERY_PHOTOS_PER_TYPE = 5;
 const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin123";
+const SIDEBAR_ITEM_IDS = ["calendar", "dashboard", "dogs", "users"];
 const APP_ID = "pet-grooming-software";
-const APP_VERSION = packageInfo.version || "0.0.1-beta.5";
+const APP_VERSION = packageInfo.version || "0.0.1-beta.6";
 const UPDATE_FORMAT = "PET_GROOMING_SOFTWARE_UPDATE";
 const UPDATE_FORMAT_VERSION = 1;
 const UPDATE_EXTENSION = ".pgs-update";
@@ -99,6 +100,9 @@ function defaultSettings() {
       breeds: ["Meticcio"],
       services: ["Bagno", "Taglio", "Snodatura", "Stripping"],
       loyaltyTopVisitsPerYear: 8
+    },
+    navigation: {
+      sidebarOrder: SIDEBAR_ITEM_IDS
     }
   };
 }
@@ -120,6 +124,11 @@ function ensureSettingsShape(settings = {}) {
     services: cleanStringList(settings.animal?.services, defaults.animal.services),
     loyaltyTopVisitsPerYear: cleanNumber(settings.animal?.loyaltyTopVisitsPerYear, defaults.animal.loyaltyTopVisitsPerYear)
   };
+  const navigation = {
+    ...defaults.navigation,
+    ...(settings.navigation || {}),
+    sidebarOrder: cleanSidebarOrder(settings.navigation?.sidebarOrder, defaults.navigation.sidebarOrder)
+  };
   return {
     branding: {
       ...defaults.branding,
@@ -136,7 +145,8 @@ function ensureSettingsShape(settings = {}) {
       ...defaults.whatsapp,
       ...(settings.whatsapp || {})
     },
-    animal
+    animal,
+    navigation
   };
 }
 
@@ -351,6 +361,24 @@ function cleanStringList(value, fallback = []) {
   return [...new Set(source.map((item) => cleanString(item)).filter(Boolean))].sort((a, b) => a.localeCompare(b, "it"));
 }
 
+function cleanSidebarOrder(value, fallback = SIDEBAR_ITEM_IDS) {
+  const source = Array.isArray(value) ? value : typeof value === "string" ? value.split(/\r?\n|,/) : fallback;
+  const seen = new Set();
+  const result = [];
+  for (const item of source) {
+    const id = cleanString(item);
+    if (!SIDEBAR_ITEM_IDS.includes(id) || seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+  }
+  for (const id of fallback) {
+    if (!SIDEBAR_ITEM_IDS.includes(id) || seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+  }
+  return result;
+}
+
 function cleanNumber(value, fallback = 0) {
   const normalized = typeof value === "string" ? value.trim().replace(",", ".") : value;
   const number = Number(normalized);
@@ -453,6 +481,13 @@ function publicAnimalSettings(db) {
     breeds: cleanStringList(animal.breeds, defaultSettings().animal.breeds),
     services: cleanStringList(animal.services, defaultSettings().animal.services),
     loyaltyTopVisitsPerYear: cleanNumber(animal.loyaltyTopVisitsPerYear, defaultSettings().animal.loyaltyTopVisitsPerYear)
+  };
+}
+
+function publicNavigationSettings(db) {
+  const navigation = ensureSettingsShape(db.settings).navigation;
+  return {
+    sidebarOrder: cleanSidebarOrder(navigation.sidebarOrder)
   };
 }
 
@@ -1071,6 +1106,7 @@ async function handleApi(req, res, url) {
     if (url.pathname === "/api/public-settings" && method === "GET") {
       return sendJson(res, 200, {
         branding: publicBrandingSettings(db),
+        navigation: publicNavigationSettings(db),
         setup: {
           showInitialAccessHint: showInitialAccessHint(db)
         }
@@ -1255,6 +1291,23 @@ async function handleApi(req, res, url) {
         writeDb(db);
         broadcastDataChange("settings", { section: "animal" });
         return sendJson(res, 200, { animal: publicAnimalSettings(db) });
+      }
+    }
+
+    if (parts[1] === "settings" && parts[2] === "navigation") {
+      if (method === "GET") {
+        return sendJson(res, 200, { navigation: publicNavigationSettings(db) });
+      }
+      if (user.role !== "admin") return sendError(res, 403, "Solo amministratore");
+      if (method === "PUT") {
+        const body = await readBody(req);
+        db.settings.navigation = {
+          sidebarOrder: cleanSidebarOrder(body.sidebarOrder),
+          updatedAt: new Date().toISOString()
+        };
+        writeDb(db);
+        broadcastDataChange("settings", { section: "navigation" });
+        return sendJson(res, 200, { navigation: publicNavigationSettings(db) });
       }
     }
 

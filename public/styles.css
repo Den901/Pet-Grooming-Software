@@ -94,6 +94,13 @@ textarea:focus {
   box-shadow: 0 0 0 3px rgba(35, 67, 68, 0.14);
 }
 
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
 label {
   display: grid;
   gap: 7px;
@@ -315,10 +322,18 @@ label {
   font-weight: 800;
 }
 
+.nav-symbol.gear {
+  font-size: 1rem;
+}
+
 .sidebar-bottom {
   margin-top: auto;
   display: grid;
   gap: 12px;
+}
+
+.nav-item-bottom {
+  width: 100%;
 }
 
 .user-card {
@@ -1298,6 +1313,67 @@ label {
   gap: 8px;
 }
 
+.service-picker {
+  display: grid;
+  gap: 10px;
+}
+
+.service-selected {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.service-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  padding: 7px 9px;
+  border-radius: 999px;
+  background: #eaf3f0;
+  color: var(--brand);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.service-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.service-chip button {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(35, 67, 68, 0.12);
+  color: var(--brand);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.service-picker-controls,
+.service-custom-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.service-picker-controls select {
+  grid-column: 1 / -1;
+}
+
 .gallery-upload {
   display: grid;
   gap: 8px;
@@ -1399,6 +1475,40 @@ label {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.order-list {
+  display: grid;
+  gap: 8px;
+}
+
+.order-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-soft);
+}
+
+.order-row .nav-symbol {
+  background: var(--brand);
+  color: #fff;
+}
+
+.order-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .dashboard-grid {
@@ -1510,23 +1620,40 @@ label {
   flex: 0 1 auto;
 }
 
-.update-status {
-  padding: 12px;
+.update-layout {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.update-block {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  padding: 13px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel-soft);
 }
 
-.update-available {
-  display: grid;
-  gap: 4px;
-}
-
-.update-available strong {
+.update-block-main strong {
   color: var(--green);
 }
 
-.update-available span,
+.update-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.update-block strong {
+  font-size: 1.08rem;
+  line-height: 1.25;
+}
+
+.update-block small,
 .danger-note {
   color: var(--muted);
   line-height: 1.45;
@@ -1710,6 +1837,11 @@ label {
   background: #e1e6e0;
 }
 
+.icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .modal-actions {
   justify-content: flex-end;
   border-top: 1px solid var(--line);
@@ -1750,6 +1882,10 @@ label {
 :root[data-theme="dark"] .access-box,
 :root[data-theme="dark"] .field-group,
 :root[data-theme="dark"] .gallery-upload,
+:root[data-theme="dark"] .order-row,
+:root[data-theme="dark"] .service-selected,
+:root[data-theme="dark"] .service-chip,
+:root[data-theme="dark"] .update-block,
 :root[data-theme="dark"] .empty-chart,
 :root[data-theme="dark"] .dog-history,
 :root[data-theme="dark"] .empty-history,
@@ -1777,6 +1913,9 @@ label {
 :root[data-theme="dark"] .access-box,
 :root[data-theme="dark"] .field-group,
 :root[data-theme="dark"] .gallery-upload,
+:root[data-theme="dark"] .order-row,
+:root[data-theme="dark"] .service-selected,
+:root[data-theme="dark"] .update-block,
 :root[data-theme="dark"] .metric {
   border-color: var(--line);
 }
@@ -1880,6 +2019,7 @@ label {
   }
 
   .dashboard-grid,
+  .update-layout,
   .pie-layout {
     grid-template-columns: 1fr;
   }

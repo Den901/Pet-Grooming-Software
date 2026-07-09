@@ -1,4 +1,4 @@
-const CACHE_NAME = "toelettatura-pwa-v16";
+const CACHE_NAME = "toelettatura-pwa-v17";
 const APP_SHELL = ["/", "/index.html", "/styles.css", "/app.js", "/manifest.json", "/icons/icon.svg"];
 
 self.addEventListener("install", (event) => {
