@@ -21,7 +21,7 @@ const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin123";
 const SIDEBAR_ITEM_IDS = ["calendar", "dashboard", "dogs", "users"];
 const APP_ID = "pet-grooming-software";
-const APP_VERSION = packageInfo.version || "0.0.1-beta.9";
+const APP_VERSION = packageInfo.version || "0.0.1-beta.10";
 const UPDATE_FORMAT = "PET_GROOMING_SOFTWARE_UPDATE";
 const UPDATE_FORMAT_VERSION = 1;
 const UPDATE_EXTENSION = ".pgs-update";
@@ -248,7 +248,11 @@ function ensureUserSecurityFlags(db) {
   return changed;
 }
 
-function publicUser(user) {
+function onlineUserIds() {
+  return new Set(Array.from(eventClients, (client) => client.userId).filter(Boolean));
+}
+
+function publicUser(user, onlineIds = onlineUserIds()) {
   if (!user) return null;
   return {
     id: user.id,
@@ -258,6 +262,7 @@ function publicUser(user) {
     active: Boolean(user.active),
     mustChangePassword: Boolean(user.mustChangePassword),
     defaultPassword: Boolean(user.defaultPassword),
+    online: onlineIds.has(user.id),
     avatarUrl: cleanString(user.avatarUrl),
     createdAt: user.createdAt,
     updatedAt: user.updatedAt
@@ -283,8 +288,12 @@ function publicLoginUsers(db) {
 function broadcastDataChange(type, detail = {}) {
   const payload = `data: ${JSON.stringify({ type, detail, at: new Date().toISOString() })}\n\n`;
   for (const client of eventClients) {
-    client.write(payload);
+    client.res.write(payload);
   }
+}
+
+function broadcastPresenceChange() {
+  broadcastDataChange("presence", { onlineUserIds: Array.from(onlineUserIds()) });
 }
 
 function sendJson(res, status, payload) {
@@ -942,15 +951,28 @@ function schedulePortalRestart() {
   return true;
 }
 
-function addEventClient(req, res) {
+function addEventClient(req, res, user) {
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache, no-transform",
     Connection: "keep-alive"
   });
-  res.write(`data: ${JSON.stringify({ type: "connected", at: new Date().toISOString() })}\n\n`);
-  eventClients.add(res);
-  req.on("close", () => eventClients.delete(res));
+  const wasOnline = onlineUserIds().has(user.id);
+  const client = { res, userId: user.id };
+  eventClients.add(client);
+  res.write(
+    `data: ${JSON.stringify({
+      type: "connected",
+      detail: { onlineUserIds: Array.from(onlineUserIds()) },
+      at: new Date().toISOString()
+    })}\n\n`
+  );
+  if (!wasOnline) broadcastPresenceChange();
+  req.on("close", () => {
+    const wasConnected = onlineUserIds().has(user.id);
+    eventClients.delete(client);
+    if (wasConnected && !onlineUserIds().has(user.id)) broadcastPresenceChange();
+  });
 }
 
 function validateDogForSave(dog) {
@@ -1159,7 +1181,7 @@ async function handleApi(req, res, url) {
     if (!user) return sendError(res, 401, "Accesso richiesto");
 
     if (url.pathname === "/api/events" && method === "GET") {
-      return addEventClient(req, res);
+      return addEventClient(req, res, user);
     }
 
     if (parts[1] === "system" && parts[2] === "update-check" && ["GET", "POST"].includes(method)) {
@@ -1493,7 +1515,8 @@ async function handleApi(req, res, url) {
       if (user.role !== "admin") return sendError(res, 403, "Solo amministratore");
       const id = parts[2];
       if (method === "GET") {
-        return sendJson(res, 200, { users: db.users.map(publicUser) });
+        const onlineIds = onlineUserIds();
+        return sendJson(res, 200, { users: db.users.map((item) => publicUser(item, onlineIds)) });
       }
       if (method === "POST") {
         const body = await readBody(req);

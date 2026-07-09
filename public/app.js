@@ -7,6 +7,7 @@ const state = {
   dogs: [],
   appointments: [],
   users: [],
+  onlineUserIds: [],
   duckdns: null,
   branding: null,
   whatsapp: null,
@@ -429,6 +430,7 @@ async function loadData() {
       api("/api/version")
     ]);
     state.users = usersResponse.users || [];
+    state.onlineUserIds = state.users.filter((user) => user.online).map((user) => user.id);
     state.loginUsers = state.users.filter((user) => user.active).map(loginUserFromUser);
     state.duckdns = duckdnsResponse.duckdns || null;
     state.branding = brandingResponse.branding || state.branding;
@@ -437,6 +439,7 @@ async function loadData() {
     applyBranding();
   } else {
     state.users = [];
+    state.onlineUserIds = [];
     state.duckdns = null;
     state.whatsapp = null;
     state.version = null;
@@ -449,7 +452,11 @@ function connectLiveUpdates() {
   state.eventSource = source;
   source.onmessage = (event) => {
     const payload = JSON.parse(event.data || "{}");
-    if (!payload.type || payload.type === "connected") return;
+    if (payload.type === "connected" || payload.type === "presence") {
+      applyOnlineUsers(payload.detail?.onlineUserIds || []);
+      return;
+    }
+    if (!payload.type) return;
     clearTimeout(state.liveRefreshTimer);
     state.liveRefreshTimer = setTimeout(async () => {
       await loadData();
@@ -462,6 +469,13 @@ function connectLiveUpdates() {
     state.eventSource = null;
     setTimeout(connectLiveUpdates, 4000);
   };
+}
+
+function applyOnlineUsers(onlineUserIds = []) {
+  state.onlineUserIds = onlineUserIds;
+  const online = new Set(onlineUserIds);
+  state.users = state.users.map((user) => ({ ...user, online: online.has(user.id) }));
+  if (state.view === "users") renderView();
 }
 
 function renderLogin(error = "") {
@@ -683,6 +697,7 @@ async function logout() {
   state.dogs = [];
   state.appointments = [];
   state.users = [];
+  state.onlineUserIds = [];
   state.duckdns = null;
   state.whatsapp = null;
   state.animalSettings = null;
@@ -1000,6 +1015,7 @@ function renderDashboard() {
   });
   const serviceStats = countBy(completed.flatMap((appointment) => appointment.services?.length ? appointment.services : [appointment.service || "Servizio"]));
   const dogStats = countBy(completed, (appointment) => appointment.dogName || "Senza nome");
+  const topClient = topDashboardClient(completed);
   const avgMinutes = average(state.dogs.map((dog) => Number(dog.estimatedMinutes || 0)).filter(Boolean));
   const focus = state.dashboardFocus === "services" ? serviceStats : breedStats;
   return `
@@ -1016,7 +1032,7 @@ function renderDashboard() {
     <section class="metric-grid" aria-label="Riepilogo dashboard">
       <div class="metric"><span>Da fare</span><strong>${planned.length}</strong></div>
       <div class="metric"><span>Fatti</span><strong>${completed.length}</strong></div>
-      <div class="metric"><span>Cliente piu presente</span><strong>${escapeHtml(topStatLabel(dogStats))}</strong></div>
+      <div class="metric top-client-metric"><span>Cliente piu presente</span>${renderTopClientMetric(topClient)}</div>
       <div class="metric"><span>Tempo medio scheda</span><strong>${escapeHtml(durationLabel(avgMinutes))}</strong></div>
     </section>
     <section class="dashboard-grid">
@@ -1128,6 +1144,10 @@ function renderUsers() {
               </div>
               <span class="role-pill ${user.role === "admin" ? "admin" : ""}">${user.role === "admin" ? "Admin" : "User"}</span>
               <span class="state-pill ${user.active ? "active" : "off"}">${user.active ? "Attivo" : "Disattivo"}</span>
+              <span class="online-pill ${user.online ? "online" : "offline"}">
+                <span class="online-dot" aria-hidden="true"></span>
+                ${user.online ? "Online" : "Offline"}
+              </span>
               <div class="row-actions">
                 <button class="btn secondary slim" type="button" data-user-edit="${user.id}">Modifica</button>
                 <button class="btn secondary slim" type="button" data-user-delete="${user.id}">Elimina</button>
@@ -2983,6 +3003,46 @@ function topStatLabel(stats) {
   const first = stats?.[0];
   if (!first) return "-";
   return `${first.label} (${first.count})`;
+}
+
+function topDashboardClient(completedAppointments = []) {
+  const counts = new Map();
+  for (const appointment of completedAppointments) {
+    const key = appointment.dogId || `name:${lowerText(appointment.dogName)}|owner:${lowerText(appointment.ownerName)}`;
+    const current = counts.get(key) || { appointment, count: 0 };
+    current.count += 1;
+    counts.set(key, current);
+  }
+  const first = [...counts.values()].sort((a, b) => b.count - a.count || String(a.appointment.dogName || "").localeCompare(String(b.appointment.dogName || ""), "it"))[0];
+  if (!first) return null;
+  const dog =
+    state.dogs.find((item) => item.id === first.appointment.dogId) ||
+    state.dogs.find(
+      (item) =>
+        lowerText(item.dogName) === lowerText(first.appointment.dogName) &&
+        (!first.appointment.ownerName || lowerText(item.ownerName) === lowerText(first.appointment.ownerName))
+    );
+  return {
+    dog,
+    count: first.count,
+    name: dog?.dogName || first.appointment.dogName || "Senza nome"
+  };
+}
+
+function renderTopClientMetric(topClient) {
+  if (!topClient) return `<strong>-</strong>`;
+  const photo = topClient.dog?.photoUrl
+    ? `<img src="${escapeAttr(topClient.dog.photoUrl)}" alt="Foto di ${escapeAttr(topClient.name)}" />`
+    : `<span>${escapeHtml(initials(topClient.name))}</span>`;
+  return `
+    <div class="metric-client">
+      <div class="metric-client-photo">${photo}</div>
+      <div class="metric-client-copy">
+        <strong>${escapeHtml(topClient.name)}</strong>
+        <small>${escapeHtml(topClient.count === 1 ? "1 prestazione" : `${topClient.count} prestazioni`)}</small>
+      </div>
+    </div>
+  `;
 }
 
 function renderStatList(title, stats) {

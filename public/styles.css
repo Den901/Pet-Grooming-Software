@@ -607,6 +607,54 @@ label {
   font-size: 1.55rem;
 }
 
+.metric-client {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  min-width: 0;
+}
+
+.metric-client-photo {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--brand);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  border: 2px solid rgba(225, 166, 61, 0.58);
+}
+
+.metric-client-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.metric-client-copy {
+  min-width: 0;
+}
+
+.metric-client-copy strong {
+  margin-top: 0;
+  font-size: 1.05rem;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metric-client-copy small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
 .calendar {
   overflow: hidden;
 }
@@ -1481,7 +1529,7 @@ label {
 
 .table-row {
   display: grid;
-  grid-template-columns: minmax(160px, 1.2fr) 110px 110px auto;
+  grid-template-columns: minmax(180px, 1.2fr) 96px 104px 112px auto;
   gap: 10px;
   align-items: center;
   padding: 12px 0;
@@ -1493,8 +1541,11 @@ label {
 }
 
 .role-pill,
-.state-pill {
+.state-pill,
+.online-pill {
   display: inline-flex;
+  align-items: center;
+  gap: 7px;
   width: max-content;
   border-radius: 999px;
   padding: 4px 8px;
@@ -1517,6 +1568,41 @@ label {
 .state-pill.off {
   background: #fbefed;
   color: var(--danger);
+}
+
+.online-pill.online {
+  background: rgba(42, 118, 255, 0.12);
+  color: #1f62c9;
+}
+
+.online-pill.offline {
+  background: #eef1ed;
+  color: var(--muted);
+}
+
+.online-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #9ca6b5;
+}
+
+.online-pill.online .online-dot {
+  background: #2678ff;
+  animation: onlinePulse 2.4s ease-in-out infinite;
+}
+
+@keyframes onlinePulse {
+  0%,
+  100% {
+    opacity: 0.68;
+    box-shadow: 0 0 0 0 rgba(38, 120, 255, 0.36);
+  }
+
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 0 6px rgba(38, 120, 255, 0);
+  }
 }
 
 .settings-grid {
@@ -1944,7 +2030,7 @@ label {
   place-items: center;
   padding: 18px;
   background: rgba(13, 22, 21, 0.48);
-  z-index: 40;
+  z-index: 120;
 }
 
 .modal-card {
@@ -2074,7 +2160,8 @@ label {
 :root[data-theme="dark"] .history-edit,
 :root[data-theme="dark"] .add-day,
 :root[data-theme="dark"] .role-pill,
-:root[data-theme="dark"] .state-pill {
+:root[data-theme="dark"] .state-pill,
+:root[data-theme="dark"] .online-pill {
   background: var(--panel-soft);
   color: var(--ink);
 }
@@ -2100,6 +2187,20 @@ label {
 :root[data-theme="dark"] .mobile-appt-row,
 :root[data-theme="dark"] .state-pill.active {
   background: rgba(104, 183, 173, 0.14);
+}
+
+:root[data-theme="dark"] .online-pill.online {
+  background: rgba(93, 143, 183, 0.22);
+  color: #9ccaff;
+}
+
+:root[data-theme="dark"] .online-pill.offline {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--muted);
+}
+
+:root[data-theme="dark"] .metric-client-photo {
+  border-color: rgba(225, 166, 61, 0.62);
 }
 
 :root[data-theme="dark"] .status-confermato {
@@ -2533,14 +2634,14 @@ label {
 
   .modal-backdrop {
     place-items: start center;
-    padding: 8px;
+    padding: 8px 8px calc(104px + env(safe-area-inset-bottom));
     overflow-y: auto;
   }
 
   .modal-card {
     width: 100%;
     max-width: calc(100vw - 16px);
-    max-height: calc(100dvh - 16px);
+    max-height: calc(100dvh - 112px - env(safe-area-inset-bottom));
   }
 
   .modal-head,
