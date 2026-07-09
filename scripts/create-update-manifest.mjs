@@ -21,7 +21,8 @@ function parseArgs(argv) {
     out: "",
     packageUrl: "",
     releaseUrl: "",
-    notes: ""
+    notes: "",
+    changelog: ""
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -39,6 +40,8 @@ function parseArgs(argv) {
       options.releaseUrl = argv[++index];
     } else if (arg === "--notes") {
       options.notes = argv[++index];
+    } else if (arg === "--changelog") {
+      options.changelog = argv[++index];
     } else {
       throw new Error(`Argomento non riconosciuto: ${arg}`);
     }
@@ -54,6 +57,8 @@ function buildManifest(options) {
   const tag = options.tag || `v${options.version}`;
   const packageName = `Pet-Grooming-Software-${options.version}.pgs-update`;
   const repoBase = `https://github.com/${options.repo}`;
+  const releaseNotes = options.notes || `Release ${releaseLabel(options.version)}`;
+  const changelog = options.changelog || releaseNotes;
   return {
     format: UPDATE_MANIFEST_FORMAT,
     formatVersion: UPDATE_MANIFEST_VERSION,
@@ -64,7 +69,8 @@ function buildManifest(options) {
     packageName,
     packageUrl: options.packageUrl || `${repoBase}/releases/download/${tag}/${packageName}`,
     releaseUrl: options.releaseUrl || `${repoBase}/releases/tag/${tag}`,
-    notes: options.notes || `Release ${releaseLabel(options.version)}`
+    notes: releaseNotes,
+    changelog
   };
 }
 

@@ -32,11 +32,18 @@ const weekdayShort = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 const formatter = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "2-digit", month: "short" });
 const monthFormatter = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" });
 const CUSTOM_OPTION_VALUE = "__add_new__";
+const NAV_ICONS = {
+  calendar: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="3"></rect><path d="M8 3v4M16 3v4M4 10h16"></path><path d="M8 14h2M12 14h2M16 14h2M8 17h2M12 17h2"></path></svg>`,
+  dashboard: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13a8 8 0 0 1 16 0"></path><path d="M12 13l4-5"></path><path d="M7 17h10"></path><path d="M6 13h2M16 13h2"></path></svg>`,
+  dogs: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5z"></path><path d="M9.4 14.2c.7-1.6 4.5-1.6 5.2 0 .6 1.4-.8 2.4-2.6 2.4s-3.2-1-2.6-2.4Z"></path><circle cx="8.7" cy="10" r="1.3"></circle><circle cx="15.3" cy="10" r="1.3"></circle><circle cx="11" cy="8.2" r="1.2"></circle><circle cx="13" cy="8.2" r="1.2"></circle></svg>`,
+  users: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"></circle><path d="M3.8 18c.8-3 3-4.5 5.2-4.5s4.4 1.5 5.2 4.5"></path><circle cx="16.8" cy="9" r="2.3"></circle><path d="M14.8 14.1c2.5.2 4.2 1.5 5 3.9"></path></svg>`,
+  settings: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 3v3M12 18v3M4.2 7.5l2.6 1.5M17.2 15l2.6 1.5M4.2 16.5 6.8 15M17.2 9l2.6-1.5"></path></svg>`
+};
 const SIDEBAR_DEFINITIONS = {
-  calendar: { id: "calendar", label: "Calendario", symbol: "CA" },
-  dashboard: { id: "dashboard", label: "Dashboard", symbol: "DA" },
-  dogs: { id: "dogs", label: "Schede", symbol: "SC" },
-  users: { id: "users", label: "Utenti", symbol: "UT", adminOnly: true }
+  calendar: { id: "calendar", label: "Calendario", icon: "calendar" },
+  dashboard: { id: "dashboard", label: "Dashboard", icon: "dashboard" },
+  dogs: { id: "dogs", label: "Schede", icon: "dogs" },
+  users: { id: "users", label: "Utenti", icon: "users", adminOnly: true }
 };
 const DEFAULT_SIDEBAR_ORDER = ["calendar", "dashboard", "dogs", "users"];
 const THEME_PRESETS = {
@@ -200,6 +207,10 @@ function sidebarOrder(order = state.navigation?.sidebarOrder) {
     result.push(id);
   }
   return result;
+}
+
+function renderNavSymbol(iconName) {
+  return `<span class="nav-symbol" aria-hidden="true">${NAV_ICONS[iconName] || NAV_ICONS.calendar}</span>`;
 }
 
 function loginUserFromUser(user) {
@@ -519,7 +530,7 @@ function renderShell() {
             .map(
               (item) => `
                 <button class="nav-item ${state.view === item.id ? "active" : ""}" data-nav="${item.id}" type="button">
-                  <span class="nav-symbol">${item.symbol}</span>
+                  ${renderNavSymbol(item.icon)}
                   <span>${item.label}</span>
                 </button>
               `
@@ -537,7 +548,7 @@ function renderShell() {
           ${
             state.me.role === "admin"
               ? `<button class="nav-item nav-item-bottom ${state.view === "settings" ? "active" : ""}" data-nav="settings" type="button">
-                  <span class="nav-symbol gear" aria-hidden="true">&#9881;</span>
+                  ${renderNavSymbol("settings")}
                   <span>Impostazioni</span>
                 </button>`
               : ""
@@ -1402,12 +1413,25 @@ function renderUpdateStatus(updateCheck) {
       <span class="update-label">Update web</span>
       <strong>Disponibile: ${escapeHtml(updateCheck.latestReleaseLabel || updateCheck.latestVersion)}</strong>
       <small>Installata: ${escapeHtml(updateCheck.currentReleaseLabel || updateCheck.currentVersion)}. Premi "Installa update disponibile", poi riavvia il servizio.</small>
+      ${renderUpdateChangelog(updateCheck)}
     `;
   }
   return `
     <span class="update-label">Update web</span>
     <strong>Portale aggiornato</strong>
     <small>Versione online: ${escapeHtml(updateCheck.latestReleaseLabel || updateCheck.latestVersion || "-")}.</small>
+    ${renderUpdateChangelog(updateCheck)}
+  `;
+}
+
+function renderUpdateChangelog(updateCheck) {
+  const notes = String(updateCheck?.changelog || updateCheck?.notes || "").trim();
+  if (!notes) return "";
+  return `
+    <div class="update-changelog">
+      <span>Changelog</span>
+      <p>${escapeHtml(notes)}</p>
+    </div>
   `;
 }
 
@@ -1419,7 +1443,7 @@ function renderSidebarOrderRows(order = sidebarOrder()) {
       (item) => `
         <div class="order-row" data-sidebar-order-row>
           <input type="hidden" name="sidebarOrder" value="${escapeAttr(item.id)}" />
-          <span class="nav-symbol">${escapeHtml(item.symbol)}</span>
+          ${renderNavSymbol(item.icon)}
           <strong>${escapeHtml(item.label)}</strong>
           <div class="order-actions">
             <button class="icon-btn" type="button" data-order-move="-1" title="Sposta su" aria-label="Sposta ${escapeAttr(item.label)} su">&#8593;</button>
@@ -2211,9 +2235,11 @@ function openAppointmentDialog(appointment = {}, options = {}) {
   const currentStatus = completionMode ? "completato" : appointment.status || "programmato";
   const selectedDog = appointment.dogId ? state.dogs.find((dog) => dog.id === appointment.dogId) : null;
   const animal = getAnimalSettings();
-  const selectedServices = normalizeServiceList(
+  const plannedServices = normalizeServiceList(
     appointment.services?.length ? appointment.services : appointment.service || selectedDog?.services || ["Toelettatura"]
   );
+  const performedServices = currentStatus === "completato" ? normalizeServiceList(appointment.treatmentDone) : [];
+  const selectedServices = performedServices.length ? performedServices : plannedServices;
   const serviceOptions = uniqueValues([...(animal.services || []), ...selectedServices, "Toelettatura"]);
   openModal({
     title: completionMode ? "Concludi prestazione" : isEdit ? "Modifica appuntamento" : "Nuovo appuntamento",
@@ -2287,14 +2313,11 @@ function openAppointmentDialog(appointment = {}, options = {}) {
           <input name="contact" value="${escapeAttr(selectedDog?.contact || appointment.contact || "")}" inputmode="tel" />
         </label>
         <fieldset class="field-group full">
-          <legend>Prestazioni previste</legend>
+          <legend data-service-legend>${currentStatus === "completato" ? "Servizi eseguiti" : "Prestazioni previste"}</legend>
           ${renderServicePicker(selectedServices, serviceOptions)}
         </fieldset>
         <label data-completion-field>Importo pagato
           <input name="paidAmount" type="number" min="0" step="0.01" value="${escapeAttr(appointment.paidAmount || "")}" inputmode="decimal" />
-        </label>
-        <label class="full" data-completion-field>Servizio eseguito
-          <input name="treatmentDone" value="${escapeAttr(appointment.treatmentDone || "")}" placeholder="Es. bagno, taglio, snodatura, stripping" />
         </label>
         <div class="full gallery-upload" data-completion-field>
           <label>Foto prima del lavoro
@@ -2317,13 +2340,12 @@ function openAppointmentDialog(appointment = {}, options = {}) {
     `,
     onOpen: (form) => {
       bindServicePickers(form);
-      if (completionMode && !form.elements.treatmentDone.value) {
-        form.elements.treatmentDone.value = selectedServiceLabelsFromForm(form) || "Toelettatura";
-      }
       const createDogRows = form.querySelectorAll("[data-create-dog-row]");
       const completionFields = form.querySelectorAll("[data-completion-field]");
+      const serviceLegend = form.querySelector("[data-service-legend]");
       const syncCompletionFields = () => {
         const isCompleted = form.elements.status.value === "completato";
+        if (serviceLegend) serviceLegend.textContent = isCompleted ? "Servizi eseguiti" : "Prestazioni previste";
         completionFields.forEach((field) => {
           field.hidden = !isCompleted;
           field.querySelectorAll("input, textarea, select").forEach((input) => {
@@ -2356,8 +2378,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
       modalRoot.querySelector("[data-complete-form]")?.addEventListener("click", () => {
         form.elements.status.value = "completato";
         syncCompletionFields();
-        if (!form.elements.treatmentDone.value) form.elements.treatmentDone.value = selectedServiceLabelsFromForm(form) || "Toelettatura";
-        form.elements.treatmentDone.focus();
+        form.querySelector("[data-service-select]")?.focus();
         notify("Completa servizio e importo, poi salva la prestazione");
       });
       form.elements.status.addEventListener("change", syncCompletionFields);
@@ -2389,7 +2410,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
       payload.service = services.join(", ");
       payload.createDogProfile = formData.get("createDogProfile") === "on";
       if (completionMode) payload.status = "completato";
-      if (payload.status === "completato" && !payload.treatmentDone) payload.treatmentDone = payload.service || "Toelettatura";
+      if (payload.status === "completato") payload.treatmentDone = payload.service || "Toelettatura";
       if (payload.status !== "completato") {
         payload.treatmentDone = "";
         payload.paidAmount = "";
@@ -2893,11 +2914,6 @@ function renderAppointmentGallery(appointment) {
           .join("")}</div>`
       : "";
   return `<div class="appointment-gallery">${group("Prima", before)}${group("Dopo", after)}</div>`;
-}
-
-function selectedServiceLabelsFromForm(form) {
-  const formData = new FormData(form);
-  return collectServicesFromForm(formData, form).join(", ");
 }
 
 async function filesToDataUrls(fileList, limit = 5) {

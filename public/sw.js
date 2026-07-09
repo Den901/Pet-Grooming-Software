@@ -1,10 +1,13 @@
-const CACHE_NAME = "toelettatura-pwa-v18";
+const CACHE_NAME = "toelettatura-pwa-v19";
 const APP_SHELL = [
   "/",
   "/index.html",
   "/styles.css",
   "/app.js",
   "/manifest.json",
+  "/apple-touch-icon.png",
+  "/apple-touch-icon-precomposed.png",
+  "/favicon.png",
   "/icons/icon-180.png",
   "/icons/icon-192.png",
   "/icons/icon-512.png",

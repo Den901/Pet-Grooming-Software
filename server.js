@@ -21,7 +21,7 @@ const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin123";
 const SIDEBAR_ITEM_IDS = ["calendar", "dashboard", "dogs", "users"];
 const APP_ID = "pet-grooming-software";
-const APP_VERSION = packageInfo.version || "0.0.1-beta.7";
+const APP_VERSION = packageInfo.version || "0.0.1-beta.8";
 const UPDATE_FORMAT = "PET_GROOMING_SOFTWARE_UPDATE";
 const UPDATE_FORMAT_VERSION = 1;
 const UPDATE_EXTENSION = ".pgs-update";
@@ -914,6 +914,7 @@ function validateUpdateManifest(manifest, manifestUrl = UPDATE_MANIFEST_URL) {
     packageUrl,
     releaseUrl: cleanString(manifest.releaseUrl),
     notes: cleanString(manifest.notes),
+    changelog: cleanString(manifest.changelog) || cleanString(manifest.notes),
     createdAt: cleanString(manifest.createdAt),
     updateAvailable: compareVersions(latestVersion, APP_VERSION) > 0
   };

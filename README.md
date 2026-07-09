@@ -1,28 +1,30 @@
 # Toelettatura Manager
 
-Release corrente: `0.0.1 beta 7` (`0.0.1-beta.7`).
+Release corrente: `0.0.1 beta 8` (`0.0.1-beta.8`).
 
 Portale web PWA in Node.js per gestire:
 
 - login amministratore e operatori;
 - login rapido da tendina utenti con inserimento della sola password;
 - foto profilo utenti visibile nella sidebar;
-- personalizzazione logo, colori, tema chiaro/scuro, sfondo login, nome portale e dati azienda;
+- personalizzazione logo, colori, tema chiaro/scuro con accenti cromatici, sfondo login, nome portale e dati azienda;
 - aggiornamento live multiutente di schede, appuntamenti, utenti e impostazioni;
 - calendario appuntamenti con vista desktop/iPad e agenda compatta su iPhone;
-- menu mobile persistente in basso con icone tonde;
+- menu mobile persistente in basso con icone tonde e ancoraggio dedicato per iPhone/PWA;
+- icone menu per calendario, dashboard, schede e utenti;
 - dashboard statistiche per servizi fatti/da fare, razze, servizi piu usati, animale piu presente e tempi medi;
 - schede animali con foto, cornice cliente, razza, eta, colore, sesso, contatti, patologie, tempi stimati, reminder WhatsApp e consenso immagini;
 - impostazioni scheda animale per razze, prestazioni cumulabili e soglia cliente top;
 - storico appuntamenti a menu nella scheda cane con servizio eseguito, importo pagato e galleria foto prima/dopo;
-- chiusura prestazione da scheda cane o calendario;
+- chiusura prestazione da scheda cane o calendario con servizi precompilati e modificabili;
 - ricerca schede;
 - backup cifrato con password e import backup;
 - impostazioni WhatsApp per promemoria appuntamenti;
 - aggiornamento software da file locale o release GitHub con pacchetto `.pgs-update`;
 - notifica nel pannello impostazioni quando e disponibile un nuovo update web;
+- changelog visibile nel controllo update web insieme alla nuova versione;
 - layout desktop, mobile e iPad;
-- icona PWA e badge cliente top con zampa personalizzata trasparente.
+- icona PWA/iPhone e badge cliente top con zampa personalizzata trasparente.
 
 ## Anteprime
 
@@ -88,9 +90,9 @@ npm.cmd run release:packages
 
 Il comando genera nella cartella `dist/`:
 
-- `Pet-Grooming-Software-0.0.1-beta.7-windows.zip`;
-- `Pet-Grooming-Software-0.0.1-beta.7-linux.tar.gz`;
-- `Pet-Grooming-Software-0.0.1-beta.7.pgs-update`;
+- `Pet-Grooming-Software-0.0.1-beta.8-windows.zip`;
+- `Pet-Grooming-Software-0.0.1-beta.8-linux.tar.gz`;
+- `Pet-Grooming-Software-0.0.1-beta.8.pgs-update`;
 - `pet-grooming-update.json`.
 
 Se `npm` non e bloccato dalla policy PowerShell puoi usare anche `npm run release:packages`.
@@ -99,7 +101,7 @@ Se `npm` non e bloccato dalla policy PowerShell puoi usare anche `npm run releas
 
 Prerequisito: Node.js 18 o superiore installato sul PC.
 
-1. Estrai `Pet-Grooming-Software-0.0.1-beta.7-windows.zip`.
+1. Estrai `Pet-Grooming-Software-0.0.1-beta.8-windows.zip`.
 2. Apri PowerShell nella cartella estratta. Per installare in `ProgramData` e creare l'avvio automatico e consigliato aprirlo come amministratore.
 3. Per installare in `C:\ProgramData\Pet Grooming Software` e creare l'avvio automatico all'accesso:
 
@@ -125,12 +127,12 @@ Per riavviare dopo un update, chiudi la finestra dove gira Node.js e rilancia lo
 
 Prerequisito: Node.js 18 o superiore installato sul server.
 
-1. Copia `Pet-Grooming-Software-0.0.1-beta.7-linux.tar.gz` sul server.
+1. Copia `Pet-Grooming-Software-0.0.1-beta.8-linux.tar.gz` sul server.
 2. Estrai il pacchetto e entra nella cartella:
 
 ```bash
-tar -xzf Pet-Grooming-Software-0.0.1-beta.7-linux.tar.gz
-cd Pet-Grooming-Software-0.0.1-beta.7
+tar -xzf Pet-Grooming-Software-0.0.1-beta.8-linux.tar.gz
+cd Pet-Grooming-Software-0.0.1-beta.8
 ```
 
 3. Installazione consigliata in `/opt` con servizio systemd:
@@ -229,7 +231,7 @@ Il portale include `manifest.json` e `service worker`, quindi puo essere install
 
 ## Release e aggiornamenti
 
-La release corrente e `0.0.1 beta 7`. A ogni modifica di release fai avanzare la beta di 1:
+La release corrente e `0.0.1 beta 8`. A ogni modifica di release fai avanzare la beta di 1:
 
 ```powershell
 npm.cmd run release:bump
@@ -238,9 +240,11 @@ npm.cmd run release:packages
 
 Il file `.pgs-update` puo essere caricato in una release GitHub oppure scelto localmente da `Impostazioni > Aggiornamento portale`. Il portale accetta solo il formato personalizzato `PET_GROOMING_SOFTWARE_UPDATE` con estensione `.pgs-update`, app id corretto, hash dei file e percorsi software ammessi.
 
-Per l'update web carica nella stessa release GitHub anche `pet-grooming-update.json`. Il portale controlla di default `https://github.com/Den901/Pet-Grooming-Software/releases/latest/download/pet-grooming-update.json` e mostra un avviso nel pannello impostazioni quando trova una versione piu recente. Se un domani vuoi usare un altro server puoi avviare Node.js con la variabile `UPDATE_MANIFEST_URL`.
+Per l'update web carica nella stessa release GitHub anche `pet-grooming-update.json`. Il portale controlla di default `https://github.com/Den901/Pet-Grooming-Software/releases/latest/download/pet-grooming-update.json` e mostra un avviso nel pannello impostazioni quando trova una versione piu recente. Il controllo update mostra anche il changelog pubblicato nel manifest. Se un domani vuoi usare un altro server puoi avviare Node.js con la variabile `UPDATE_MANIFEST_URL`.
 
 L'aggiornamento non modifica database, foto, backup o `node_modules`. Dopo l'installazione dell'update bisogna riavviare il servizio Node.js. Nel pannello `Impostazioni > Aggiornamento portale` l'amministratore puo usare il pulsante `Riavvia servizio`: su Linux funziona quando il portale e installato come servizio systemd con `Restart=always`, come nello script `scripts/install-linux.sh`.
+
+La `0.0.1 beta 8` mostra il changelog nel controllo update web, aggiunge il campo `changelog` nel manifest release, pubblica icone Apple dedicate alla radice del portale per migliorare il riconoscimento dell'icona PWA su iPhone, sostituisce le sigle del menu con icone per calendario, dashboard, schede e utenti, ancora il menu PWA in basso durante lo scroll iPhone, arricchisce il tema scuro e rende la chiusura prestazione basata sul selettore servizi modificabile.
 
 La `0.0.1 beta 7` introduce il login rapido con selezione utente da menu a tendina, logo login piu grande e centrato, menu mobile persistente in basso con icone tonde, icona PWA PNG trasparente e badge cliente top con la zampa personalizzata.
 
