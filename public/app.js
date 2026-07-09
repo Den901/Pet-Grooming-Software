@@ -10,10 +10,14 @@ const state = {
   duckdns: null,
   branding: null,
   whatsapp: null,
+  animalSettings: null,
   version: null,
   initialAccessHint: false,
   updateCheck: null,
   updateCheckLoading: false,
+  eventSource: null,
+  liveRefreshTimer: null,
+  dashboardFocus: "breeds",
   deferredInstallPrompt: null,
   pwaPromptHidden: false,
   view: new URLSearchParams(window.location.search).get("view") || "calendar",
@@ -111,8 +115,8 @@ async function api(path, options = {}) {
 function getBranding() {
   return {
     theme: "light",
-    portalName: "Toilettatura Manager",
-    businessName: "Toilettatura",
+    portalName: "Toelettatura Manager",
+    businessName: "Toelettatura",
     tagline: "Agenda e schede clienti",
     companyInfo: "",
     phone: "",
@@ -160,13 +164,22 @@ function getBranding() {
   };
 }
 
+function getAnimalSettings() {
+  return {
+    breeds: ["Meticcio"],
+    services: ["Bagno", "Taglio", "Snodatura", "Stripping"],
+    loyaltyTopVisitsPerYear: 8,
+    ...(state.animalSettings || {})
+  };
+}
+
 function applyBranding() {
   const branding = getBranding();
   const colors = branding.colors;
   const theme = branding.theme === "dark" || (branding.theme === "custom" && isDarkHex(colors.background)) ? "dark" : "light";
   const loginBackground = loginBackgroundCss(branding.loginBackground, colors);
   document.documentElement.dataset.theme = theme;
-  document.title = branding.portalName || "Toilettatura Manager";
+  document.title = branding.portalName || "Toelettatura Manager";
   const variables = {
     "--brand": colors.brand,
     "--brand-strong": colors.brandStrong,
@@ -251,9 +264,16 @@ function renderBrandMark(className) {
 }
 
 async function loadData() {
-  const [dogsResponse, appointmentsResponse] = await Promise.all([api("/api/dogs"), api("/api/appointments")]);
+  const [meResponse, dogsResponse, appointmentsResponse, animalResponse] = await Promise.all([
+    api("/api/me"),
+    api("/api/dogs"),
+    api("/api/appointments"),
+    api("/api/settings/animal")
+  ]);
+  state.me = meResponse.user || state.me;
   state.dogs = dogsResponse.dogs || [];
   state.appointments = appointmentsResponse.appointments || [];
+  state.animalSettings = animalResponse.animal || state.animalSettings;
   if (state.me?.role === "admin") {
     const [usersResponse, duckdnsResponse, brandingResponse, whatsappResponse, versionResponse] = await Promise.all([
       api("/api/users"),
@@ -274,6 +294,27 @@ async function loadData() {
     state.whatsapp = null;
     state.version = null;
   }
+}
+
+function connectLiveUpdates() {
+  if (state.eventSource || !state.me || typeof EventSource !== "function") return;
+  const source = new EventSource("/api/events");
+  state.eventSource = source;
+  source.onmessage = (event) => {
+    const payload = JSON.parse(event.data || "{}");
+    if (!payload.type || payload.type === "connected") return;
+    clearTimeout(state.liveRefreshTimer);
+    state.liveRefreshTimer = setTimeout(async () => {
+      await loadData();
+      if (state.me) renderShell();
+      notify("Portale aggiornato");
+    }, 350);
+  };
+  source.onerror = () => {
+    source.close();
+    state.eventSource = null;
+    setTimeout(connectLiveUpdates, 4000);
+  };
 }
 
 function renderLogin(error = "") {
@@ -320,6 +361,7 @@ function renderLogin(error = "") {
       state.initialAccessHint = false;
       await loadData();
       renderShell();
+      connectLiveUpdates();
       notify("Accesso effettuato");
       promptDefaultPasswordChange();
     } catch (err) {
@@ -363,6 +405,7 @@ function openDefaultPasswordDialog() {
       state.me = response.user;
       await loadData();
       renderShell();
+      connectLiveUpdates();
       notify("Password admin aggiornata");
     }
   });
@@ -401,8 +444,11 @@ function renderShell() {
         </nav>
         <div class="sidebar-bottom">
           <div class="user-card">
-            <strong>${escapeHtml(state.me.displayName || state.me.username)}</strong>
-            <span>${state.me.role === "admin" ? "Amministratore" : "Operatore"}</span>
+            ${renderUserAvatar(state.me, "sidebar-user-avatar")}
+            <div>
+              <strong>${escapeHtml(state.me.displayName || state.me.username)}</strong>
+              <span>${state.me.role === "admin" ? "Amministratore" : "Operatore"}</span>
+            </div>
           </div>
           <button class="btn ghost" type="button" id="logoutBtn">Esci</button>
         </div>
@@ -420,11 +466,13 @@ function renderShell() {
   document.getElementById("logoutBtn").addEventListener("click", logout);
   renderView();
   renderPwaInstallPrompt();
+  connectLiveUpdates();
 }
 
 function navItems() {
   const items = [
     { id: "calendar", label: "Calendario", symbol: "CA" },
+    { id: "dashboard", label: "Dashboard", symbol: "DA" },
     { id: "dogs", label: "Schede", symbol: "SC" }
   ];
   if (state.me?.role === "admin") {
@@ -446,9 +494,12 @@ async function logout() {
   state.users = [];
   state.duckdns = null;
   state.whatsapp = null;
+  state.animalSettings = null;
   state.version = null;
   state.updateCheck = null;
   state.updateCheckLoading = false;
+  state.eventSource?.close();
+  state.eventSource = null;
   renderLogin();
   renderPwaInstallPrompt();
 }
@@ -456,11 +507,13 @@ async function logout() {
 function renderView() {
   const main = document.getElementById("mainContent");
   if (state.view === "calendar") main.innerHTML = renderCalendar();
+  if (state.view === "dashboard") main.innerHTML = renderDashboard();
   if (state.view === "dogs") main.innerHTML = renderDogs();
   if (state.view === "users") main.innerHTML = renderUsers();
   if (state.view === "settings") main.innerHTML = renderSettings();
 
   if (state.view === "calendar") bindCalendar();
+  if (state.view === "dashboard") bindDashboard();
   if (state.view === "dogs") bindDogs();
   if (state.view === "users") bindUsers();
   if (state.view === "settings") bindSettings();
@@ -744,6 +797,61 @@ function bindCalendar() {
   });
 }
 
+function renderDashboard() {
+  const today = todayISO();
+  const completed = state.appointments.filter((item) => item.status === "completato");
+  const planned = state.appointments.filter((item) => ["programmato", "confermato"].includes(item.status) && item.date >= today);
+  const breedStats = countBy(completed, (appointment) => {
+    const dog = state.dogs.find((item) => item.id === appointment.dogId);
+    return dog?.breed || "Non indicata";
+  });
+  const serviceStats = countBy(completed.flatMap((appointment) => appointment.services?.length ? appointment.services : [appointment.service || "Servizio"]));
+  const dogStats = countBy(completed, (appointment) => appointment.dogName || "Senza nome");
+  const avgMinutes = average(state.dogs.map((dog) => Number(dog.estimatedMinutes || 0)).filter(Boolean));
+  const focus = state.dashboardFocus === "services" ? serviceStats : breedStats;
+  return `
+    <div class="topbar">
+      <div class="page-title">
+        <h1>Dashboard</h1>
+        <p>Statistiche operative su appuntamenti, razze, servizi e tempi.</p>
+      </div>
+      <div class="segmented" role="group" aria-label="Grafico dashboard">
+        <button type="button" data-dashboard-focus="breeds" class="${state.dashboardFocus !== "services" ? "active" : ""}">Razze</button>
+        <button type="button" data-dashboard-focus="services" class="${state.dashboardFocus === "services" ? "active" : ""}">Servizi</button>
+      </div>
+    </div>
+    <section class="metric-grid" aria-label="Riepilogo dashboard">
+      <div class="metric"><span>Da fare</span><strong>${planned.length}</strong></div>
+      <div class="metric"><span>Fatti</span><strong>${completed.length}</strong></div>
+      <div class="metric"><span>Cliente piu presente</span><strong>${escapeHtml(topStatLabel(dogStats))}</strong></div>
+      <div class="metric"><span>Tempo medio scheda</span><strong>${escapeHtml(durationLabel(avgMinutes))}</strong></div>
+    </section>
+    <section class="dashboard-grid">
+      <div class="panel">
+        <h2>${state.dashboardFocus === "services" ? "Servizi piu richiesti" : "Razze piu trattate"}</h2>
+        ${renderPieChart(focus)}
+      </div>
+      <div class="panel">
+        <h2>Classifiche</h2>
+        <div class="stat-lists">
+          ${renderStatList("Razze", breedStats)}
+          ${renderStatList("Servizi", serviceStats)}
+          ${renderStatList("Animali", dogStats)}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function bindDashboard() {
+  document.querySelectorAll("[data-dashboard-focus]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.dashboardFocus = button.dataset.dashboardFocus;
+      renderView();
+    });
+  });
+}
+
 function renderDogs() {
   const filteredDogs = filteredDogList();
   return `
@@ -770,12 +878,13 @@ function renderDogs() {
 }
 
 function renderDogCard(dog) {
+  const topDog = isTopDog(dog);
   const photo = dog.photoUrl
     ? `<img src="${escapeAttr(dog.photoUrl)}" alt="Foto di ${escapeAttr(dog.dogName)}" />`
     : `<span>${escapeHtml(initials(dog.dogName))}</span>`;
   return `
-    <button class="dog-tile" type="button" data-dog-open="${dog.id}" aria-label="Apri scheda di ${escapeAttr(dog.dogName || "cane")}">
-      <div class="dog-thumb">${photo}</div>
+    <button class="dog-tile ${topDog ? "top-client" : ""}" type="button" data-dog-open="${dog.id}" aria-label="Apri scheda di ${escapeAttr(dog.dogName || "cane")}">
+      <div class="dog-thumb">${photo}${topDog ? `<span class="top-paw" aria-label="Cliente top">&#128062;</span>` : ""}</div>
       <div class="dog-tile-main">
         <h3>${escapeHtml(dog.dogName || "Senza nome")}</h3>
       </div>
@@ -817,9 +926,12 @@ function renderUsers() {
         .map(
           (user) => `
             <div class="table-row">
-              <div>
-                <strong>${escapeHtml(user.displayName || user.username)}</strong><br />
-                <span class="muted">${escapeHtml(user.username)}</span>
+              <div class="user-row-main">
+                ${renderUserAvatar(user, "user-row-avatar")}
+                <div>
+                  <strong>${escapeHtml(user.displayName || user.username)}</strong><br />
+                  <span class="muted">${escapeHtml(user.username)}</span>
+                </div>
               </div>
               <span class="role-pill ${user.role === "admin" ? "admin" : ""}">${user.role === "admin" ? "Admin" : "User"}</span>
               <span class="state-pill ${user.active ? "active" : "off"}">${user.active ? "Attivo" : "Disattivo"}</span>
@@ -856,6 +968,7 @@ function renderSettings() {
   const loginBackground = branding.loginBackground;
   const whatsapp = state.whatsapp || {};
   const duckdns = state.duckdns || {};
+  const animal = getAnimalSettings();
   const version = state.version || {};
   const updateCheck = state.updateCheck;
   const localUrls = duckdns.localUrls || [];
@@ -973,6 +1086,29 @@ function renderSettings() {
         </div>
         <div class="settings-actions">
           <button class="btn" type="submit">Salva identita</button>
+        </div>
+      </form>
+      <form class="settings-panel wide" id="animalSettingsForm">
+        <div class="settings-heading-row">
+          <div>
+            <h2>Scheda animale</h2>
+            <p class="settings-note">Gestisci razze, servizi selezionabili e soglia cliente top.</p>
+          </div>
+          <span class="badge">${escapeHtml(animal.loyaltyTopVisitsPerYear)} servizi/anno</span>
+        </div>
+        <div class="form-grid">
+          <label class="full">Razze disponibili
+            <textarea name="breeds" placeholder="Una razza per riga">${escapeHtml((animal.breeds || []).join("\n"))}</textarea>
+          </label>
+          <label class="full">Servizi disponibili
+            <textarea name="services" placeholder="Un servizio per riga">${escapeHtml((animal.services || []).join("\n"))}</textarea>
+          </label>
+          <label>Servizi annui per cliente top
+            <input name="loyaltyTopVisitsPerYear" type="number" min="1" step="1" value="${escapeAttr(animal.loyaltyTopVisitsPerYear || 8)}" />
+          </label>
+        </div>
+        <div class="settings-actions">
+          <button class="btn" type="submit">Salva scheda animale</button>
         </div>
       </form>
       <form class="settings-panel wide" id="whatsappForm">
@@ -1112,7 +1248,7 @@ function renderSettings() {
             <input name="updateFile" type="file" accept=".pgs-update" />
           </label>
           <label class="full">URL update web
-            <input name="updateUrl" type="url" value="${escapeAttr(updateCheck?.updateAvailable && updateCheck.packageUrl ? updateCheck.packageUrl : "")}" placeholder="https://.../Pet-Grooming-Software-0.0.1-beta.4.pgs-update" />
+            <input name="updateUrl" type="url" value="${escapeAttr(updateCheck?.updateAvailable && updateCheck.packageUrl ? updateCheck.packageUrl : "")}" placeholder="https://.../Pet-Grooming-Software-0.0.1-beta.5.pgs-update" />
           </label>
         </div>
         <p class="settings-note">L'update aggiorna solo il software. Database, foto e backup non vengono toccati. Dopo l'installazione serve riavviare il servizio.</p>
@@ -1206,6 +1342,26 @@ function bindSettings() {
     }
   });
 
+  document.getElementById("animalSettingsForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    try {
+      const response = await api("/api/settings/animal", {
+        method: "PUT",
+        body: JSON.stringify({
+          breeds: parseTextareaList(data.get("breeds")),
+          services: parseTextareaList(data.get("services")),
+          loyaltyTopVisitsPerYear: data.get("loyaltyTopVisitsPerYear")
+        })
+      });
+      state.animalSettings = response.animal;
+      renderView();
+      notify("Impostazioni scheda animale salvate");
+    } catch (err) {
+      notify(err.message);
+    }
+  });
+
   document.getElementById("whatsappForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -1281,7 +1437,7 @@ function bindSettings() {
       const blob = new Blob([JSON.stringify(response.backup, null, 2)], { type: "application/json" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
-      link.download = response.fileName || "toilettatura-backup.json";
+      link.download = response.fileName || "toelettatura-backup.json";
       link.click();
       setTimeout(() => URL.revokeObjectURL(link.href), 500);
       form.reset();
@@ -1436,6 +1592,7 @@ function bindLoginBackgroundMode(form) {
 function openDogDetailsDialog(dog = {}) {
   const history = dogAppointmentHistory(dog);
   const scheduledCount = history.filter(isScheduledAppointment).length;
+  const topDog = isTopDog(dog);
   const photo = dog.photoUrl
     ? `<img src="${escapeAttr(dog.photoUrl)}" alt="Foto di ${escapeAttr(dog.dogName)}" />`
     : `<span>${escapeHtml(initials(dog.dogName))}</span>`;
@@ -1445,10 +1602,11 @@ function openDogDetailsDialog(dog = {}) {
     headerAction: `<button class="icon-btn" type="button" data-header-action aria-label="Modifica scheda" title="Modifica scheda">&#9998;</button>`,
     content: `
       <section class="dog-detail">
-        <div class="dog-detail-photo">${photo}</div>
+        <div class="dog-detail-photo ${topDog ? "top-client" : ""}">${photo}${topDog ? `<span class="top-paw detail" aria-label="Cliente top">&#128062;</span>` : ""}</div>
         <div class="dog-detail-body">
           <div class="dog-detail-heading">
             <strong>${escapeHtml(dog.dogName || "Scheda cane")}</strong>
+            ${topDog ? `<span class="top-badge"><span aria-hidden="true">&#128062;</span> Cliente top</span>` : ""}
             ${scheduledCount ? `<span>${escapeHtml(scheduledAppointmentLabel(scheduledCount))}</span>` : ""}
           </div>
           <div class="detail-list">
@@ -1458,11 +1616,43 @@ function openDogDetailsDialog(dog = {}) {
             </div>
             <div class="detail-item">
               <span>Contatto</span>
-              <strong>${escapeHtml(dog.contact || "-")}</strong>
+              <strong>${escapeHtml(dog.contactMissing ? "Non presente" : dog.contact || "-")}</strong>
+            </div>
+            <div class="detail-item">
+              <span>Contatto alternativo</span>
+              <strong>${escapeHtml(dog.alternateContact || "-")}</strong>
+            </div>
+            <div class="detail-item">
+              <span>Razza</span>
+              <strong>${escapeHtml(dog.breed || "-")}</strong>
+            </div>
+            <div class="detail-item">
+              <span>Eta animale</span>
+              <strong>${escapeHtml(ageLabel(dog.birthYear))}</strong>
+            </div>
+            <div class="detail-item">
+              <span>Colore</span>
+              <strong>${escapeHtml(dog.color || "-")}</strong>
+            </div>
+            <div class="detail-item">
+              <span>Sesso</span>
+              <strong>${escapeHtml(dog.sex === "F" ? "Femmina" : dog.sex === "M" ? "Maschio" : "-")}</strong>
+            </div>
+            <div class="detail-item">
+              <span>Consenso immagini</span>
+              <strong>${escapeHtml(dog.imageConsent === "yes" ? "Si" : dog.imageConsent === "no" ? "No" : "-")}</strong>
             </div>
             <div class="detail-item">
               <span>Tempo stimato</span>
               <strong>${escapeHtml(durationLabel(dog.estimatedMinutes))}</strong>
+            </div>
+            <div class="detail-item">
+              <span>Reminder</span>
+              <strong>${escapeHtml(reminderLabel(dog.reminderDaysBefore))}</strong>
+            </div>
+            <div class="detail-item full">
+              <span>Servizi preferiti</span>
+              <strong>${escapeHtml((dog.services || []).join(", ") || "-")}</strong>
             </div>
             <div class="detail-item full">
               <span>Patologie</span>
@@ -1518,7 +1708,8 @@ function openDogDetailsDialog(dog = {}) {
           dogName: freshDog.dogName,
           ownerName: freshDog.ownerName,
           contact: freshDog.contact,
-          service: "Toilettatura",
+          services: freshDog.services?.length ? freshDog.services : ["Toelettatura"],
+          service: freshDog.services?.length ? freshDog.services.join(", ") : "Toelettatura",
           status: "completato"
         }, { completionMode: true });
       });
@@ -1545,6 +1736,7 @@ function openDogDetailsDialog(dog = {}) {
 
 function renderHistoryAppointment(appointment) {
   const treatment = appointment.treatmentDone || appointment.service || "-";
+  const gallery = renderAppointmentGallery(appointment);
   return `
     <button class="history-item status-${escapeHtml(appointment.status)}" type="button" data-history-appointment="${appointment.id}" aria-label="Modifica appuntamento del ${escapeAttr(formatShortDate(appointment.date))}">
       <div class="history-main">
@@ -1557,12 +1749,15 @@ function renderHistoryAppointment(appointment) {
       </div>
       <div class="history-amount">${escapeHtml(moneyLabel(appointment.paidAmount))}</div>
       <span class="history-edit" aria-hidden="true">&#9998;</span>
+      ${gallery}
     </button>
   `;
 }
 
 function openDogDialog(dog = {}) {
   const isEdit = Boolean(dog.id);
+  const animal = getAnimalSettings();
+  const dogServices = dog.services || [];
   openModal({
     title: isEdit ? "Modifica scheda" : "Nuova scheda",
     submitLabel: isEdit ? "Salva scheda" : "Crea scheda",
@@ -1571,16 +1766,59 @@ function openDogDialog(dog = {}) {
         <label>Nome cane
           <input name="dogName" value="${escapeAttr(dog.dogName || "")}" required />
         </label>
-        <label>Tempo stimato in minuti
-          <input name="estimatedMinutes" type="number" min="0" step="5" value="${escapeAttr(dog.estimatedMinutes || "")}" />
+        <label>Tempo stimato
+          <input name="estimatedTime" type="time" step="300" value="${escapeAttr(minutesToTimeInput(dog.estimatedMinutes))}" />
+        </label>
+        <label>Razza
+          <input name="breed" list="breedOptions" value="${escapeAttr(dog.breed || "")}" placeholder="Seleziona o scrivi razza" />
+          <datalist id="breedOptions">${animal.breeds.map((breed) => `<option value="${escapeAttr(breed)}"></option>`).join("")}</datalist>
+        </label>
+        <label>Anno nascita
+          <input name="birthYear" type="number" min="1980" max="${new Date().getFullYear()}" value="${escapeAttr(dog.birthYear || "")}" />
+        </label>
+        <label>Colore cane
+          <input name="color" value="${escapeAttr(dog.color || "")}" required />
+        </label>
+        <fieldset class="field-group">
+          <legend>Sesso cane</legend>
+          <label class="choice-line"><input name="sex" type="radio" value="M" ${dog.sex === "M" ? "checked" : ""} required /> Maschio</label>
+          <label class="choice-line"><input name="sex" type="radio" value="F" ${dog.sex === "F" ? "checked" : ""} required /> Femmina</label>
+        </fieldset>
+        <label>Reminder WhatsApp
+          <select name="reminderDaysBefore">
+            ${[0, 1, 2, 3, 5, 7].map((days) => `<option value="${days}" ${Number(dog.reminderDaysBefore ?? 1) === days ? "selected" : ""}>${escapeHtml(reminderLabel(days))}</option>`).join("")}
+          </select>
         </label>
         <label>Nome proprietario
           <input name="ownerName" value="${escapeAttr(dog.ownerName || "")}" />
         </label>
         <label>Numero contatto
-          <input name="contact" value="${escapeAttr(dog.contact || "")}" inputmode="tel" />
+          <input name="contact" value="${escapeAttr(dog.contact || "")}" inputmode="tel" ${dog.contactMissing ? "disabled" : ""} required />
         </label>
-        <label class="full">Patologie animale
+        <label>Secondo contatto
+          <input name="alternateContact" value="${escapeAttr(dog.alternateContact || "")}" inputmode="tel" />
+        </label>
+        <label class="checkbox-line full">
+          <input name="contactMissing" type="checkbox" ${dog.contactMissing ? "checked" : ""} />
+          Numero non presente
+        </label>
+        <fieldset class="field-group full">
+          <legend>Servizi</legend>
+          <div class="check-grid">
+            ${animal.services
+              .map((service) => `<label class="choice-line"><input name="services" type="checkbox" value="${escapeAttr(service)}" ${dogServices.includes(service) ? "checked" : ""} /> ${escapeHtml(service)}</label>`)
+              .join("")}
+          </div>
+          <label>Aggiungi servizio
+            <input name="extraService" placeholder="Es. taglio unghie" />
+          </label>
+        </fieldset>
+        <fieldset class="field-group full">
+          <legend>Consenso utilizzo immagini</legend>
+          <label class="choice-line"><input name="imageConsent" type="radio" value="yes" ${dog.imageConsent === "yes" ? "checked" : ""} required /> Si</label>
+          <label class="choice-line"><input name="imageConsent" type="radio" value="no" ${dog.imageConsent === "no" ? "checked" : ""} required /> No</label>
+        </fieldset>
+        <label class="full">Patologie
           <textarea name="pathologies">${escapeHtml(dog.pathologies || "")}</textarea>
         </label>
         <label class="full">Note
@@ -1598,24 +1836,44 @@ function openDogDialog(dog = {}) {
       const fileInput = form.elements.photo;
       const preview = document.getElementById("photoPreview");
       if (!dog.photoUrl) preview.style.display = "none";
+      const syncContact = () => {
+        const missing = form.elements.contactMissing.checked;
+        form.elements.contact.disabled = missing;
+        form.elements.contact.required = !missing;
+        if (missing) form.elements.contact.value = "";
+      };
+      form.elements.contactMissing.addEventListener("change", syncContact);
+      syncContact();
       fileInput.addEventListener("change", async () => {
         const file = fileInput.files[0];
         if (!file) return;
-        preview.src = await fileToDataUrl(file);
+        preview.src = await imageFileToDataUrl(file);
         preview.style.display = "block";
       });
     },
     onSubmit: async (formData, form) => {
       const photo = form.elements.photo.files[0];
+      const services = formData.getAll("services").map(String).filter(Boolean);
+      const extraService = String(formData.get("extraService") || "").trim();
+      if (extraService) services.push(extraService);
       const payload = {
         dogName: formData.get("dogName"),
         ownerName: formData.get("ownerName"),
         contact: formData.get("contact"),
+        contactMissing: formData.get("contactMissing") === "on",
+        alternateContact: formData.get("alternateContact"),
+        breed: formData.get("breed"),
+        birthYear: formData.get("birthYear"),
+        color: formData.get("color"),
+        sex: formData.get("sex"),
+        imageConsent: formData.get("imageConsent"),
         pathologies: formData.get("pathologies"),
-        estimatedMinutes: formData.get("estimatedMinutes"),
+        estimatedMinutes: timeInputToMinutes(formData.get("estimatedTime")),
+        reminderDaysBefore: formData.get("reminderDaysBefore"),
+        services,
         notes: formData.get("notes")
       };
-      if (photo) payload.photoData = await fileToDataUrl(photo);
+      if (photo) payload.photoData = await imageFileToDataUrl(photo);
       await api(isEdit ? `/api/dogs/${dog.id}` : "/api/dogs", {
         method: isEdit ? "PUT" : "POST",
         body: JSON.stringify(payload)
@@ -1632,6 +1890,11 @@ function openAppointmentDialog(appointment = {}, options = {}) {
   const completionMode = Boolean(options.completionMode) || (!isEdit && appointment.status === "completato");
   const currentStatus = completionMode ? "completato" : appointment.status || "programmato";
   const selectedDog = appointment.dogId ? state.dogs.find((dog) => dog.id === appointment.dogId) : null;
+  const animal = getAnimalSettings();
+  const selectedServices = normalizeServiceList(
+    appointment.services?.length ? appointment.services : appointment.service || selectedDog?.services || ["Toelettatura"]
+  );
+  const serviceOptions = uniqueValues([...(animal.services || []), ...selectedServices, "Toelettatura"]);
   openModal({
     title: completionMode ? "Concludi prestazione" : isEdit ? "Modifica appuntamento" : "Nuovo appuntamento",
     submitLabel: completionMode ? "Salva prestazione" : isEdit ? "Salva appuntamento" : "Crea appuntamento",
@@ -1669,10 +1932,30 @@ function openAppointmentDialog(appointment = {}, options = {}) {
         ${
           appointment.dogId
             ? ""
-            : `<label class="checkbox-line full" data-create-dog-row>
-                <input name="createDogProfile" type="checkbox" checked />
-                Crea subito la scheda cane con questi dati
-              </label>`
+            : `<fieldset class="field-group full quick-profile" data-create-dog-row>
+                <legend>Scheda rapida cane</legend>
+                <label class="checkbox-line">
+                  <input name="createDogProfile" type="checkbox" checked />
+                  Crea subito la scheda cane con questi dati
+                </label>
+                <label class="checkbox-line">
+                  <input name="contactMissing" type="checkbox" />
+                  Numero non presente
+                </label>
+                <label>Colore cane
+                  <input name="color" data-quick-required />
+                </label>
+                <fieldset class="field-group compact">
+                  <legend>Sesso cane</legend>
+                  <label class="choice-line"><input name="sex" type="radio" value="M" data-quick-required /> Maschio</label>
+                  <label class="choice-line"><input name="sex" type="radio" value="F" data-quick-required /> Femmina</label>
+                </fieldset>
+                <fieldset class="field-group compact">
+                  <legend>Consenso immagini</legend>
+                  <label class="choice-line"><input name="imageConsent" type="radio" value="yes" data-quick-required /> Si</label>
+                  <label class="choice-line"><input name="imageConsent" type="radio" value="no" data-quick-required /> No</label>
+                </fieldset>
+              </fieldset>`
         }
         <label>Nome cane
           <input name="dogName" value="${escapeAttr(selectedDog?.dogName || appointment.dogName || "")}" required />
@@ -1683,15 +1966,37 @@ function openAppointmentDialog(appointment = {}, options = {}) {
         <label>Contatto
           <input name="contact" value="${escapeAttr(selectedDog?.contact || appointment.contact || "")}" inputmode="tel" />
         </label>
-        <label>Trattamento previsto
-          <input name="service" value="${escapeAttr(appointment.service || "Toilettatura")}" />
-        </label>
+        <fieldset class="field-group full">
+          <legend>Servizi previsti</legend>
+          <div class="check-grid">
+            ${serviceOptions
+              .map((service) => `<label class="choice-line"><input name="services" type="checkbox" value="${escapeAttr(service)}" ${selectedServices.includes(service) ? "checked" : ""} /> ${escapeHtml(service)}</label>`)
+              .join("")}
+          </div>
+          <label>Aggiungi servizio
+            <input name="extraService" placeholder="Es. taglio unghie" />
+          </label>
+        </fieldset>
         <label data-completion-field>Importo pagato
           <input name="paidAmount" type="number" min="0" step="0.01" value="${escapeAttr(appointment.paidAmount || "")}" inputmode="decimal" />
         </label>
-        <label class="full" data-completion-field>Trattamento eseguito
+        <label class="full" data-completion-field>Servizio eseguito
           <input name="treatmentDone" value="${escapeAttr(appointment.treatmentDone || "")}" placeholder="Es. bagno, taglio, snodatura, stripping" />
         </label>
+        <div class="full gallery-upload" data-completion-field>
+          <label>Foto prima del lavoro
+            <input name="beforePhotos" type="file" accept="image/*" multiple />
+          </label>
+          ${appointment.beforePhotos?.length ? `<div class="gallery-preview">${appointment.beforePhotos.map((src) => `<img src="${escapeAttr(src)}" alt="Prima del lavoro" />`).join("")}</div>` : ""}
+          ${appointment.beforePhotos?.length ? `<label class="checkbox-line"><input name="clearBeforePhotos" type="checkbox" /> Rimuovi foto prima salvate</label>` : ""}
+        </div>
+        <div class="full gallery-upload" data-completion-field>
+          <label>Foto dopo il lavoro
+            <input name="afterPhotos" type="file" accept="image/*" multiple />
+          </label>
+          ${appointment.afterPhotos?.length ? `<div class="gallery-preview">${appointment.afterPhotos.map((src) => `<img src="${escapeAttr(src)}" alt="Dopo il lavoro" />`).join("")}</div>` : ""}
+          ${appointment.afterPhotos?.length ? `<label class="checkbox-line"><input name="clearAfterPhotos" type="checkbox" /> Rimuovi foto dopo salvate</label>` : ""}
+        </div>
         <label class="full">Note appuntamento
           <textarea name="notes">${escapeHtml(appointment.notes || "")}</textarea>
         </label>
@@ -1699,33 +2004,59 @@ function openAppointmentDialog(appointment = {}, options = {}) {
     `,
     onOpen: (form) => {
       if (completionMode && !form.elements.treatmentDone.value) {
-        form.elements.treatmentDone.value = form.elements.service.value || "Toilettatura";
+        form.elements.treatmentDone.value = selectedServiceLabelsFromForm(form) || "Toelettatura";
       }
-      const createDogRow = form.querySelector("[data-create-dog-row]");
+      const createDogRows = form.querySelectorAll("[data-create-dog-row]");
       const completionFields = form.querySelectorAll("[data-completion-field]");
+      const serviceInputs = Array.from(form.querySelectorAll('input[name="services"]'));
+      const setServiceChecks = (services) => {
+        const serviceNames = normalizeServiceList(services);
+        if (!serviceNames.length) return;
+        serviceInputs.forEach((input) => {
+          input.checked = serviceNames.includes(input.value);
+        });
+      };
       const syncCompletionFields = () => {
         const isCompleted = form.elements.status.value === "completato";
         completionFields.forEach((field) => {
           field.hidden = !isCompleted;
-          field.querySelectorAll("input").forEach((input) => {
+          field.querySelectorAll("input, textarea, select").forEach((input) => {
             input.disabled = !isCompleted;
           });
         });
       };
       const syncCreateDogRow = () => {
         const hasLinkedDog = Boolean(form.elements.dogId.value);
-        if (!createDogRow) return;
-        createDogRow.hidden = hasLinkedDog;
-        if (hasLinkedDog && form.elements.createDogProfile) form.elements.createDogProfile.checked = false;
+        const wantsProfile = Boolean(form.elements.createDogProfile?.checked);
+        createDogRows.forEach((row) => {
+          row.hidden = hasLinkedDog;
+          row.querySelectorAll("input, select, textarea").forEach((input) => {
+            if (input.name === "createDogProfile") {
+              input.disabled = hasLinkedDog;
+              if (hasLinkedDog) input.checked = false;
+              return;
+            }
+            input.disabled = hasLinkedDog || !wantsProfile;
+            input.required = !hasLinkedDog && wantsProfile && input.hasAttribute("data-quick-required");
+          });
+        });
+        if (form.elements.contactMissing) {
+          const missing = form.elements.contactMissing.checked && !hasLinkedDog && wantsProfile;
+          form.elements.contact.disabled = missing;
+          form.elements.contact.required = !hasLinkedDog && wantsProfile && !missing;
+          if (missing) form.elements.contact.value = "";
+        }
       };
       modalRoot.querySelector("[data-complete-form]")?.addEventListener("click", () => {
         form.elements.status.value = "completato";
         syncCompletionFields();
-        if (!form.elements.treatmentDone.value) form.elements.treatmentDone.value = form.elements.service.value || "Toilettatura";
+        if (!form.elements.treatmentDone.value) form.elements.treatmentDone.value = selectedServiceLabelsFromForm(form) || "Toelettatura";
         form.elements.treatmentDone.focus();
-        notify("Completa trattamento e importo, poi salva la prestazione");
+        notify("Completa servizio e importo, poi salva la prestazione");
       });
       form.elements.status.addEventListener("change", syncCompletionFields);
+      form.elements.createDogProfile?.addEventListener("change", syncCreateDogRow);
+      form.elements.contactMissing?.addEventListener("change", syncCreateDogRow);
       form.elements.dogId.addEventListener("change", () => {
         syncCreateDogRow();
         const dog = state.dogs.find((item) => item.id === form.elements.dogId.value);
@@ -1733,6 +2064,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
         form.elements.dogName.value = dog.dogName || "";
         form.elements.ownerName.value = dog.ownerName || "";
         form.elements.contact.value = dog.contact || "";
+        setServiceChecks(dog.services);
       });
       syncCreateDogRow();
       syncCompletionFields();
@@ -1743,14 +2075,25 @@ function openAppointmentDialog(appointment = {}, options = {}) {
       renderView();
       notify("Appuntamento eliminato");
     },
-    onSubmit: async (formData) => {
+    onSubmit: async (formData, form) => {
       const payload = Object.fromEntries(formData.entries());
+      const services = formData.getAll("services").map(String).filter(Boolean);
+      const extraService = String(formData.get("extraService") || "").trim();
+      if (extraService) services.push(extraService);
+      if (!services.length) services.push("Toelettatura");
+      payload.services = services;
+      payload.service = services.join(", ");
       payload.createDogProfile = formData.get("createDogProfile") === "on";
       if (completionMode) payload.status = "completato";
-      if (payload.status === "completato" && !payload.treatmentDone) payload.treatmentDone = payload.service || "Toilettatura";
+      if (payload.status === "completato" && !payload.treatmentDone) payload.treatmentDone = payload.service || "Toelettatura";
       if (payload.status !== "completato") {
         payload.treatmentDone = "";
         payload.paidAmount = "";
+      } else {
+        payload.beforePhotoData = await filesToDataUrls(form.elements.beforePhotos?.files, 5);
+        payload.afterPhotoData = await filesToDataUrls(form.elements.afterPhotos?.files, 5);
+        payload.clearBeforePhotos = formData.get("clearBeforePhotos") === "on";
+        payload.clearAfterPhotos = formData.get("clearAfterPhotos") === "on";
       }
       await api(isEdit ? `/api/appointments/${appointment.id}` : "/api/appointments", {
         method: isEdit ? "PUT" : "POST",
@@ -1786,26 +2129,51 @@ function openUserDialog(user = {}) {
         <label>Password ${isEdit ? "(lascia vuota per non cambiarla)" : ""}
           <input name="password" type="password" autocomplete="new-password" ${isEdit ? "" : "required"} />
         </label>
+        <label>Foto profilo
+          <input name="avatar" type="file" accept="image/*" />
+        </label>
+        <div class="user-avatar-preview-wrap">
+          ${renderUserAvatar(user, "user-avatar-preview")}
+        </div>
+        <label class="checkbox-line full">
+          <input name="clearAvatar" type="checkbox" />
+          Rimuovi foto profilo
+        </label>
         <label class="checkbox-line full">
           <input name="active" type="checkbox" ${user.active !== false ? "checked" : ""} />
           Utente attivo
         </label>
       </div>
     `,
-    onSubmit: async (formData) => {
+    onOpen: (form) => {
+      const avatarInput = form.elements.avatar;
+      const preview = form.querySelector(".user-avatar-preview");
+      avatarInput?.addEventListener("change", async () => {
+        const file = avatarInput.files[0];
+        if (!file || !preview) return;
+        const dataUrl = await imageFileToDataUrl(file, { maxSize: 420, quality: 0.82 });
+        preview.innerHTML = `<img src="${escapeAttr(dataUrl)}" alt="Foto profilo" />`;
+      });
+    },
+    onSubmit: async (formData, form) => {
+      const avatar = form.elements.avatar.files[0];
       const payload = {
         displayName: formData.get("displayName"),
         username: formData.get("username"),
         role: formData.get("role"),
         password: formData.get("password"),
+        clearAvatar: formData.get("clearAvatar") === "on",
         active: formData.get("active") === "on"
       };
-      await api(isEdit ? `/api/users/${user.id}` : "/api/users", {
+      if (avatar) payload.avatarData = await imageFileToDataUrl(avatar, { maxSize: 420, quality: 0.82 });
+      const response = await api(isEdit ? `/api/users/${user.id}` : "/api/users", {
         method: isEdit ? "PUT" : "POST",
         body: JSON.stringify(payload)
       });
+      if (response.user?.id === state.me?.id) state.me = response.user;
       await loadData();
-      renderView();
+      if (response.user?.id === state.me?.id) renderShell();
+      else renderView();
       notify(isEdit ? "Utente aggiornato" : "Utente creato");
     }
   });
@@ -1906,7 +2274,9 @@ function filteredDogList() {
   const query = state.dogSearch.trim().toLowerCase();
   if (!query) return state.dogs;
   return state.dogs.filter((dog) =>
-    [dog.dogName, dog.ownerName, dog.contact, dog.pathologies, dog.notes].some((field) => String(field || "").toLowerCase().includes(query))
+    [dog.dogName, dog.ownerName, dog.contact, dog.alternateContact, dog.breed, dog.color, dog.pathologies, dog.notes, ...(dog.services || [])].some((field) =>
+      String(field || "").toLowerCase().includes(query)
+    )
   );
 }
 
@@ -2056,6 +2426,229 @@ function fileToDataUrl(file) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+function renderUserAvatar(user = {}, className = "") {
+  const name = user.displayName || user.username || "Utente";
+  const image = user.avatarUrl
+    ? `<img src="${escapeAttr(user.avatarUrl)}" alt="Foto profilo ${escapeAttr(name)}" />`
+    : `<span>${escapeHtml(initials(name))}</span>`;
+  return `<span class="user-avatar ${escapeAttr(className)}">${image}</span>`;
+}
+
+function parseTextareaList(value) {
+  return uniqueValues(
+    String(value || "")
+      .split(/\r?\n|,/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+  );
+}
+
+function normalizeServiceList(value) {
+  const raw = Array.isArray(value) ? value : String(value || "").split(",");
+  return uniqueValues(raw.map((item) => String(item || "").trim()).filter(Boolean));
+}
+
+function uniqueValues(values) {
+  const seen = new Set();
+  const result = [];
+  for (const value of values || []) {
+    const text = String(value || "").trim();
+    const key = text.toLowerCase();
+    if (!text || seen.has(key)) continue;
+    seen.add(key);
+    result.push(text);
+  }
+  return result;
+}
+
+function minutesToTimeInput(minutes) {
+  const total = Math.max(0, Math.min(Number(minutes || 0), 23 * 60 + 55));
+  if (!total) return "";
+  const hours = Math.floor(total / 60);
+  const rest = total % 60;
+  return `${String(hours).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+}
+
+function timeInputToMinutes(value) {
+  const [hours, minutes] = String(value || "").split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return 0;
+  return Math.max(0, hours * 60 + minutes);
+}
+
+function reminderLabel(days) {
+  const value = Number(days);
+  if (!Number.isFinite(value) || value <= 0) return "Il giorno stesso";
+  if (value === 1) return "1 giorno prima";
+  return `${value} giorni prima`;
+}
+
+function ageLabel(birthYear) {
+  const year = Number(birthYear || 0);
+  const currentYear = new Date().getFullYear();
+  if (!Number.isFinite(year) || year < 1980 || year > currentYear) return "-";
+  const age = currentYear - year;
+  if (age <= 0) return `Meno di 1 anno (${year})`;
+  if (age === 1) return `1 anno (${year})`;
+  return `${age} anni (${year})`;
+}
+
+function isTopDog(dog) {
+  const threshold = Math.max(1, Number(getAnimalSettings().loyaltyTopVisitsPerYear || 8));
+  const year = String(new Date().getFullYear());
+  const completedThisYear = dogAppointmentHistory(dog).filter((appointment) =>
+    appointment.status === "completato" && String(appointment.date || "").startsWith(`${year}-`)
+  ).length;
+  return completedThisYear >= threshold;
+}
+
+function countBy(items, picker = (item) => item) {
+  const counts = new Map();
+  for (const item of items || []) {
+    const picked = picker(item);
+    const labels = Array.isArray(picked) ? picked : [picked];
+    for (const rawLabel of labels) {
+      const label = String(rawLabel || "Non indicato").trim() || "Non indicato";
+      counts.set(label, (counts.get(label) || 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "it"));
+}
+
+function average(values) {
+  const valid = (values || []).map(Number).filter((value) => Number.isFinite(value) && value > 0);
+  if (!valid.length) return 0;
+  return Math.round(valid.reduce((sum, value) => sum + value, 0) / valid.length);
+}
+
+function topStatLabel(stats) {
+  const first = stats?.[0];
+  if (!first) return "-";
+  return `${first.label} (${first.count})`;
+}
+
+function renderStatList(title, stats) {
+  const rows = (stats || []).slice(0, 6);
+  return `
+    <div class="stat-list">
+      <h3>${escapeHtml(title)}</h3>
+      ${
+        rows.length
+          ? rows.map((item) => `<div><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.count)}</strong></div>`).join("")
+          : `<p class="muted">Nessun dato.</p>`
+      }
+    </div>
+  `;
+}
+
+function renderPieChart(stats) {
+  const rows = (stats || []).slice(0, 6);
+  const total = rows.reduce((sum, item) => sum + item.count, 0);
+  if (!total) return `<div class="empty-chart">Nessun dato da mostrare.</div>`;
+  const colors = ["#366a8a", "#2f7a65", "#cf6155", "#e1a63d", "#7a5ca8", "#79834d"];
+  let cursor = 0;
+  const gradient = rows
+    .map((item, index) => {
+      const start = cursor;
+      cursor += (item.count / total) * 360;
+      return `${colors[index % colors.length]} ${start.toFixed(2)}deg ${cursor.toFixed(2)}deg`;
+    })
+    .join(", ");
+  return `
+    <div class="pie-layout">
+      <div class="pie-chart" style="background: conic-gradient(${escapeAttr(gradient)});"></div>
+      <div class="pie-legend">
+        ${rows
+          .map(
+            (item, index) => `
+              <div>
+                <span style="background:${colors[index % colors.length]}"></span>
+                <strong>${escapeHtml(item.label)}</strong>
+                <small>${escapeHtml(item.count)}</small>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderAppointmentGallery(appointment) {
+  const before = Array.isArray(appointment.beforePhotos) ? appointment.beforePhotos : [];
+  const after = Array.isArray(appointment.afterPhotos) ? appointment.afterPhotos : [];
+  if (!before.length && !after.length) return "";
+  const group = (label, photos) =>
+    photos.length
+      ? `<div class="appointment-gallery-group"><span>${escapeHtml(label)}</span>${photos
+          .slice(0, 5)
+          .map((src) => `<img src="${escapeAttr(src)}" alt="" />`)
+          .join("")}</div>`
+      : "";
+  return `<div class="appointment-gallery">${group("Prima", before)}${group("Dopo", after)}</div>`;
+}
+
+function selectedServiceLabelsFromForm(form) {
+  const selected = Array.from(form.querySelectorAll('input[name="services"]:checked')).map((input) => input.value);
+  const extra = String(form.elements.extraService?.value || "").trim();
+  if (extra) selected.push(extra);
+  return normalizeServiceList(selected).join(", ");
+}
+
+async function filesToDataUrls(fileList, limit = 5) {
+  const files = Array.from(fileList || []);
+  if (files.length > limit) throw new Error(`Massimo ${limit} foto per tipo`);
+  const dataUrls = [];
+  for (const file of files) {
+    dataUrls.push(await imageFileToDataUrl(file, { maxSize: 1100, quality: 0.72 }));
+  }
+  return dataUrls;
+}
+
+async function imageFileToDataUrl(file, options = {}) {
+  if (!file) return "";
+  if (!String(file.type || "").startsWith("image/")) throw new Error("Seleziona solo immagini");
+  const maxOriginalBytes = options.maxOriginalBytes || 12 * 1024 * 1024;
+  if (file.size > maxOriginalBytes) throw new Error("File immagine troppo grande: massimo 12 MB");
+  const source = await fileToDataUrl(file);
+  if (typeof Image === "undefined" || typeof document.createElement !== "function") return source;
+  const image = await loadImage(source);
+  const maxSize = options.maxSize || 1200;
+  const scale = Math.min(1, maxSize / image.width, maxSize / image.height);
+  const width = Math.max(1, Math.round(image.width * scale));
+  const height = Math.max(1, Math.round(image.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  context.drawImage(image, 0, 0, width, height);
+  let quality = options.quality || 0.78;
+  let dataUrl = canvas.toDataURL("image/jpeg", quality);
+  while (dataUrlByteSize(dataUrl) > 4 * 1024 * 1024 && quality > 0.42) {
+    quality -= 0.08;
+    dataUrl = canvas.toDataURL("image/jpeg", quality);
+  }
+  if (dataUrlByteSize(dataUrl) > 4 * 1024 * 1024) {
+    throw new Error("Immagine troppo grande anche dopo la riduzione");
+  }
+  return dataUrl;
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Immagine non leggibile"));
+    image.src = src;
+  });
+}
+
+function dataUrlByteSize(dataUrl) {
+  const base64 = String(dataUrl || "").split(",")[1] || "";
+  return Math.ceil((base64.length * 3) / 4);
 }
 
 function notify(message) {

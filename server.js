@@ -15,10 +15,12 @@ const DB_FILE = path.join(DATA_DIR, "db.json");
 const MAX_BODY_BYTES = 16 * 1024 * 1024;
 const MAX_UPDATE_BYTES = 28 * 1024 * 1024;
 const MAX_UPDATE_BODY_BYTES = 40 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const MAX_GALLERY_PHOTOS_PER_TYPE = 5;
 const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin123";
 const APP_ID = "pet-grooming-software";
-const APP_VERSION = packageInfo.version || "0.0.1-beta.4";
+const APP_VERSION = packageInfo.version || "0.0.1-beta.5";
 const UPDATE_FORMAT = "PET_GROOMING_SOFTWARE_UPDATE";
 const UPDATE_FORMAT_VERSION = 1;
 const UPDATE_EXTENSION = ".pgs-update";
@@ -29,6 +31,7 @@ const UPDATE_MANIFEST_URL =
 const MAX_UPDATE_MANIFEST_BYTES = 256 * 1024;
 
 const sessions = new Map();
+const eventClients = new Set();
 let restartScheduled = false;
 
 const mimeTypes = {
@@ -48,8 +51,8 @@ function defaultSettings() {
   return {
     branding: {
       theme: "light",
-      portalName: "Toilettatura Manager",
-      businessName: "Toilettatura",
+      portalName: "Toelettatura Manager",
+      businessName: "Toelettatura",
       tagline: "Agenda e schede clienti",
       companyInfo: "",
       phone: "",
@@ -91,6 +94,11 @@ function defaultSettings() {
       cloudAccessToken: "",
       lastResult: "",
       lastUpdateAt: ""
+    },
+    animal: {
+      breeds: ["Meticcio"],
+      services: ["Bagno", "Taglio", "Snodatura", "Stripping"],
+      loyaltyTopVisitsPerYear: 8
     }
   };
 }
@@ -104,6 +112,13 @@ function ensureSettingsShape(settings = {}) {
   const loginBackground = {
     ...defaults.branding.loginBackground,
     ...(settings.branding?.loginBackground || {})
+  };
+  const animal = {
+    ...defaults.animal,
+    ...(settings.animal || {}),
+    breeds: cleanStringList(settings.animal?.breeds, defaults.animal.breeds),
+    services: cleanStringList(settings.animal?.services, defaults.animal.services),
+    loyaltyTopVisitsPerYear: cleanNumber(settings.animal?.loyaltyTopVisitsPerYear, defaults.animal.loyaltyTopVisitsPerYear)
   };
   return {
     branding: {
@@ -120,7 +135,8 @@ function ensureSettingsShape(settings = {}) {
     whatsapp: {
       ...defaults.whatsapp,
       ...(settings.whatsapp || {})
-    }
+    },
+    animal
   };
 }
 
@@ -230,9 +246,17 @@ function publicUser(user) {
     active: Boolean(user.active),
     mustChangePassword: Boolean(user.mustChangePassword),
     defaultPassword: Boolean(user.defaultPassword),
+    avatarUrl: cleanString(user.avatarUrl),
     createdAt: user.createdAt,
     updatedAt: user.updatedAt
   };
+}
+
+function broadcastDataChange(type, detail = {}) {
+  const payload = `data: ${JSON.stringify({ type, detail, at: new Date().toISOString() })}\n\n`;
+  for (const client of eventClients) {
+    client.write(payload);
+  }
 }
 
 function sendJson(res, status, payload) {
@@ -322,6 +346,11 @@ function cleanString(value, fallback = "") {
   return typeof value === "string" ? value.trim() : fallback;
 }
 
+function cleanStringList(value, fallback = []) {
+  const source = Array.isArray(value) ? value : typeof value === "string" ? value.split(/\r?\n|,/) : fallback;
+  return [...new Set(source.map((item) => cleanString(item)).filter(Boolean))].sort((a, b) => a.localeCompare(b, "it"));
+}
+
 function cleanNumber(value, fallback = 0) {
   const normalized = typeof value === "string" ? value.trim().replace(",", ".") : value;
   const number = Number(normalized);
@@ -354,6 +383,10 @@ function firstNumberField(payload, keys, existing = 0) {
   return cleanNumber(existing, 0);
 }
 
+function booleanField(payload, key, existing = false) {
+  return hasField(payload, key) ? payload[key] === true || payload[key] === "true" || payload[key] === "on" : Boolean(existing);
+}
+
 function cleanHexColor(value, fallback) {
   const color = cleanString(value);
   return /^#[0-9a-f]{6}$/i.test(color) ? color : fallback;
@@ -363,18 +396,31 @@ function savePhoto(dataUri, id) {
   if (!dataUri || typeof dataUri !== "string") return null;
   const match = dataUri.match(/^data:image\/(png|jpe?g|webp);base64,([a-z0-9+/=]+)$/i);
   if (!match) return null;
+  const buffer = Buffer.from(match[2], "base64");
+  if (buffer.length > MAX_IMAGE_BYTES) throw new Error("Immagine troppo grande: massimo 4 MB dopo la riduzione");
   const extension = match[1].toLowerCase().replace("jpeg", "jpg");
   const fileName = `${id}-${Date.now()}.${extension}`;
-  fs.writeFileSync(path.join(UPLOAD_DIR, fileName), Buffer.from(match[2], "base64"));
+  fs.writeFileSync(path.join(UPLOAD_DIR, fileName), buffer);
   return `/uploads/${fileName}`;
+}
+
+function savePhotoList(dataUris, id, existing = [], limit = MAX_GALLERY_PHOTOS_PER_TYPE) {
+  const kept = Array.isArray(existing) ? existing.filter(Boolean).slice(0, limit) : [];
+  const incoming = Array.isArray(dataUris) ? dataUris : [];
+  for (const dataUri of incoming) {
+    if (kept.length >= limit) break;
+    const saved = savePhoto(dataUri, id);
+    if (saved) kept.push(saved);
+  }
+  return kept.slice(0, limit);
 }
 
 function publicBrandingSettings(db) {
   const branding = ensureSettingsShape(db.settings).branding;
   return {
     theme: ["light", "dark", "custom"].includes(branding.theme) ? branding.theme : "light",
-    portalName: cleanString(branding.portalName) || "Toilettatura Manager",
-    businessName: cleanString(branding.businessName) || "Toilettatura",
+    portalName: cleanString(branding.portalName) || "Toelettatura Manager",
+    businessName: cleanString(branding.businessName) || "Toelettatura",
     tagline: cleanString(branding.tagline) || "Agenda e schede clienti",
     companyInfo: cleanString(branding.companyInfo),
     phone: cleanString(branding.phone),
@@ -398,6 +444,15 @@ function publicBrandingSettings(db) {
       panel: cleanHexColor(branding.colors?.panel, "#ffffff"),
       text: cleanHexColor(branding.colors?.text, "#162625")
     }
+  };
+}
+
+function publicAnimalSettings(db) {
+  const animal = ensureSettingsShape(db.settings).animal;
+  return {
+    breeds: cleanStringList(animal.breeds, defaultSettings().animal.breeds),
+    services: cleanStringList(animal.services, defaultSettings().animal.services),
+    loyaltyTopVisitsPerYear: cleanNumber(animal.loyaltyTopVisitsPerYear, defaultSettings().animal.loyaltyTopVisitsPerYear)
   };
 }
 
@@ -832,22 +887,24 @@ function schedulePortalRestart() {
   return true;
 }
 
-function normalizeDog(payload, existing = {}) {
-  const now = new Date().toISOString();
-  const id = existing.id || crypto.randomUUID();
-  const photoUrl = savePhoto(payload.photoData, id) || existing.photoUrl || "";
-  return {
-    id,
-    dogName: stringField(payload, "dogName", existing.dogName),
-    ownerName: stringField(payload, "ownerName", existing.ownerName),
-    contact: stringField(payload, "contact", existing.contact),
-    pathologies: stringField(payload, "pathologies", existing.pathologies),
-    estimatedMinutes: numberField(payload, "estimatedMinutes", existing.estimatedMinutes),
-    notes: stringField(payload, "notes", existing.notes),
-    photoUrl,
-    createdAt: existing.createdAt || now,
-    updatedAt: now
-  };
+function addEventClient(req, res) {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive"
+  });
+  res.write(`data: ${JSON.stringify({ type: "connected", at: new Date().toISOString() })}\n\n`);
+  eventClients.add(res);
+  req.on("close", () => eventClients.delete(res));
+}
+
+function validateDogForSave(dog) {
+  if (!dog.dogName) return "Inserisci il nome del cane";
+  if (!dog.contactMissing && !dog.contact) return "Inserisci il numero di telefono o spunta non presente";
+  if (!dog.color) return "Inserisci il colore del cane";
+  if (!["M", "F"].includes(dog.sex)) return "Seleziona il sesso del cane";
+  if (!["yes", "no"].includes(dog.imageConsent)) return "Seleziona il consenso immagini";
+  return "";
 }
 
 function lowerMatch(value) {
@@ -875,15 +932,52 @@ function maybeCreateDogFromAppointment(payload, db) {
   if (matchingDog) {
     return { payload: { ...payload, dogId: matchingDog.id }, dog: matchingDog };
   }
+  const contact = cleanString(payload.contact);
   const dog = normalizeDog({
     dogName,
     ownerName: cleanString(payload.ownerName),
-    contact: cleanString(payload.contact),
+    contact,
     estimatedMinutes: 0,
+    contactMissing: booleanField(payload, "contactMissing", !contact),
+    color: cleanString(payload.color),
+    sex: cleanString(payload.sex),
+    imageConsent: cleanString(payload.imageConsent),
+    services: selectedServices(payload, []),
     notes: `Scheda creata da appuntamento del ${cleanString(payload.date) || "giorno non indicato"}.`
   });
+  const validationError = validateDogForSave(dog);
+  if (validationError) return { payload, dog: null, error: validationError };
+  updateAnimalOptionsFromDog(db, dog);
   db.dogs.push(dog);
   return { payload: { ...payload, dogId: dog.id }, dog };
+}
+
+function selectedServices(payload, existing = []) {
+  const value = hasField(payload, "services") ? payload.services : hasField(payload, "service") ? payload.service : existing;
+  const list = Array.isArray(value) ? value : cleanString(value) ? String(value).split(",") : [];
+  return cleanStringList(list, []);
+}
+
+function updateAnimalOptionsFromDog(db, dog) {
+  const current = publicAnimalSettings(db);
+  const breeds = cleanStringList([...current.breeds, dog.breed], current.breeds);
+  const services = cleanStringList([...current.services, ...(dog.services || [])], current.services);
+  db.settings.animal = {
+    ...current,
+    ...(db.settings.animal || {}),
+    breeds,
+    services,
+    loyaltyTopVisitsPerYear: cleanNumber(db.settings.animal?.loyaltyTopVisitsPerYear, current.loyaltyTopVisitsPerYear)
+  };
+}
+
+function updateAnimalOptionsFromAppointment(db, appointment) {
+  const current = publicAnimalSettings(db);
+  db.settings.animal = {
+    ...current,
+    ...(db.settings.animal || {}),
+    services: cleanStringList([...current.services, ...(appointment.services || [])], current.services)
+  };
 }
 
 function normalizeAppointment(payload, db, existing = {}) {
@@ -891,10 +985,17 @@ function normalizeAppointment(payload, db, existing = {}) {
   const id = existing.id || crypto.randomUUID();
   const dogId = stringField(payload, "dogId", existing.dogId);
   const dog = dogId ? db.dogs.find((item) => item.id === dogId) : null;
-  const service = stringField(payload, "service", existing.service);
+  const services = selectedServices(payload, existing.services || (existing.service ? [existing.service] : []));
+  const service = services.join(", ") || stringField(payload, "service", existing.service);
   const status = ["programmato", "confermato", "completato", "annullato"].includes(payload.status) ? payload.status : existing.status || "programmato";
   let treatmentDone = firstStringField(payload, ["treatmentDone", "treatment", "performedTreatment"], existing.treatmentDone);
   if (status === "completato" && !treatmentDone) treatmentDone = service;
+  const beforePhotos = hasField(payload, "clearBeforePhotos") && payload.clearBeforePhotos === true
+    ? []
+    : savePhotoList(payload.beforePhotoData, `${id}-before`, existing.beforePhotos, MAX_GALLERY_PHOTOS_PER_TYPE);
+  const afterPhotos = hasField(payload, "clearAfterPhotos") && payload.clearAfterPhotos === true
+    ? []
+    : savePhotoList(payload.afterPhotoData, `${id}-after`, existing.afterPhotos, MAX_GALLERY_PHOTOS_PER_TYPE);
   return {
     id,
     dogId,
@@ -905,10 +1006,42 @@ function normalizeAppointment(payload, db, existing = {}) {
     startTime: stringField(payload, "startTime", existing.startTime),
     endTime: stringField(payload, "endTime", existing.endTime),
     service,
+    services,
     treatmentDone,
     paidAmount: firstNumberField(payload, ["paidAmount", "amountPaid", "amount", "price"], existing.paidAmount),
+    beforePhotos,
+    afterPhotos,
     status,
     notes: stringField(payload, "notes", existing.notes),
+    createdAt: existing.createdAt || now,
+    updatedAt: now
+  };
+}
+
+function normalizeDog(payload, existing = {}) {
+  const now = new Date().toISOString();
+  const id = existing.id || crypto.randomUUID();
+  const photoUrl = savePhoto(payload.photoData, id) || existing.photoUrl || "";
+  const contactMissing = booleanField(payload, "contactMissing", existing.contactMissing);
+  const services = selectedServices(payload, existing.services);
+  return {
+    id,
+    dogName: stringField(payload, "dogName", existing.dogName),
+    ownerName: stringField(payload, "ownerName", existing.ownerName),
+    contact: contactMissing ? "" : stringField(payload, "contact", existing.contact),
+    contactMissing,
+    alternateContact: stringField(payload, "alternateContact", existing.alternateContact),
+    breed: stringField(payload, "breed", existing.breed),
+    birthYear: numberField(payload, "birthYear", existing.birthYear),
+    color: stringField(payload, "color", existing.color),
+    sex: ["M", "F"].includes(payload.sex) ? payload.sex : existing.sex || "",
+    imageConsent: ["yes", "no"].includes(payload.imageConsent) ? payload.imageConsent : existing.imageConsent || "",
+    pathologies: stringField(payload, "pathologies", existing.pathologies),
+    estimatedMinutes: numberField(payload, "estimatedMinutes", existing.estimatedMinutes),
+    reminderDaysBefore: numberField(payload, "reminderDaysBefore", existing.reminderDaysBefore ?? 1),
+    services,
+    notes: stringField(payload, "notes", existing.notes),
+    photoUrl,
     createdAt: existing.createdAt || now,
     updatedAt: now
   };
@@ -965,6 +1098,10 @@ async function handleApi(req, res, url) {
     }
 
     if (!user) return sendError(res, 401, "Accesso richiesto");
+
+    if (url.pathname === "/api/events" && method === "GET") {
+      return addEventClient(req, res);
+    }
 
     if (parts[1] === "system" && parts[2] === "update-check" && ["GET", "POST"].includes(method)) {
       if (user.role !== "admin") return sendError(res, 403, "Solo amministratore");
@@ -1039,8 +1176,8 @@ async function handleApi(req, res, url) {
         db.settings.branding = {
           ...current,
           theme: ["light", "dark", "custom"].includes(body.theme) ? body.theme : current.theme || "light",
-          portalName: cleanString(body.portalName) || "Toilettatura Manager",
-          businessName: cleanString(body.businessName) || "Toilettatura",
+          portalName: cleanString(body.portalName) || "Toelettatura Manager",
+          businessName: cleanString(body.businessName) || "Toelettatura",
           tagline: cleanString(body.tagline),
           companyInfo: cleanString(body.companyInfo),
           phone: cleanString(body.phone),
@@ -1069,6 +1206,7 @@ async function handleApi(req, res, url) {
           updatedAt: new Date().toISOString()
         };
         writeDb(db);
+        broadcastDataChange("settings", { section: "branding" });
         return sendJson(res, 200, { branding: publicBrandingSettings(db) });
       }
     }
@@ -1096,7 +1234,27 @@ async function handleApi(req, res, url) {
         if (body.clearCloudAccessToken === true) next.cloudAccessToken = "";
         db.settings.whatsapp = next;
         writeDb(db);
+        broadcastDataChange("settings", { section: "whatsapp" });
         return sendJson(res, 200, { whatsapp: publicWhatsappSettings(db) });
+      }
+    }
+
+    if (parts[1] === "settings" && parts[2] === "animal") {
+      if (method === "GET") {
+        return sendJson(res, 200, { animal: publicAnimalSettings(db) });
+      }
+      if (user.role !== "admin") return sendError(res, 403, "Solo amministratore");
+      if (method === "PUT") {
+        const body = await readBody(req);
+        db.settings.animal = {
+          breeds: cleanStringList(body.breeds, defaultSettings().animal.breeds),
+          services: cleanStringList(body.services, defaultSettings().animal.services),
+          loyaltyTopVisitsPerYear: Math.max(1, cleanNumber(body.loyaltyTopVisitsPerYear, 8)),
+          updatedAt: new Date().toISOString()
+        };
+        writeDb(db);
+        broadcastDataChange("settings", { section: "animal" });
+        return sendJson(res, 200, { animal: publicAnimalSettings(db) });
       }
     }
 
@@ -1113,7 +1271,7 @@ async function handleApi(req, res, url) {
           body.password
         );
         return sendJson(res, 200, {
-          fileName: `toilettatura-backup-${new Date().toISOString().slice(0, 10)}.json`,
+          fileName: `toelettatura-backup-${new Date().toISOString().slice(0, 10)}.json`,
           backup
         });
       }
@@ -1121,6 +1279,7 @@ async function handleApi(req, res, url) {
         const body = await readBody(req);
         const backupPayload = decryptBackup(body.backup, body.password);
         restoreBackup(backupPayload);
+        broadcastDataChange("backup", { action: "import" });
         return sendJson(res, 200, { ok: true });
       }
     }
@@ -1145,6 +1304,7 @@ async function handleApi(req, res, url) {
         if (body.clearToken === true) next.token = "";
         db.settings.duckdns = next;
         writeDb(db);
+        broadcastDataChange("settings", { section: "duckdns" });
         return sendJson(res, 200, { duckdns: publicDuckDnsSettings(db, req) });
       }
     }
@@ -1156,11 +1316,13 @@ async function handleApi(req, res, url) {
         db.settings.duckdns.lastUpdateAt = new Date().toISOString();
         db.settings.duckdns.lastResult = result;
         writeDb(db);
+        broadcastDataChange("settings", { section: "duckdns" });
         return sendJson(res, 200, { result, duckdns: publicDuckDnsSettings(db, req) });
       } catch (error) {
         db.settings.duckdns.lastUpdateAt = new Date().toISOString();
         db.settings.duckdns.lastResult = error.message || "Errore DuckDNS";
         writeDb(db);
+        broadcastDataChange("settings", { section: "duckdns" });
         return sendError(res, 502, db.settings.duckdns.lastResult);
       }
     }
@@ -1173,9 +1335,12 @@ async function handleApi(req, res, url) {
       if (method === "POST") {
         const body = await readBody(req);
         const dog = normalizeDog(body);
-        if (!dog.dogName) return sendError(res, 400, "Inserisci il nome del cane");
+        const validationError = validateDogForSave(dog);
+        if (validationError) return sendError(res, 400, validationError);
+        updateAnimalOptionsFromDog(db, dog);
         db.dogs.push(dog);
         writeDb(db);
+        broadcastDataChange("dogs", { action: "create", id: dog.id });
         return sendJson(res, 201, { dog });
       }
       const index = db.dogs.findIndex((item) => item.id === id);
@@ -1183,7 +1348,9 @@ async function handleApi(req, res, url) {
       if (method === "PUT") {
         const body = await readBody(req);
         const dog = normalizeDog(body, db.dogs[index]);
-        if (!dog.dogName) return sendError(res, 400, "Inserisci il nome del cane");
+        const validationError = validateDogForSave(dog);
+        if (validationError) return sendError(res, 400, validationError);
+        updateAnimalOptionsFromDog(db, dog);
         db.dogs[index] = dog;
         db.appointments = db.appointments.map((appointment) =>
           appointment.dogId === dog.id
@@ -1191,11 +1358,13 @@ async function handleApi(req, res, url) {
             : appointment
         );
         writeDb(db);
+        broadcastDataChange("dogs", { action: "update", id: dog.id });
         return sendJson(res, 200, { dog });
       }
       if (method === "DELETE") {
         db.dogs.splice(index, 1);
         writeDb(db);
+        broadcastDataChange("dogs", { action: "delete", id });
         return sendJson(res, 200, { ok: true });
       }
     }
@@ -1208,12 +1377,15 @@ async function handleApi(req, res, url) {
       if (method === "POST") {
         const body = await readBody(req);
         const prepared = maybeCreateDogFromAppointment(body, db);
+        if (prepared.error) return sendError(res, 400, prepared.error);
         const appointment = normalizeAppointment(prepared.payload, db);
         if (!appointment.date || !appointment.startTime || !appointment.dogName) {
           return sendError(res, 400, "Data, orario e cane sono obbligatori");
         }
+        updateAnimalOptionsFromAppointment(db, appointment);
         db.appointments.push(appointment);
         writeDb(db);
+        broadcastDataChange("appointments", { action: "create", id: appointment.id });
         return sendJson(res, 201, { appointment, dog: prepared.dog });
       }
       const index = db.appointments.findIndex((item) => item.id === id);
@@ -1221,17 +1393,21 @@ async function handleApi(req, res, url) {
       if (method === "PUT") {
         const body = await readBody(req);
         const prepared = maybeCreateDogFromAppointment(body, db);
+        if (prepared.error) return sendError(res, 400, prepared.error);
         const appointment = normalizeAppointment(prepared.payload, db, db.appointments[index]);
         if (!appointment.date || !appointment.startTime || !appointment.dogName) {
           return sendError(res, 400, "Data, orario e cane sono obbligatori");
         }
+        updateAnimalOptionsFromAppointment(db, appointment);
         db.appointments[index] = appointment;
         writeDb(db);
+        broadcastDataChange("appointments", { action: "update", id: appointment.id });
         return sendJson(res, 200, { appointment, dog: prepared.dog });
       }
       if (method === "DELETE") {
         db.appointments.splice(index, 1);
         writeDb(db);
+        broadcastDataChange("appointments", { action: "delete", id });
         return sendJson(res, 200, { ok: true });
       }
     }
@@ -1257,12 +1433,14 @@ async function handleApi(req, res, url) {
           displayName: cleanString(body.displayName || username),
           role: body.role === "admin" ? "admin" : "user",
           active: body.active !== false,
+          avatarUrl: savePhoto(body.avatarData, `user-${crypto.randomUUID()}`) || "",
           createdAt: new Date().toISOString(),
           passwordHash: passwordInfo.hash,
           passwordSalt: passwordInfo.salt
         };
         db.users.push(newUser);
         writeDb(db);
+        broadcastDataChange("users", { action: "create", id: newUser.id });
         return sendJson(res, 201, { user: publicUser(newUser) });
       }
       const index = db.users.findIndex((item) => item.id === id);
@@ -1278,6 +1456,7 @@ async function handleApi(req, res, url) {
         nextUser.displayName = cleanString(body.displayName || nextUser.displayName || nextUsername);
         nextUser.role = body.role === "admin" ? "admin" : "user";
         nextUser.active = body.active !== false;
+        nextUser.avatarUrl = savePhoto(body.avatarData, `user-${id}`) || (body.clearAvatar === true ? "" : nextUser.avatarUrl || "");
         nextUser.updatedAt = new Date().toISOString();
         if (cleanString(body.password)) {
           const passwordInfo = makePassword(body.password);
@@ -1290,6 +1469,7 @@ async function handleApi(req, res, url) {
         }
         db.users[index] = nextUser;
         writeDb(db);
+        broadcastDataChange("users", { action: "update", id });
         return sendJson(res, 200, { user: publicUser(nextUser) });
       }
       if (method === "DELETE") {
@@ -1301,6 +1481,7 @@ async function handleApi(req, res, url) {
         }
         db.users.splice(index, 1);
         writeDb(db);
+        broadcastDataChange("users", { action: "delete", id });
         return sendJson(res, 200, { ok: true });
       }
     }
@@ -1364,5 +1545,5 @@ const server = http.createServer((req, res) => {
 
 ensureStorage();
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Portale toilettatura attivo su http://localhost:${PORT}`);
+  console.log(`Portale toelettatura attivo su http://localhost:${PORT}`);
 });

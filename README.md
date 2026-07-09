@@ -1,14 +1,18 @@
-# Toilettatura Manager
+# Toelettatura Manager
 
-Release corrente: `0.0.1 beta 4` (`0.0.1-beta.4`).
+Release corrente: `0.0.1 beta 5` (`0.0.1-beta.5`).
 
 Portale web PWA in Node.js per gestire:
 
 - login amministratore e operatori;
+- foto profilo utenti visibile nella sidebar;
 - personalizzazione logo, colori, tema chiaro/scuro, sfondo login, nome portale e dati azienda;
-- calendario appuntamenti;
-- schede animali con foto, proprietario, contatto, patologie, tempi stimati e note;
-- storico appuntamenti a menu nella scheda cane con trattamento eseguito e importo pagato;
+- aggiornamento live multiutente di schede, appuntamenti, utenti e impostazioni;
+- calendario appuntamenti con vista desktop/iPad e agenda compatta su iPhone;
+- dashboard statistiche per servizi fatti/da fare, razze, servizi piu usati, animale piu presente e tempi medi;
+- schede animali con foto, cornice cliente, razza, eta, colore, sesso, contatti, patologie, tempi stimati, reminder WhatsApp e consenso immagini;
+- impostazioni scheda animale per razze, servizi cumulabili e soglia cliente top;
+- storico appuntamenti a menu nella scheda cane con servizio eseguito, importo pagato e galleria foto prima/dopo;
 - chiusura prestazione da scheda cane o calendario;
 - ricerca schede;
 - backup cifrato con password e import backup;
@@ -28,9 +32,11 @@ Le immagini del portale sono salvate in `docs/screenshots/` e vanno aggiornate a
 | Schede in miniature | ![Schede in miniature su iPad](docs/screenshots/schede-miniature-ipad.png) |
 | Scheda cane in popup | ![Scheda cane in popup su iPad](docs/screenshots/scheda-popup-ipad.png) |
 | Storico appuntamenti | ![Storico appuntamenti su iPad](docs/screenshots/storico-appuntamenti-ipad.png) |
-| Identita e WhatsApp | ![Impostazioni identita e WhatsApp su iPad](docs/screenshots/impostazioni-identita-whatsapp-ipad.png) |
+| Identita portale | ![Impostazioni identita su iPad](docs/screenshots/impostazioni-identita-whatsapp-ipad.png) |
+| Scheda animale | ![Impostazioni scheda animale su iPad](docs/screenshots/impostazioni-scheda-animale-ipad.png) |
 | DuckDNS | ![Impostazioni DuckDNS su iPad](docs/screenshots/impostazioni-duckdns-ipad.png) |
 | Aggiornamento portale | ![Aggiornamento portale su iPad](docs/screenshots/impostazioni-update-ipad.png) |
+| Agenda iPhone | ![Agenda iPhone](docs/screenshots/iphone-agenda.png) |
 
 ## Accesso iniziale
 
@@ -79,9 +85,9 @@ npm.cmd run release:packages
 
 Il comando genera nella cartella `dist/`:
 
-- `Pet-Grooming-Software-0.0.1-beta.4-windows.zip`;
-- `Pet-Grooming-Software-0.0.1-beta.4-linux.tar.gz`;
-- `Pet-Grooming-Software-0.0.1-beta.4.pgs-update`;
+- `Pet-Grooming-Software-0.0.1-beta.5-windows.zip`;
+- `Pet-Grooming-Software-0.0.1-beta.5-linux.tar.gz`;
+- `Pet-Grooming-Software-0.0.1-beta.5.pgs-update`;
 - `pet-grooming-update.json`.
 
 Se `npm` non e bloccato dalla policy PowerShell puoi usare anche `npm run release:packages`.
@@ -90,7 +96,7 @@ Se `npm` non e bloccato dalla policy PowerShell puoi usare anche `npm run releas
 
 Prerequisito: Node.js 18 o superiore installato sul PC.
 
-1. Estrai `Pet-Grooming-Software-0.0.1-beta.4-windows.zip`.
+1. Estrai `Pet-Grooming-Software-0.0.1-beta.5-windows.zip`.
 2. Apri PowerShell nella cartella estratta. Per installare in `ProgramData` e creare l'avvio automatico e consigliato aprirlo come amministratore.
 3. Per installare in `C:\ProgramData\Pet Grooming Software` e creare l'avvio automatico all'accesso:
 
@@ -116,12 +122,12 @@ Per riavviare dopo un update, chiudi la finestra dove gira Node.js e rilancia lo
 
 Prerequisito: Node.js 18 o superiore installato sul server.
 
-1. Copia `Pet-Grooming-Software-0.0.1-beta.4-linux.tar.gz` sul server.
+1. Copia `Pet-Grooming-Software-0.0.1-beta.5-linux.tar.gz` sul server.
 2. Estrai il pacchetto e entra nella cartella:
 
 ```bash
-tar -xzf Pet-Grooming-Software-0.0.1-beta.4-linux.tar.gz
-cd Pet-Grooming-Software-0.0.1-beta.4
+tar -xzf Pet-Grooming-Software-0.0.1-beta.5-linux.tar.gz
+cd Pet-Grooming-Software-0.0.1-beta.5
 ```
 
 3. Installazione consigliata in `/opt` con servizio systemd:
@@ -220,7 +226,7 @@ Il portale include `manifest.json` e `service worker`, quindi puo essere install
 
 ## Release e aggiornamenti
 
-La release corrente e `0.0.1 beta 4`. A ogni modifica di release fai avanzare la beta di 1:
+La release corrente e `0.0.1 beta 5`. A ogni modifica di release fai avanzare la beta di 1:
 
 ```powershell
 npm.cmd run release:bump
@@ -233,7 +239,7 @@ Per l'update web carica nella stessa release GitHub anche `pet-grooming-update.j
 
 L'aggiornamento non modifica database, foto, backup o `node_modules`. Dopo l'installazione dell'update bisogna riavviare il servizio Node.js. Nel pannello `Impostazioni > Aggiornamento portale` l'amministratore puo usare il pulsante `Riavvia servizio`: su Linux funziona quando il portale e installato come servizio systemd con `Restart=always`, come nello script `scripts/install-linux.sh`.
 
-La `0.0.1 beta 4` corregge anche il download degli update pubblicati come asset GitHub: il portale valida l'URL `.pgs-update` iniziale e poi accetta i redirect firmati di GitHub usati per scaricare realmente il file.
+La `0.0.1 beta 5` introduce aggiornamento live multiutente, avatar utenti, schede animali estese, servizi cumulabili, cliente top, galleria foto prima/dopo, dashboard statistiche, agenda iPhone e impostazioni scheda animale.
 
 Riavvio manuale su Linux:
 

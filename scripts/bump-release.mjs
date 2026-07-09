@@ -31,9 +31,9 @@ function nextBetaVersion(currentVersion) {
 function bumpServiceWorkerCache() {
   if (!fs.existsSync(swFile)) return "";
   const current = fs.readFileSync(swFile, "utf8");
-  const next = current.replace(/toilettatura-pwa-v(\d+)/, (_, value) => `toilettatura-pwa-v${Number(value) + 1}`);
+  const next = current.replace(/toelettatura-pwa-v(\d+)|toilettatura-pwa-v(\d+)/, (_, preferred, legacy) => `toelettatura-pwa-v${Number(preferred || legacy) + 1}`);
   if (next !== current) fs.writeFileSync(swFile, next);
-  const match = next.match(/toilettatura-pwa-v(\d+)/);
+  const match = next.match(/toelettatura-pwa-v(\d+)/);
   return match ? match[0] : "";
 }
 

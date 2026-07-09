@@ -1,6 +1,6 @@
 {
-  "name": "Toilettatura Manager",
-  "short_name": "Toilettatura",
+  "name": "Toelettatura Manager",
+  "short_name": "Toelettatura",
   "description": "Portale PWA per appuntamenti, schede animali, utenti e backup.",
   "start_url": "/",
   "scope": "/",
