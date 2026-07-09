@@ -1,5 +1,15 @@
-const CACHE_NAME = "toelettatura-pwa-v17";
-const APP_SHELL = ["/", "/index.html", "/styles.css", "/app.js", "/manifest.json", "/icons/icon.svg"];
+const CACHE_NAME = "toelettatura-pwa-v18";
+const APP_SHELL = [
+  "/",
+  "/index.html",
+  "/styles.css",
+  "/app.js",
+  "/manifest.json",
+  "/icons/icon-180.png",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+  "/icons/top-client-paw.png"
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));

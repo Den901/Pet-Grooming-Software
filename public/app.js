@@ -12,6 +12,7 @@ const state = {
   whatsapp: null,
   animalSettings: null,
   navigation: null,
+  loginUsers: [],
   version: null,
   initialAccessHint: false,
   updateCheck: null,
@@ -101,6 +102,7 @@ async function loadPublicSettings() {
     const response = await api("/api/public-settings");
     state.branding = response.branding || state.branding;
     state.navigation = response.navigation || state.navigation;
+    state.loginUsers = Array.isArray(response.loginUsers) ? response.loginUsers : state.loginUsers;
     state.initialAccessHint = Boolean(response.setup?.showInitialAccessHint);
     applyBranding();
   } catch {
@@ -198,6 +200,15 @@ function sidebarOrder(order = state.navigation?.sidebarOrder) {
     result.push(id);
   }
   return result;
+}
+
+function loginUserFromUser(user) {
+  return {
+    username: user.username,
+    displayName: user.displayName || user.username,
+    role: user.role,
+    avatarUrl: user.avatarUrl || ""
+  };
 }
 
 function applyBranding() {
@@ -312,6 +323,7 @@ async function loadData() {
       api("/api/version")
     ]);
     state.users = usersResponse.users || [];
+    state.loginUsers = state.users.filter((user) => user.active).map(loginUserFromUser);
     state.duckdns = duckdnsResponse.duckdns || null;
     state.branding = brandingResponse.branding || state.branding;
     state.whatsapp = whatsappResponse.whatsapp || null;
@@ -349,6 +361,8 @@ function connectLiveUpdates() {
 function renderLogin(error = "") {
   const branding = getBranding();
   const initialAccessHint = state.initialAccessHint;
+  const loginUsers = state.loginUsers || [];
+  const selectedLoginUser = loginUsers[0] || null;
   app.className = "login-screen";
   app.innerHTML = `
     <section class="login-panel">
@@ -357,9 +371,22 @@ function renderLogin(error = "") {
       <p>${escapeHtml(branding.businessName)}${branding.tagline ? ` - ${escapeHtml(branding.tagline)}` : ""}</p>
       ${error ? `<div class="error-box">${escapeHtml(error)}</div>` : ""}
       <form class="login-form" id="loginForm">
-        <label>Username
-          <input name="username" autocomplete="username" required />
-        </label>
+        ${
+          loginUsers.length
+            ? `<label>Utente
+                <select name="username" autocomplete="username" required>
+                  ${loginUsers
+                    .map((user) => `<option value="${escapeAttr(user.username)}">${escapeHtml(user.displayName || user.username)} - ${escapeHtml(user.role === "admin" ? "Admin" : "Operatore")}</option>`)
+                    .join("")}
+                </select>
+              </label>
+              <div class="login-user-preview" id="loginUserPreview">
+                ${renderLoginUserPreview(selectedLoginUser)}
+              </div>`
+            : `<label>Username
+                <input name="username" autocomplete="username" required />
+              </label>`
+        }
         <label>Password
           <input name="password" type="password" autocomplete="current-password" required />
         </label>
@@ -375,6 +402,7 @@ function renderLogin(error = "") {
       }
     </section>
   `;
+  bindLoginUserPreview();
   document.getElementById("loginForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -397,6 +425,33 @@ function renderLogin(error = "") {
       renderLogin(err.message);
     }
   });
+}
+
+function renderLoginUserPreview(user) {
+  if (!user) return `<span class="muted">Seleziona un utente</span>`;
+  const name = user.displayName || user.username;
+  const avatar = user.avatarUrl
+    ? `<img src="${escapeAttr(user.avatarUrl)}" alt="Foto profilo ${escapeAttr(name)}" />`
+    : `<span>${escapeHtml(initials(name))}</span>`;
+  return `
+    <span class="login-user-avatar">${avatar}</span>
+    <div>
+      <strong>${escapeHtml(name)}</strong>
+      <span>${escapeHtml(user.role === "admin" ? "Amministratore" : "Operatore")}</span>
+    </div>
+  `;
+}
+
+function bindLoginUserPreview() {
+  const select = document.querySelector('#loginForm select[name="username"]');
+  const preview = document.getElementById("loginUserPreview");
+  if (!select || !preview) return;
+  const sync = () => {
+    const user = state.loginUsers.find((item) => item.username === select.value);
+    preview.innerHTML = renderLoginUserPreview(user);
+  };
+  select.addEventListener("change", sync);
+  sync();
 }
 
 function promptDefaultPasswordChange() {
@@ -531,6 +586,7 @@ async function logout() {
   state.updateCheckLoading = false;
   state.eventSource?.close();
   state.eventSource = null;
+  await loadPublicSettings();
   renderLogin();
   renderPwaInstallPrompt();
 }
@@ -915,7 +971,7 @@ function renderDogCard(dog) {
     : `<span>${escapeHtml(initials(dog.dogName))}</span>`;
   return `
     <button class="dog-tile ${topDog ? "top-client" : ""}" type="button" data-dog-open="${dog.id}" aria-label="Apri scheda di ${escapeAttr(dog.dogName || "cane")}">
-      <div class="dog-thumb">${photo}${topDog ? `<span class="top-paw" aria-label="Cliente top">&#128062;</span>` : ""}</div>
+      <div class="dog-thumb">${photo}${topDog ? `<img class="top-paw" src="/icons/top-client-paw.png" alt="Cliente top" />` : ""}</div>
       <div class="dog-tile-main">
         <h3>${escapeHtml(dog.dogName || "Senza nome")}</h3>
       </div>
@@ -1720,11 +1776,11 @@ function openDogDetailsDialog(dog = {}) {
     headerAction: `<button class="icon-btn" type="button" data-header-action aria-label="Modifica scheda" title="Modifica scheda">&#9998;</button>`,
     content: `
       <section class="dog-detail">
-        <div class="dog-detail-photo ${topDog ? "top-client" : ""}">${photo}${topDog ? `<span class="top-paw detail" aria-label="Cliente top">&#128062;</span>` : ""}</div>
+        <div class="dog-detail-photo ${topDog ? "top-client" : ""}">${photo}${topDog ? `<img class="top-paw detail" src="/icons/top-client-paw.png" alt="Cliente top" />` : ""}</div>
         <div class="dog-detail-body">
           <div class="dog-detail-heading">
             <strong>${escapeHtml(dog.dogName || "Scheda cane")}</strong>
-            ${topDog ? `<span class="top-badge"><span aria-hidden="true">&#128062;</span> Cliente top</span>` : ""}
+            ${topDog ? `<span class="top-badge"><img src="/icons/top-client-paw.png" alt="" /> Cliente top</span>` : ""}
             ${scheduledCount ? `<span>${escapeHtml(scheduledAppointmentLabel(scheduledCount))}</span>` : ""}
           </div>
           <div class="detail-list">

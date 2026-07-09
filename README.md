@@ -1,14 +1,16 @@
 # Toelettatura Manager
 
-Release corrente: `0.0.1 beta 6` (`0.0.1-beta.6`).
+Release corrente: `0.0.1 beta 7` (`0.0.1-beta.7`).
 
 Portale web PWA in Node.js per gestire:
 
 - login amministratore e operatori;
+- login rapido da tendina utenti con inserimento della sola password;
 - foto profilo utenti visibile nella sidebar;
 - personalizzazione logo, colori, tema chiaro/scuro, sfondo login, nome portale e dati azienda;
 - aggiornamento live multiutente di schede, appuntamenti, utenti e impostazioni;
 - calendario appuntamenti con vista desktop/iPad e agenda compatta su iPhone;
+- menu mobile persistente in basso con icone tonde;
 - dashboard statistiche per servizi fatti/da fare, razze, servizi piu usati, animale piu presente e tempi medi;
 - schede animali con foto, cornice cliente, razza, eta, colore, sesso, contatti, patologie, tempi stimati, reminder WhatsApp e consenso immagini;
 - impostazioni scheda animale per razze, prestazioni cumulabili e soglia cliente top;
@@ -19,7 +21,8 @@ Portale web PWA in Node.js per gestire:
 - impostazioni WhatsApp per promemoria appuntamenti;
 - aggiornamento software da file locale o release GitHub con pacchetto `.pgs-update`;
 - notifica nel pannello impostazioni quando e disponibile un nuovo update web;
-- layout desktop, mobile e iPad.
+- layout desktop, mobile e iPad;
+- icona PWA e badge cliente top con zampa personalizzata trasparente.
 
 ## Anteprime
 
@@ -85,9 +88,9 @@ npm.cmd run release:packages
 
 Il comando genera nella cartella `dist/`:
 
-- `Pet-Grooming-Software-0.0.1-beta.6-windows.zip`;
-- `Pet-Grooming-Software-0.0.1-beta.6-linux.tar.gz`;
-- `Pet-Grooming-Software-0.0.1-beta.6.pgs-update`;
+- `Pet-Grooming-Software-0.0.1-beta.7-windows.zip`;
+- `Pet-Grooming-Software-0.0.1-beta.7-linux.tar.gz`;
+- `Pet-Grooming-Software-0.0.1-beta.7.pgs-update`;
 - `pet-grooming-update.json`.
 
 Se `npm` non e bloccato dalla policy PowerShell puoi usare anche `npm run release:packages`.
@@ -96,7 +99,7 @@ Se `npm` non e bloccato dalla policy PowerShell puoi usare anche `npm run releas
 
 Prerequisito: Node.js 18 o superiore installato sul PC.
 
-1. Estrai `Pet-Grooming-Software-0.0.1-beta.6-windows.zip`.
+1. Estrai `Pet-Grooming-Software-0.0.1-beta.7-windows.zip`.
 2. Apri PowerShell nella cartella estratta. Per installare in `ProgramData` e creare l'avvio automatico e consigliato aprirlo come amministratore.
 3. Per installare in `C:\ProgramData\Pet Grooming Software` e creare l'avvio automatico all'accesso:
 
@@ -122,12 +125,12 @@ Per riavviare dopo un update, chiudi la finestra dove gira Node.js e rilancia lo
 
 Prerequisito: Node.js 18 o superiore installato sul server.
 
-1. Copia `Pet-Grooming-Software-0.0.1-beta.6-linux.tar.gz` sul server.
+1. Copia `Pet-Grooming-Software-0.0.1-beta.7-linux.tar.gz` sul server.
 2. Estrai il pacchetto e entra nella cartella:
 
 ```bash
-tar -xzf Pet-Grooming-Software-0.0.1-beta.6-linux.tar.gz
-cd Pet-Grooming-Software-0.0.1-beta.6
+tar -xzf Pet-Grooming-Software-0.0.1-beta.7-linux.tar.gz
+cd Pet-Grooming-Software-0.0.1-beta.7
 ```
 
 3. Installazione consigliata in `/opt` con servizio systemd:
@@ -226,7 +229,7 @@ Il portale include `manifest.json` e `service worker`, quindi puo essere install
 
 ## Release e aggiornamenti
 
-La release corrente e `0.0.1 beta 6`. A ogni modifica di release fai avanzare la beta di 1:
+La release corrente e `0.0.1 beta 7`. A ogni modifica di release fai avanzare la beta di 1:
 
 ```powershell
 npm.cmd run release:bump
@@ -238,6 +241,8 @@ Il file `.pgs-update` puo essere caricato in una release GitHub oppure scelto lo
 Per l'update web carica nella stessa release GitHub anche `pet-grooming-update.json`. Il portale controlla di default `https://github.com/Den901/Pet-Grooming-Software/releases/latest/download/pet-grooming-update.json` e mostra un avviso nel pannello impostazioni quando trova una versione piu recente. Se un domani vuoi usare un altro server puoi avviare Node.js con la variabile `UPDATE_MANIFEST_URL`.
 
 L'aggiornamento non modifica database, foto, backup o `node_modules`. Dopo l'installazione dell'update bisogna riavviare il servizio Node.js. Nel pannello `Impostazioni > Aggiornamento portale` l'amministratore puo usare il pulsante `Riavvia servizio`: su Linux funziona quando il portale e installato come servizio systemd con `Restart=always`, come nello script `scripts/install-linux.sh`.
+
+La `0.0.1 beta 7` introduce il login rapido con selezione utente da menu a tendina, logo login piu grande e centrato, menu mobile persistente in basso con icone tonde, icona PWA PNG trasparente e badge cliente top con la zampa personalizzata.
 
 La `0.0.1 beta 6` riordina il pannello `Aggiornamento portale`: mostra chiaramente la versione installata, mantiene il controllo automatico update web con installazione diretta quando disponibile, elimina il campo URL manuale e lascia separato l'update da file locale. La stessa beta rende coerente la gestione razze/prestazioni: aggiunta rapida da schede e appuntamenti, salvataggio automatico nella lista master `Scheda animale`, primo contatto vincolante con opzione `numero non presente`, e ordine della sidebar configurabile dalle impostazioni con `Impostazioni` fisso in basso.
 

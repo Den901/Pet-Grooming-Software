@@ -21,7 +21,7 @@ const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin123";
 const SIDEBAR_ITEM_IDS = ["calendar", "dashboard", "dogs", "users"];
 const APP_ID = "pet-grooming-software";
-const APP_VERSION = packageInfo.version || "0.0.1-beta.6";
+const APP_VERSION = packageInfo.version || "0.0.1-beta.7";
 const UPDATE_FORMAT = "PET_GROOMING_SOFTWARE_UPDATE";
 const UPDATE_FORMAT_VERSION = 1;
 const UPDATE_EXTENSION = ".pgs-update";
@@ -260,6 +260,22 @@ function publicUser(user) {
     createdAt: user.createdAt,
     updatedAt: user.updatedAt
   };
+}
+
+function publicLoginUser(user) {
+  return {
+    username: user.username,
+    displayName: cleanString(user.displayName) || user.username,
+    role: user.role,
+    avatarUrl: cleanString(user.avatarUrl)
+  };
+}
+
+function publicLoginUsers(db) {
+  return db.users
+    .filter((user) => user?.active)
+    .map(publicLoginUser)
+    .sort((a, b) => (a.role === "admin" ? -1 : 1) - (b.role === "admin" ? -1 : 1) || a.displayName.localeCompare(b.displayName, "it"));
 }
 
 function broadcastDataChange(type, detail = {}) {
@@ -1107,6 +1123,7 @@ async function handleApi(req, res, url) {
       return sendJson(res, 200, {
         branding: publicBrandingSettings(db),
         navigation: publicNavigationSettings(db),
+        loginUsers: publicLoginUsers(db),
         setup: {
           showInitialAccessHint: showInitialAccessHint(db)
         }
