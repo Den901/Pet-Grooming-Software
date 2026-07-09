@@ -21,7 +21,7 @@ const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin123";
 const SIDEBAR_ITEM_IDS = ["calendar", "dashboard", "dogs", "users"];
 const APP_ID = "pet-grooming-software";
-const APP_VERSION = packageInfo.version || "0.0.1-beta.10";
+const APP_VERSION = packageInfo.version || "0.0.1-beta.11";
 const UPDATE_FORMAT = "PET_GROOMING_SOFTWARE_UPDATE";
 const UPDATE_FORMAT_VERSION = 1;
 const UPDATE_EXTENSION = ".pgs-update";
@@ -1115,6 +1115,7 @@ function normalizeDog(payload, existing = {}) {
     color: stringField(payload, "color", existing.color),
     sex: ["M", "F"].includes(payload.sex) ? payload.sex : existing.sex || "",
     imageConsent: ["yes", "no"].includes(payload.imageConsent) ? payload.imageConsent : existing.imageConsent || "",
+    manualTopClient: booleanField(payload, "manualTopClient", existing.manualTopClient),
     pathologies: stringField(payload, "pathologies", existing.pathologies),
     estimatedMinutes: numberField(payload, "estimatedMinutes", existing.estimatedMinutes),
     reminderDaysBefore: numberField(payload, "reminderDaysBefore", existing.reminderDaysBefore ?? 1),

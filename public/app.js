@@ -24,7 +24,8 @@ const state = {
   appUpdateReady: false,
   appUpdatePromptDismissed: false,
   appUpdateReloading: false,
-  dashboardFocus: "breeds",
+  dashboardFocus: "services",
+  revenueRange: "month",
   deferredInstallPrompt: null,
   pwaPromptHidden: false,
   view: new URLSearchParams(window.location.search).get("view") || "calendar",
@@ -1015,7 +1016,10 @@ function renderDashboard() {
   });
   const serviceStats = countBy(completed.flatMap((appointment) => appointment.services?.length ? appointment.services : [appointment.service || "Servizio"]));
   const dogStats = countBy(completed, (appointment) => appointment.dogName || "Senza nome");
+  const serviceRevenueStats = revenueByService(completed);
+  const revenueSeries = revenueTrendSeries(completed, state.revenueRange);
   const topClient = topDashboardClient(completed);
+  const topRevenue = topRevenueClient(completed);
   const avgMinutes = average(state.dogs.map((dog) => Number(dog.estimatedMinutes || 0)).filter(Boolean));
   const focus = state.dashboardFocus === "services" ? serviceStats : breedStats;
   return `
@@ -1025,14 +1029,15 @@ function renderDashboard() {
         <p>Statistiche operative su appuntamenti, razze, servizi e tempi.</p>
       </div>
       <div class="segmented" role="group" aria-label="Grafico dashboard">
-        <button type="button" data-dashboard-focus="breeds" class="${state.dashboardFocus !== "services" ? "active" : ""}">Razze</button>
         <button type="button" data-dashboard-focus="services" class="${state.dashboardFocus === "services" ? "active" : ""}">Servizi</button>
+        <button type="button" data-dashboard-focus="breeds" class="${state.dashboardFocus !== "services" ? "active" : ""}">Razze</button>
       </div>
     </div>
     <section class="metric-grid" aria-label="Riepilogo dashboard">
       <div class="metric"><span>Da fare</span><strong>${planned.length}</strong></div>
       <div class="metric"><span>Fatti</span><strong>${completed.length}</strong></div>
       <div class="metric top-client-metric"><span>Cliente piu presente</span>${renderTopClientMetric(topClient)}</div>
+      <div class="metric top-client-metric"><span>Cane piu redditizio</span>${renderRevenueClientMetric(topRevenue)}</div>
       <div class="metric"><span>Tempo medio scheda</span><strong>${escapeHtml(durationLabel(avgMinutes))}</strong></div>
     </section>
     <section class="dashboard-grid">
@@ -1043,10 +1048,27 @@ function renderDashboard() {
       <div class="panel">
         <h2>Classifiche</h2>
         <div class="stat-lists">
-          ${renderStatList("Razze", breedStats)}
           ${renderStatList("Servizi", serviceStats)}
+          ${renderStatList("Razze", breedStats)}
           ${renderStatList("Animali", dogStats)}
         </div>
+      </div>
+    </section>
+    <section class="dashboard-grid revenue-dashboard-grid">
+      <div class="panel">
+        <h2>Incasso per servizio</h2>
+        ${renderRevenueBars(serviceRevenueStats)}
+      </div>
+      <div class="panel">
+        <div class="panel-heading-row">
+          <h2>Andamento incassi</h2>
+          <div class="segmented compact" role="group" aria-label="Periodo incassi">
+            ${["week", "month", "year"]
+              .map((range) => `<button type="button" data-revenue-range="${range}" class="${state.revenueRange === range ? "active" : ""}">${escapeHtml(revenueRangeLabel(range))}</button>`)
+              .join("")}
+          </div>
+        </div>
+        ${renderRevenueLineChart(revenueSeries)}
       </div>
     </section>
   `;
@@ -1056,6 +1078,12 @@ function bindDashboard() {
   document.querySelectorAll("[data-dashboard-focus]").forEach((button) => {
     button.addEventListener("click", () => {
       state.dashboardFocus = button.dataset.dashboardFocus;
+      renderView();
+    });
+  });
+  document.querySelectorAll("[data-revenue-range]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.revenueRange = button.dataset.revenueRange;
       renderView();
     });
   });
@@ -1960,6 +1988,10 @@ function openDogDetailsDialog(dog = {}) {
               <strong>${escapeHtml(dog.imageConsent === "yes" ? "Si" : dog.imageConsent === "no" ? "No" : "-")}</strong>
             </div>
             <div class="detail-item">
+              <span>Cliente top</span>
+              <strong>${escapeHtml(topDog ? (dog.manualTopClient ? "Si, manuale" : "Si, automatico") : "No")}</strong>
+            </div>
+            <div class="detail-item">
               <span>Tempo stimato</span>
               <strong>${escapeHtml(durationLabel(dog.estimatedMinutes))}</strong>
             </div>
@@ -2299,6 +2331,10 @@ function openDogDialog(dog = {}) {
           <input name="contactMissing" type="checkbox" ${dog.contactMissing ? "checked" : ""} />
           Numero non presente
         </label>
+        <label class="checkbox-line full">
+          <input name="manualTopClient" type="checkbox" ${dog.manualTopClient ? "checked" : ""} />
+          Cliente top manuale
+        </label>
         <fieldset class="field-group full">
           <legend>Prestazioni</legend>
           ${renderServicePicker(dogServices, animal.services)}
@@ -2359,6 +2395,7 @@ function openDogDialog(dog = {}) {
         color,
         sex: formData.get("sex"),
         imageConsent: formData.get("imageConsent"),
+        manualTopClient: formData.get("manualTopClient") === "on",
         pathologies: formData.get("pathologies"),
         estimatedMinutes: timeInputToMinutes(formData.get("estimatedTime")),
         reminderDaysBefore: formData.get("reminderDaysBefore"),
@@ -2970,6 +3007,7 @@ function ageLabel(birthYear) {
 }
 
 function isTopDog(dog) {
+  if (dog?.manualTopClient) return true;
   const threshold = Math.max(1, Number(getAnimalSettings().loyaltyTopVisitsPerYear || 8));
   const year = String(new Date().getFullYear());
   const completedThisYear = dogAppointmentHistory(dog).filter((appointment) =>
@@ -3029,17 +3067,201 @@ function topDashboardClient(completedAppointments = []) {
   };
 }
 
+function topRevenueClient(completedAppointments = []) {
+  const totals = new Map();
+  for (const appointment of completedAppointments) {
+    const amount = appointmentRevenue(appointment);
+    if (!Number.isFinite(amount) || amount <= 0) continue;
+    const key = appointment.dogId || `name:${lowerText(appointment.dogName)}|owner:${lowerText(appointment.ownerName)}`;
+    const current = totals.get(key) || { appointment, total: 0, count: 0 };
+    current.total += amount;
+    current.count += 1;
+    totals.set(key, current);
+  }
+  const first = [...totals.values()].sort((a, b) => b.total - a.total || String(a.appointment.dogName || "").localeCompare(String(b.appointment.dogName || ""), "it"))[0];
+  if (!first) return null;
+  const dog =
+    state.dogs.find((item) => item.id === first.appointment.dogId) ||
+    state.dogs.find(
+      (item) =>
+        lowerText(item.dogName) === lowerText(first.appointment.dogName) &&
+        (!first.appointment.ownerName || lowerText(item.ownerName) === lowerText(first.appointment.ownerName))
+    );
+  return {
+    dog,
+    total: first.total,
+    count: first.count,
+    name: dog?.dogName || first.appointment.dogName || "Senza nome"
+  };
+}
+
+function revenueByService(completedAppointments = []) {
+  const totals = new Map();
+  for (const appointment of completedAppointments) {
+    const amount = appointmentRevenue(appointment);
+    if (amount <= 0) continue;
+    const services = normalizeServiceList(appointment.services?.length ? appointment.services : appointment.treatmentDone || appointment.service || "Servizio");
+    const names = services.length ? services : ["Servizio"];
+    const share = amount / names.length;
+    for (const service of names) {
+      const current = totals.get(service) || { label: service, total: 0, count: 0 };
+      current.total += share;
+      current.count += 1;
+      totals.set(service, current);
+    }
+  }
+  return [...totals.values()].sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "it"));
+}
+
+function revenueTrendSeries(completedAppointments = [], range = "month") {
+  const today = new Date();
+  const selected = ["week", "month", "year"].includes(range) ? range : "month";
+  const year = today.getFullYear();
+  let points = [];
+  if (selected === "week") {
+    const start = startOfWeek(today);
+    points = Array.from({ length: 7 }, (_, index) => {
+      const date = addDays(start, index);
+      return { key: toISODate(date), label: new Intl.DateTimeFormat("it-IT", { weekday: "short", day: "2-digit" }).format(date), total: 0 };
+    });
+  } else if (selected === "year") {
+    points = Array.from({ length: 12 }, (_, index) => {
+      const date = new Date(year, index, 1);
+      return { key: `${year}-${String(index + 1).padStart(2, "0")}`, label: new Intl.DateTimeFormat("it-IT", { month: "short" }).format(date), total: 0 };
+    });
+  } else {
+    const days = new Date(year, today.getMonth() + 1, 0).getDate();
+    points = Array.from({ length: days }, (_, index) => {
+      const date = new Date(year, today.getMonth(), index + 1);
+      return { key: toISODate(date), label: String(index + 1), total: 0 };
+    });
+  }
+  const lookup = new Map(points.map((point) => [point.key, point]));
+  for (const appointment of completedAppointments) {
+    const amount = appointmentRevenue(appointment);
+    if (amount <= 0 || !appointment.date) continue;
+    const key = selected === "year" ? String(appointment.date).slice(0, 7) : String(appointment.date).slice(0, 10);
+    const point = lookup.get(key);
+    if (point) point.total += amount;
+  }
+  const total = points.reduce((sum, point) => sum + point.total, 0);
+  return { range: selected, points, total, max: Math.max(...points.map((point) => point.total), 0) };
+}
+
+function appointmentRevenue(appointment) {
+  const amount = Number(appointment?.paidAmount || 0);
+  return Number.isFinite(amount) && amount > 0 ? amount : 0;
+}
+
 function renderTopClientMetric(topClient) {
   if (!topClient) return `<strong>-</strong>`;
+  const topDog = topClient.dog ? isTopDog(topClient.dog) : false;
   const photo = topClient.dog?.photoUrl
     ? `<img src="${escapeAttr(topClient.dog.photoUrl)}" alt="Foto di ${escapeAttr(topClient.name)}" />`
     : `<span>${escapeHtml(initials(topClient.name))}</span>`;
   return `
     <div class="metric-client">
-      <div class="metric-client-photo">${photo}</div>
+      <div class="metric-client-photo ${topDog ? "top-client" : ""}">${photo}${topDog ? `<img class="top-paw metric" src="/icons/top-client-paw.png" alt="Cliente top" />` : ""}</div>
       <div class="metric-client-copy">
         <strong>${escapeHtml(topClient.name)}</strong>
         <small>${escapeHtml(topClient.count === 1 ? "1 prestazione" : `${topClient.count} prestazioni`)}</small>
+      </div>
+    </div>
+  `;
+}
+
+function renderRevenueBars(stats = []) {
+  const rows = stats.slice(0, 8);
+  if (!rows.length) return `<div class="empty-chart">Nessun incasso registrato.</div>`;
+  const max = Math.max(...rows.map((item) => item.total), 0);
+  return `
+    <div class="revenue-bars">
+      ${rows
+        .map((item) => {
+          const height = max ? Math.max(8, Math.round((item.total / max) * 100)) : 0;
+          return `
+            <div class="revenue-bar-item">
+              <div class="revenue-bar-value">${escapeHtml(moneyLabel(item.total))}</div>
+              <div class="revenue-bar-track" title="${escapeAttr(`${item.label}: ${moneyLabel(item.total)}`)}">
+                <span style="height: ${escapeAttr(height)}%;"></span>
+              </div>
+              <strong>${escapeHtml(item.label)}</strong>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function renderRevenueLineChart(series) {
+  const points = series?.points || [];
+  if (!points.length || !series.total) return `<div class="empty-chart">Nessun incasso nel periodo.</div>`;
+  const width = 640;
+  const height = 230;
+  const left = 34;
+  const right = 22;
+  const top = 24;
+  const bottom = 58;
+  const chartWidth = width - left - right;
+  const chartHeight = height - top - bottom;
+  const max = Math.max(series.max || 0, 1);
+  const coordinates = points.map((point, index) => {
+    const x = left + (points.length === 1 ? chartWidth / 2 : (chartWidth / (points.length - 1)) * index);
+    const y = top + chartHeight - (point.total / max) * chartHeight;
+    return { ...point, x, y };
+  });
+  const polyline = coordinates.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
+  return `
+    <div class="revenue-line-card">
+      <svg class="revenue-line-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Andamento incassi ${escapeAttr(revenueRangeLabel(series.range).toLowerCase())}">
+        <line class="revenue-axis" x1="${left}" y1="${top + chartHeight}" x2="${width - right}" y2="${top + chartHeight}"></line>
+        <line class="revenue-axis" x1="${left}" y1="${top}" x2="${left}" y2="${top + chartHeight}"></line>
+        <polyline class="revenue-line" points="${escapeAttr(polyline)}"></polyline>
+        ${coordinates
+          .map(
+            (point, index) => `
+              <g class="revenue-point">
+                <circle cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="${point.total > 0 ? 5 : 3}">
+                  <title>${escapeHtml(`${point.label}: ${moneyLabel(point.total)}`)}</title>
+                </circle>
+                ${shouldShowRevenueTick(series.range, index, points.length) ? `<text x="${point.x.toFixed(1)}" y="${height - 22}" text-anchor="middle">${escapeHtml(point.label)}</text>` : ""}
+              </g>
+            `
+          )
+          .join("")}
+      </svg>
+      <div class="revenue-total"><span>Totale</span><strong>${escapeHtml(moneyLabel(series.total))}</strong></div>
+    </div>
+  `;
+}
+
+function shouldShowRevenueTick(range, index, total) {
+  if (range === "week" || range === "year") return true;
+  if (index === 0 || index === total - 1) return true;
+  return index % 5 === 4;
+}
+
+function revenueRangeLabel(range) {
+  return {
+    week: "Settimana",
+    month: "Mese",
+    year: "Anno"
+  }[range] || "Mese";
+}
+
+function renderRevenueClientMetric(topClient) {
+  if (!topClient) return `<strong>-</strong>`;
+  const topDog = topClient.dog ? isTopDog(topClient.dog) : false;
+  const photo = topClient.dog?.photoUrl
+    ? `<img src="${escapeAttr(topClient.dog.photoUrl)}" alt="Foto di ${escapeAttr(topClient.name)}" />`
+    : `<span>${escapeHtml(initials(topClient.name))}</span>`;
+  return `
+    <div class="metric-client">
+      <div class="metric-client-photo ${topDog ? "top-client" : ""}">${photo}${topDog ? `<img class="top-paw metric" src="/icons/top-client-paw.png" alt="Cliente top" />` : ""}</div>
+      <div class="metric-client-copy">
+        <strong>${escapeHtml(topClient.name)}</strong>
+        <small>${escapeHtml(moneyLabel(topClient.total))}</small>
       </div>
     </div>
   `;
