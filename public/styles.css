@@ -3114,8 +3114,12 @@ label {
     min-height: calc(74px + env(safe-area-inset-bottom));
     max-height: calc(82px + env(safe-area-inset-bottom));
     display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
     align-items: stretch;
+    justify-content: flex-start;
     gap: 6px;
+    white-space: nowrap;
     padding: 7px 10px calc(7px + env(safe-area-inset-bottom));
     overflow-x: auto;
     overflow-y: hidden;
