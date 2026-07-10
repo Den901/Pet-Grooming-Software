@@ -21,7 +21,7 @@ const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin123";
 const SIDEBAR_ITEM_IDS = ["calendar", "dashboard", "dogs", "users"];
 const APP_ID = "pet-grooming-software";
-const APP_VERSION = packageInfo.version || "0.0.1-beta.11";
+const APP_VERSION = packageInfo.version || "0.0.1-beta.12";
 const UPDATE_FORMAT = "PET_GROOMING_SOFTWARE_UPDATE";
 const UPDATE_FORMAT_VERSION = 1;
 const UPDATE_EXTENSION = ".pgs-update";
@@ -52,8 +52,8 @@ function defaultSettings() {
   return {
     branding: {
       theme: "light",
-      portalName: "Toelettatura Manager",
-      businessName: "Toelettatura",
+      portalName: "Groomly",
+      businessName: "Groomly",
       tagline: "Agenda e schede clienti",
       companyInfo: "",
       phone: "",
@@ -474,8 +474,8 @@ function publicBrandingSettings(db) {
   const branding = ensureSettingsShape(db.settings).branding;
   return {
     theme: ["light", "dark", "custom"].includes(branding.theme) ? branding.theme : "light",
-    portalName: cleanString(branding.portalName) || "Toelettatura Manager",
-    businessName: cleanString(branding.businessName) || "Toelettatura",
+    portalName: cleanString(branding.portalName) || "Groomly",
+    businessName: cleanString(branding.businessName) || "Groomly",
     tagline: cleanString(branding.tagline) || "Agenda e schede clienti",
     companyInfo: cleanString(branding.companyInfo),
     phone: cleanString(branding.phone),
@@ -1035,6 +1035,38 @@ function selectedServices(payload, existing = []) {
   return cleanStringList(list, []);
 }
 
+function selectedServiceAmounts(payload, services = [], existing = [], paidAmount = 0) {
+  const source = hasField(payload, "serviceAmounts") ? payload.serviceAmounts : existing;
+  const map = new Map();
+  if (Array.isArray(source)) {
+    for (const item of source) {
+      const service = cleanString(item?.service || item?.name);
+      if (!service) continue;
+      map.set(service.toLowerCase(), cleanNumber(item?.amount, 0));
+    }
+  } else if (source && typeof source === "object") {
+    for (const [serviceName, amount] of Object.entries(source)) {
+      const service = cleanString(serviceName);
+      if (!service) continue;
+      map.set(service.toLowerCase(), cleanNumber(amount, 0));
+    }
+  }
+  const result = services.map((service) => ({
+    service,
+    amount: map.get(service.toLowerCase()) || 0
+  }));
+  const total = result.reduce((sum, item) => sum + item.amount, 0);
+  if (!total && cleanNumber(paidAmount, 0) > 0 && result.length) {
+    const share = cleanNumber(paidAmount, 0) / result.length;
+    return result.map((item) => ({ ...item, amount: Number(share.toFixed(2)) }));
+  }
+  return result;
+}
+
+function totalServiceAmounts(serviceAmounts = []) {
+  return (serviceAmounts || []).reduce((sum, item) => sum + cleanNumber(item?.amount, 0), 0);
+}
+
 function updateAnimalOptionsFromDog(db, dog) {
   const current = publicAnimalSettings(db);
   const breeds = cleanStringList([...current.breeds, dog.breed], current.breeds);
@@ -1069,6 +1101,9 @@ function normalizeAppointment(payload, db, existing = {}) {
   const status = ["programmato", "confermato", "completato", "annullato"].includes(payload.status) ? payload.status : existing.status || "programmato";
   let treatmentDone = firstStringField(payload, ["treatmentDone", "treatment", "performedTreatment"], existing.treatmentDone);
   if (status === "completato" && !treatmentDone) treatmentDone = service;
+  const rawPaidAmount = status === "completato" ? firstNumberField(payload, ["paidAmount", "amountPaid", "amount", "price"], existing.paidAmount) : 0;
+  const serviceAmounts = status === "completato" ? selectedServiceAmounts(payload, services, existing.serviceAmounts, rawPaidAmount) : [];
+  const serviceTotal = totalServiceAmounts(serviceAmounts);
   const beforePhotos = hasField(payload, "clearBeforePhotos") && payload.clearBeforePhotos === true
     ? []
     : savePhotoList(payload.beforePhotoData, `${id}-before`, existing.beforePhotos, MAX_GALLERY_PHOTOS_PER_TYPE);
@@ -1087,7 +1122,8 @@ function normalizeAppointment(payload, db, existing = {}) {
     service,
     services,
     treatmentDone,
-    paidAmount: firstNumberField(payload, ["paidAmount", "amountPaid", "amount", "price"], existing.paidAmount),
+    serviceAmounts,
+    paidAmount: serviceTotal > 0 ? Number(serviceTotal.toFixed(2)) : rawPaidAmount,
     beforePhotos,
     afterPhotos,
     status,
@@ -1258,8 +1294,8 @@ async function handleApi(req, res, url) {
         db.settings.branding = {
           ...current,
           theme: ["light", "dark", "custom"].includes(body.theme) ? body.theme : current.theme || "light",
-          portalName: cleanString(body.portalName) || "Toelettatura Manager",
-          businessName: cleanString(body.businessName) || "Toelettatura",
+          portalName: cleanString(body.portalName) || "Groomly",
+          businessName: cleanString(body.businessName) || "Groomly",
           tagline: cleanString(body.tagline),
           companyInfo: cleanString(body.companyInfo),
           phone: cleanString(body.phone),
@@ -1661,5 +1697,5 @@ const server = http.createServer((req, res) => {
 
 ensureStorage();
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Portale toelettatura attivo su http://localhost:${PORT}`);
+  console.log(`Groomly attivo su http://localhost:${PORT}`);
 });

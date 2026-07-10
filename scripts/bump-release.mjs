@@ -31,9 +31,9 @@ function nextBetaVersion(currentVersion) {
 function bumpServiceWorkerCache() {
   if (!fs.existsSync(swFile)) return "";
   const current = fs.readFileSync(swFile, "utf8");
-  const next = current.replace(/toelettatura-pwa-v(\d+)|toilettatura-pwa-v(\d+)/, (_, preferred, legacy) => `toelettatura-pwa-v${Number(preferred || legacy) + 1}`);
+  const next = current.replace(/groomly-pwa-v(\d+)|toelettatura-pwa-v(\d+)|toilettatura-pwa-v(\d+)/, (_, groomly, preferred, legacy) => `groomly-pwa-v${Number(groomly || preferred || legacy) + 1}`);
   if (next !== current) fs.writeFileSync(swFile, next);
-  const match = next.match(/toelettatura-pwa-v(\d+)/);
+  const match = next.match(/groomly-pwa-v(\d+)/);
   return match ? match[0] : "";
 }
 

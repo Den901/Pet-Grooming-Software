@@ -392,6 +392,16 @@ label {
   font-size: 1rem;
 }
 
+.nav-item[data-nav="settings"] .nav-symbol {
+  background: rgba(180, 190, 199, 0.2);
+  color: #d2d9df;
+}
+
+.logout-item .nav-symbol {
+  background: rgba(255, 255, 255, 0.1);
+  color: #d7dde2;
+}
+
 .sidebar-bottom {
   margin-top: auto;
   display: grid;
@@ -1515,6 +1525,58 @@ label {
   grid-column: 1 / -1;
 }
 
+.service-amounts {
+  display: grid;
+  gap: 12px;
+}
+
+.service-amount-list {
+  display: grid;
+  gap: 8px;
+}
+
+.service-amount-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(110px, 0.45fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-soft);
+}
+
+.service-amount-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+  font-weight: 850;
+}
+
+.service-amount-row input {
+  padding: 10px 11px;
+}
+
+.service-amount-total {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.service-amount-total span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.service-amount-total strong {
+  color: var(--brand);
+  font-size: 1.08rem;
+}
+
 .gallery-upload {
   display: grid;
   gap: 8px;
@@ -1701,6 +1763,14 @@ label {
   grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.15fr);
 }
 
+.secondary-dashboard-grid {
+  grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.15fr);
+}
+
+.revenue-line-panel {
+  margin-top: 16px;
+}
+
 .dashboard-grid h2,
 .stat-list h3 {
   margin: 0;
@@ -1802,6 +1872,43 @@ label {
   background: linear-gradient(90deg, var(--brand), var(--accent));
 }
 
+.rank-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+}
+
+.rank-row:first-of-type {
+  border-top: 0;
+}
+
+.rank-row span {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--panel-soft);
+  color: var(--brand);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.rank-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rank-row small {
+  color: var(--brand);
+  font-weight: 900;
+}
+
 .revenue-bars {
   min-height: 250px;
   display: grid;
@@ -1860,7 +1967,7 @@ label {
   position: relative;
   margin-top: 16px;
   min-height: 260px;
-  padding: 8px 8px 44px;
+  padding: 8px 8px 52px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel-soft);
@@ -1890,6 +1997,11 @@ label {
   fill: var(--gold);
   stroke: #fff;
   stroke-width: 3;
+  cursor: pointer;
+}
+
+.revenue-point.selected circle {
+  fill: var(--accent);
 }
 
 .revenue-point text {
@@ -1916,6 +2028,26 @@ label {
 .revenue-total strong {
   color: var(--brand);
   font-size: 1.25rem;
+}
+
+.revenue-point-detail {
+  position: absolute;
+  left: 14px;
+  bottom: 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.revenue-point-detail span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.revenue-point-detail strong {
+  color: var(--accent);
+  font-size: 1.05rem;
 }
 
 .empty-chart {
@@ -2295,6 +2427,7 @@ label {
 :root[data-theme="dark"] .order-row,
 :root[data-theme="dark"] .service-selected,
 :root[data-theme="dark"] .service-chip,
+:root[data-theme="dark"] .service-amount-row,
 :root[data-theme="dark"] .update-block,
 :root[data-theme="dark"] .empty-chart,
 :root[data-theme="dark"] .dog-history,
@@ -2327,6 +2460,7 @@ label {
 :root[data-theme="dark"] .gallery-upload,
 :root[data-theme="dark"] .order-row,
 :root[data-theme="dark"] .service-selected,
+:root[data-theme="dark"] .service-amount-row,
 :root[data-theme="dark"] .update-block,
 :root[data-theme="dark"] .metric {
   border-color: var(--line);
@@ -2412,10 +2546,14 @@ label {
   color: #a8efe4;
 }
 
-:root[data-theme="dark"] .nav-item[data-nav="users"] .nav-symbol,
-:root[data-theme="dark"] .nav-item[data-nav="settings"] .nav-symbol {
+:root[data-theme="dark"] .nav-item[data-nav="users"] .nav-symbol {
   background: rgba(229, 138, 125, 0.2);
   color: #ffc6bd;
+}
+
+:root[data-theme="dark"] .nav-item[data-nav="settings"] .nav-symbol {
+  background: rgba(180, 190, 199, 0.2);
+  color: #d2d9df;
 }
 
 :root[data-theme="dark"] .metric:nth-child(1) {
@@ -2711,7 +2849,7 @@ label {
     min-height: calc(76px + env(safe-area-inset-bottom));
     max-height: calc(86px + env(safe-area-inset-bottom));
     display: grid;
-    grid-template-columns: minmax(0, 4fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(108px, auto);
     align-items: stretch;
     gap: 4px;
     padding: 7px 8px calc(7px + env(safe-area-inset-bottom));
@@ -2721,6 +2859,7 @@ label {
     z-index: 90;
     transform: translate3d(0, 0, 0);
     backface-visibility: hidden;
+    contain: layout paint style;
     will-change: transform;
     -webkit-transform: translate3d(0, 0, 0);
     -webkit-backface-visibility: hidden;
@@ -2742,8 +2881,9 @@ label {
   .sidebar-bottom {
     margin: 0;
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
     gap: 4px;
+    min-width: 108px;
   }
 
   .nav-item,
@@ -2814,7 +2954,12 @@ label {
   .panel-heading-row .segmented {
     width: 100%;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .segmented.compact button {
+    padding-inline: 4px;
+    font-size: 0.72rem;
   }
 
   .revenue-bars {
@@ -2823,6 +2968,14 @@ label {
 
   .revenue-line-card {
     padding-inline: 4px;
+  }
+
+  .service-amount-row {
+    grid-template-columns: 1fr;
+  }
+
+  .service-amount-total {
+    justify-content: space-between;
   }
 
   .modal-backdrop {

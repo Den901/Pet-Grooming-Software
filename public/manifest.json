@@ -1,6 +1,6 @@
 {
-  "name": "Toelettatura Manager",
-  "short_name": "Toelettatura",
+  "name": "Groomly",
+  "short_name": "Groomly",
   "description": "Portale PWA per appuntamenti, schede animali, utenti e backup.",
   "start_url": "/",
   "scope": "/",

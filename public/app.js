@@ -24,8 +24,8 @@ const state = {
   appUpdateReady: false,
   appUpdatePromptDismissed: false,
   appUpdateReloading: false,
-  dashboardFocus: "services",
   revenueRange: "month",
+  revenueSelectedPoint: null,
   deferredInstallPrompt: null,
   pwaPromptHidden: false,
   view: new URLSearchParams(window.location.search).get("view") || "calendar",
@@ -43,7 +43,8 @@ const NAV_ICONS = {
   dashboard: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13a8 8 0 0 1 16 0"></path><path d="M12 13l4-5"></path><path d="M7 17h10"></path><path d="M6 13h2M16 13h2"></path></svg>`,
   dogs: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5z"></path><path d="M9.4 14.2c.7-1.6 4.5-1.6 5.2 0 .6 1.4-.8 2.4-2.6 2.4s-3.2-1-2.6-2.4Z"></path><circle cx="8.7" cy="10" r="1.3"></circle><circle cx="15.3" cy="10" r="1.3"></circle><circle cx="11" cy="8.2" r="1.2"></circle><circle cx="13" cy="8.2" r="1.2"></circle></svg>`,
   users: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"></circle><path d="M3.8 18c.8-3 3-4.5 5.2-4.5s4.4 1.5 5.2 4.5"></path><circle cx="16.8" cy="9" r="2.3"></circle><path d="M14.8 14.1c2.5.2 4.2 1.5 5 3.9"></path></svg>`,
-  settings: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 3v3M12 18v3M4.2 7.5l2.6 1.5M17.2 15l2.6 1.5M4.2 16.5 6.8 15M17.2 9l2.6-1.5"></path></svg>`
+  settings: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 3v3M12 18v3M4.2 7.5l2.6 1.5M17.2 15l2.6 1.5M4.2 16.5 6.8 15M17.2 9l2.6-1.5"></path></svg>`,
+  logout: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H5v16h4"></path><path d="M14 8l4 4-4 4"></path><path d="M18 12H9"></path></svg>`
 };
 const SIDEBAR_DEFINITIONS = {
   calendar: { id: "calendar", label: "Calendario", icon: "calendar" },
@@ -230,8 +231,8 @@ async function api(path, options = {}) {
 function getBranding() {
   return {
     theme: "light",
-    portalName: "Toelettatura Manager",
-    businessName: "Toelettatura",
+    portalName: "Groomly",
+    businessName: "Groomly",
     tagline: "Agenda e schede clienti",
     companyInfo: "",
     phone: "",
@@ -325,7 +326,7 @@ function applyBranding() {
   const theme = branding.theme === "dark" || (branding.theme === "custom" && isDarkHex(colors.background)) ? "dark" : "light";
   const loginBackground = loginBackgroundCss(branding.loginBackground, colors);
   document.documentElement.dataset.theme = theme;
-  document.title = branding.portalName || "Toelettatura Manager";
+  document.title = branding.portalName || "Groomly";
   const variables = {
     "--brand": colors.brand,
     "--brand-strong": colors.brandStrong,
@@ -663,7 +664,10 @@ function renderShell() {
                 </button>`
               : ""
           }
-          <button class="btn ghost" type="button" id="logoutBtn">Esci</button>
+          <button class="nav-item nav-item-bottom logout-item" type="button" id="logoutBtn">
+            ${renderNavSymbol("logout")}
+            <span>Esci</span>
+          </button>
         </div>
       </aside>
       <main class="main" id="mainContent"></main>
@@ -1021,16 +1025,11 @@ function renderDashboard() {
   const topClient = topDashboardClient(completed);
   const topRevenue = topRevenueClient(completed);
   const avgMinutes = average(state.dogs.map((dog) => Number(dog.estimatedMinutes || 0)).filter(Boolean));
-  const focus = state.dashboardFocus === "services" ? serviceStats : breedStats;
   return `
     <div class="topbar">
       <div class="page-title">
         <h1>Dashboard</h1>
-        <p>Statistiche operative su appuntamenti, razze, servizi e tempi.</p>
-      </div>
-      <div class="segmented" role="group" aria-label="Grafico dashboard">
-        <button type="button" data-dashboard-focus="services" class="${state.dashboardFocus === "services" ? "active" : ""}">Servizi</button>
-        <button type="button" data-dashboard-focus="breeds" class="${state.dashboardFocus !== "services" ? "active" : ""}">Razze</button>
+        <p>Servizi, incassi, clienti e andamento economico.</p>
       </div>
     </div>
     <section class="metric-grid" aria-label="Riepilogo dashboard">
@@ -1040,50 +1039,60 @@ function renderDashboard() {
       <div class="metric top-client-metric"><span>Cane piu redditizio</span>${renderRevenueClientMetric(topRevenue)}</div>
       <div class="metric"><span>Tempo medio scheda</span><strong>${escapeHtml(durationLabel(avgMinutes))}</strong></div>
     </section>
-    <section class="dashboard-grid">
-      <div class="panel">
-        <h2>${state.dashboardFocus === "services" ? "Servizi piu richiesti" : "Razze piu trattate"}</h2>
-        ${renderPieChart(focus)}
-      </div>
-      <div class="panel">
-        <h2>Classifiche</h2>
-        <div class="stat-lists">
-          ${renderStatList("Servizi", serviceStats)}
-          ${renderStatList("Razze", breedStats)}
-          ${renderStatList("Animali", dogStats)}
-        </div>
-      </div>
-    </section>
     <section class="dashboard-grid revenue-dashboard-grid">
+      <div class="panel">
+        <h2>Tipi di servizi</h2>
+        ${renderPieChart(serviceStats)}
+      </div>
       <div class="panel">
         <h2>Incasso per servizio</h2>
         ${renderRevenueBars(serviceRevenueStats)}
       </div>
-      <div class="panel">
-        <div class="panel-heading-row">
-          <h2>Andamento incassi</h2>
-          <div class="segmented compact" role="group" aria-label="Periodo incassi">
-            ${["week", "month", "year"]
-              .map((range) => `<button type="button" data-revenue-range="${range}" class="${state.revenueRange === range ? "active" : ""}">${escapeHtml(revenueRangeLabel(range))}</button>`)
-              .join("")}
-          </div>
+    </section>
+    <section class="panel revenue-line-panel">
+      <div class="panel-heading-row">
+        <h2>Andamento incassi</h2>
+        <div class="segmented compact" role="group" aria-label="Periodo incassi">
+          ${["day", "week", "month", "year"]
+            .map((range) => `<button type="button" data-revenue-range="${range}" class="${state.revenueRange === range ? "active" : ""}">${escapeHtml(revenueRangeLabel(range))}</button>`)
+            .join("")}
         </div>
-        ${renderRevenueLineChart(revenueSeries)}
+      </div>
+      ${renderRevenueLineChart(revenueSeries)}
+    </section>
+    <section class="dashboard-grid secondary-dashboard-grid">
+      <div class="panel">
+        <h2>Razze piu trattate</h2>
+        ${renderPieChart(breedStats)}
+      </div>
+      <div class="panel">
+        <h2>Altre classifiche</h2>
+        <div class="stat-lists">
+          ${renderStatList("Animali", dogStats)}
+          ${renderStatList("Razze", breedStats)}
+        </div>
       </div>
     </section>
   `;
 }
 
 function bindDashboard() {
-  document.querySelectorAll("[data-dashboard-focus]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.dashboardFocus = button.dataset.dashboardFocus;
-      renderView();
-    });
-  });
   document.querySelectorAll("[data-revenue-range]").forEach((button) => {
     button.addEventListener("click", () => {
       state.revenueRange = button.dataset.revenueRange;
+      state.revenueSelectedPoint = null;
+      renderView();
+    });
+  });
+  document.querySelectorAll("[data-revenue-point]").forEach((point) => {
+    point.addEventListener("click", () => {
+      state.revenueSelectedPoint = { range: state.revenueRange, key: point.dataset.revenuePoint };
+      renderView();
+    });
+    point.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      state.revenueSelectedPoint = { range: state.revenueRange, key: point.dataset.revenuePoint };
       renderView();
     });
   });
@@ -2273,6 +2282,68 @@ function setServicePickerValues(form, services) {
   updateServicePickerEmpty(picker);
 }
 
+function serviceAmountMap(appointment = {}) {
+  const map = new Map();
+  if (Array.isArray(appointment.serviceAmounts)) {
+    appointment.serviceAmounts.forEach((item) => {
+      const service = String(item?.service || "").trim();
+      if (service) map.set(service.toLowerCase(), Number(item.amount || 0));
+    });
+  }
+  return map;
+}
+
+function renderServiceAmountRows(services = [], appointment = {}) {
+  const selected = normalizeServiceList(services);
+  if (!selected.length) return `<p class="muted">Seleziona almeno un servizio.</p>`;
+  const amounts = serviceAmountMap(appointment);
+  const fallbackAmount = Number(appointment.paidAmount || 0);
+  const splitFallback = fallbackAmount > 0 && !amounts.size ? fallbackAmount / selected.length : 0;
+  return selected
+    .map((service) => {
+      const amount = amounts.has(service.toLowerCase()) ? amounts.get(service.toLowerCase()) : splitFallback;
+      return `
+        <div class="service-amount-row" data-service-amount-row>
+          <input type="hidden" name="serviceAmountService" value="${escapeAttr(service)}" />
+          <span>${escapeHtml(service)}</span>
+          <input name="serviceAmountValue" type="number" min="0" step="0.01" value="${amount ? escapeAttr(Number(amount).toFixed(2)) : ""}" inputmode="decimal" data-service-amount-input />
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function collectServiceAmounts(form) {
+  return Array.from(form.querySelectorAll("[data-service-amount-row]"))
+    .map((row) => ({
+      service: row.querySelector('input[name="serviceAmountService"]')?.value || "",
+      amount: Number(row.querySelector('input[name="serviceAmountValue"]')?.value || 0)
+    }))
+    .filter((item) => item.service);
+}
+
+function serviceAmountsTotal(serviceAmounts = []) {
+  return (serviceAmounts || []).reduce((sum, item) => {
+    const amount = Number(item.amount || 0);
+    return sum + (Number.isFinite(amount) && amount > 0 ? amount : 0);
+  }, 0);
+}
+
+function syncServiceAmountTotal(form) {
+  const total = serviceAmountsTotal(collectServiceAmounts(form));
+  const target = form.querySelector("[data-service-amount-total]");
+  if (target) target.textContent = moneyLabel(total);
+}
+
+function syncServiceAmountRows(form, baseAppointment = {}) {
+  const list = form.querySelector("[data-service-amount-list]");
+  if (!list) return;
+  const previous = { serviceAmounts: collectServiceAmounts(form) };
+  const services = collectServicesFromPicker(form.querySelector("[data-service-picker]"));
+  list.innerHTML = renderServiceAmountRows(services, previous.serviceAmounts.length ? previous : baseAppointment);
+  syncServiceAmountTotal(form);
+}
+
 function updateServicePickerEmpty(picker) {
   const selected = picker.querySelector("[data-service-selected]");
   const hasServices = selected.querySelector('input[name="services"]');
@@ -2499,9 +2570,16 @@ function openAppointmentDialog(appointment = {}, options = {}) {
           <legend data-service-legend>${currentStatus === "completato" ? "Servizi eseguiti" : "Prestazioni previste"}</legend>
           ${renderServicePicker(selectedServices, serviceOptions)}
         </fieldset>
-        <label data-completion-field>Importo pagato
-          <input name="paidAmount" type="number" min="0" step="0.01" value="${escapeAttr(appointment.paidAmount || "")}" inputmode="decimal" />
-        </label>
+        <fieldset class="field-group full service-amounts" data-completion-field data-service-amounts>
+          <legend>Prezzi servizi</legend>
+          <div class="service-amount-list" data-service-amount-list>
+            ${renderServiceAmountRows(selectedServices, appointment)}
+          </div>
+          <div class="service-amount-total">
+            <span>Totale prestazione</span>
+            <strong data-service-amount-total>${escapeHtml(moneyLabel(appointment.paidAmount))}</strong>
+          </div>
+        </fieldset>
         <div class="full gallery-upload" data-completion-field>
           <label>Foto prima del lavoro
             <input name="beforePhotos" type="file" accept="image/*" multiple />
@@ -2527,6 +2605,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
       const createDogRows = form.querySelectorAll("[data-create-dog-row]");
       const completionFields = form.querySelectorAll("[data-completion-field]");
       const serviceLegend = form.querySelector("[data-service-legend]");
+      const syncAmounts = () => syncServiceAmountRows(form, appointment);
       const syncCompletionFields = () => {
         const isCompleted = form.elements.status.value === "completato";
         if (serviceLegend) serviceLegend.textContent = isCompleted ? "Servizi eseguiti" : "Prestazioni previste";
@@ -2564,10 +2643,18 @@ function openAppointmentDialog(appointment = {}, options = {}) {
       modalRoot.querySelector("[data-complete-form]")?.addEventListener("click", () => {
         form.elements.status.value = "completato";
         syncCompletionFields();
+        syncAmounts();
         form.querySelector("[data-service-select]")?.focus();
         notify("Completa servizio e importo, poi salva la prestazione");
       });
       form.elements.status.addEventListener("change", syncCompletionFields);
+      form.addEventListener("change", (event) => {
+        if (event.target.matches("[data-service-select]")) setTimeout(syncAmounts, 0);
+        if (event.target.matches("[data-service-amount-input]")) syncServiceAmountTotal(form);
+      });
+      form.addEventListener("click", (event) => {
+        if (event.target.closest("[data-service-remove], [data-service-custom-add]")) setTimeout(syncAmounts, 0);
+      });
       form.elements.createDogProfile?.addEventListener("change", syncCreateDogRow);
       form.elements.contactMissing?.addEventListener("change", syncCreateDogRow);
       form.elements.dogId.addEventListener("change", () => {
@@ -2578,9 +2665,11 @@ function openAppointmentDialog(appointment = {}, options = {}) {
         form.elements.ownerName.value = dog.ownerName || "";
         form.elements.contact.value = dog.contact || "";
         setServicePickerValues(form, dog.services);
+        syncAmounts();
       });
       syncCreateDogRow();
       syncCompletionFields();
+      syncServiceAmountTotal(form);
     },
     onDanger: async () => {
       await api(`/api/appointments/${appointment.id}`, { method: "DELETE", body: "{}" });
@@ -2601,7 +2690,10 @@ function openAppointmentDialog(appointment = {}, options = {}) {
       if (payload.status !== "completato") {
         payload.treatmentDone = "";
         payload.paidAmount = "";
+        payload.serviceAmounts = [];
       } else {
+        payload.serviceAmounts = collectServiceAmounts(form);
+        payload.paidAmount = Number(serviceAmountsTotal(payload.serviceAmounts).toFixed(2));
         payload.beforePhotoData = await filesToDataUrls(form.elements.beforePhotos?.files, 5);
         payload.afterPhotoData = await filesToDataUrls(form.elements.afterPhotos?.files, 5);
         payload.clearBeforePhotos = formData.get("clearBeforePhotos") === "on";
@@ -3098,14 +3190,11 @@ function topRevenueClient(completedAppointments = []) {
 function revenueByService(completedAppointments = []) {
   const totals = new Map();
   for (const appointment of completedAppointments) {
-    const amount = appointmentRevenue(appointment);
-    if (amount <= 0) continue;
-    const services = normalizeServiceList(appointment.services?.length ? appointment.services : appointment.treatmentDone || appointment.service || "Servizio");
-    const names = services.length ? services : ["Servizio"];
-    const share = amount / names.length;
-    for (const service of names) {
+    for (const item of serviceRevenueItems(appointment)) {
+      if (item.amount <= 0) continue;
+      const service = item.service || "Servizio";
       const current = totals.get(service) || { label: service, total: 0, count: 0 };
-      current.total += share;
+      current.total += item.amount;
       current.count += 1;
       totals.set(service, current);
     }
@@ -3113,12 +3202,36 @@ function revenueByService(completedAppointments = []) {
   return [...totals.values()].sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, "it"));
 }
 
+function serviceRevenueItems(appointment) {
+  if (Array.isArray(appointment?.serviceAmounts) && appointment.serviceAmounts.length) {
+    return appointment.serviceAmounts
+      .map((item) => ({
+        service: String(item?.service || "").trim() || "Servizio",
+        amount: Number(item?.amount || 0)
+      }))
+      .filter((item) => Number.isFinite(item.amount) && item.amount > 0);
+  }
+  const amount = Number(appointment?.paidAmount || 0);
+  if (!Number.isFinite(amount) || amount <= 0) return [];
+  const services = normalizeServiceList(appointment.services?.length ? appointment.services : appointment.treatmentDone || appointment.service || "Servizio");
+  const names = services.length ? services : ["Servizio"];
+  const share = amount / names.length;
+  return names.map((service) => ({ service, amount: share }));
+}
+
 function revenueTrendSeries(completedAppointments = [], range = "month") {
   const today = new Date();
-  const selected = ["week", "month", "year"].includes(range) ? range : "month";
+  const selected = ["day", "week", "month", "year"].includes(range) ? range : "month";
   const year = today.getFullYear();
   let points = [];
-  if (selected === "week") {
+  if (selected === "day") {
+    const iso = toISODate(today);
+    points = Array.from({ length: 24 }, (_, hour) => ({
+      key: `${iso}T${String(hour).padStart(2, "0")}`,
+      label: String(hour).padStart(2, "0"),
+      total: 0
+    }));
+  } else if (selected === "week") {
     const start = startOfWeek(today);
     points = Array.from({ length: 7 }, (_, index) => {
       const date = addDays(start, index);
@@ -3140,7 +3253,12 @@ function revenueTrendSeries(completedAppointments = [], range = "month") {
   for (const appointment of completedAppointments) {
     const amount = appointmentRevenue(appointment);
     if (amount <= 0 || !appointment.date) continue;
-    const key = selected === "year" ? String(appointment.date).slice(0, 7) : String(appointment.date).slice(0, 10);
+    const key =
+      selected === "year"
+        ? String(appointment.date).slice(0, 7)
+        : selected === "day"
+          ? `${String(appointment.date).slice(0, 10)}T${String(appointment.startTime || "00").slice(0, 2).padStart(2, "0")}`
+          : String(appointment.date).slice(0, 10);
     const point = lookup.get(key);
     if (point) point.total += amount;
   }
@@ -3149,6 +3267,8 @@ function revenueTrendSeries(completedAppointments = [], range = "month") {
 }
 
 function appointmentRevenue(appointment) {
+  const serviceTotal = serviceAmountsTotal(appointment?.serviceAmounts || []);
+  if (serviceTotal > 0) return Number(serviceTotal.toFixed(2));
   const amount = Number(appointment?.paidAmount || 0);
   return Number.isFinite(amount) && amount > 0 ? amount : 0;
 }
@@ -3211,6 +3331,8 @@ function renderRevenueLineChart(series) {
     const y = top + chartHeight - (point.total / max) * chartHeight;
     return { ...point, x, y };
   });
+  const selectedKey = state.revenueSelectedPoint?.range === series.range ? state.revenueSelectedPoint.key : "";
+  const selectedPoint = coordinates.find((point) => point.key === selectedKey) || coordinates.find((point) => point.total > 0) || coordinates[0];
   const polyline = coordinates.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
   return `
     <div class="revenue-line-card">
@@ -3220,30 +3342,49 @@ function renderRevenueLineChart(series) {
         <polyline class="revenue-line" points="${escapeAttr(polyline)}"></polyline>
         ${coordinates
           .map(
-            (point, index) => `
-              <g class="revenue-point">
-                <circle cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="${point.total > 0 ? 5 : 3}">
+            (point, index) => {
+              const isSelected = point.key === selectedPoint?.key;
+              return `
+              <g class="revenue-point ${isSelected ? "selected" : ""}" data-revenue-point="${escapeAttr(point.key)}" role="button" tabindex="0">
+                <circle cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="${isSelected ? 7 : point.total > 0 ? 5 : 3}">
                   <title>${escapeHtml(`${point.label}: ${moneyLabel(point.total)}`)}</title>
                 </circle>
                 ${shouldShowRevenueTick(series.range, index, points.length) ? `<text x="${point.x.toFixed(1)}" y="${height - 22}" text-anchor="middle">${escapeHtml(point.label)}</text>` : ""}
               </g>
-            `
+            `;
+            }
           )
           .join("")}
       </svg>
+      <div class="revenue-point-detail">
+        <span>${escapeHtml(revenuePointDetailLabel(series.range, selectedPoint))}</span>
+        <strong>${escapeHtml(moneyLabel(selectedPoint?.total || 0))}</strong>
+      </div>
       <div class="revenue-total"><span>Totale</span><strong>${escapeHtml(moneyLabel(series.total))}</strong></div>
     </div>
   `;
 }
 
 function shouldShowRevenueTick(range, index, total) {
+  if (range === "day") return index % 3 === 0 || index === total - 1;
   if (range === "week" || range === "year") return true;
   if (index === 0 || index === total - 1) return true;
   return index % 5 === 4;
 }
 
+function revenuePointDetailLabel(range, point) {
+  if (!point) return "Nessun punto";
+  return {
+    day: `Ore ${point.label}:00`,
+    week: point.label,
+    month: `Giorno ${point.label}`,
+    year: point.label
+  }[range] || point.label;
+}
+
 function revenueRangeLabel(range) {
   return {
+    day: "Giorno",
     week: "Settimana",
     month: "Mese",
     year: "Anno"
@@ -3269,25 +3410,19 @@ function renderRevenueClientMetric(topClient) {
 
 function renderStatList(title, stats) {
   const rows = (stats || []).slice(0, 6);
-  const max = Math.max(...rows.map((item) => Number(item.count || 0)), 0);
   return `
     <div class="stat-list">
       <h3>${escapeHtml(title)}</h3>
       ${
         rows.length
           ? rows
-              .map((item) => {
+              .map((item, index) => {
                 const count = Number(item.count || 0);
-                const width = max ? Math.max(6, Math.round((count / max) * 100)) : 0;
                 return `
-                  <div class="stat-bar-row">
-                    <div class="stat-bar-head">
-                      <span>${escapeHtml(item.label)}</span>
-                      <strong>${escapeHtml(count)}</strong>
-                    </div>
-                    <div class="stat-bar-track" aria-hidden="true">
-                      <span style="width: ${escapeAttr(width)}%;"></span>
-                    </div>
+                  <div class="rank-row">
+                    <span>${index + 1}</span>
+                    <strong>${escapeHtml(item.label)}</strong>
+                    <small>${escapeHtml(count)}</small>
                   </div>
                 `;
               })
