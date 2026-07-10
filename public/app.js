@@ -57,6 +57,7 @@ const SIDEBAR_DEFINITIONS = {
   users: { id: "users", label: "Utenti", icon: "users", adminOnly: true }
 };
 const DEFAULT_SIDEBAR_ORDER = ["calendar", "dashboard", "dogs", "serviceHistory", "users"];
+let lastNewDogActionAt = 0;
 const THEME_PRESETS = {
   light: {
     brand: "#234344",
@@ -90,6 +91,8 @@ window.addEventListener("appinstalled", () => {
 });
 
 document.addEventListener("click", handlePhotoZoomClick);
+document.addEventListener("click", handleNewDogAction);
+document.addEventListener("pointerup", handleNewDogAction);
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closePhotoLightbox();
 });
@@ -1160,20 +1163,6 @@ function renderDogCard(dog) {
 }
 
 function bindDogs() {
-  const newDogBtn = document.getElementById("newDogBtn");
-  let newDogOpenedAt = 0;
-  const openNewDog = (event) => {
-    const now = Date.now();
-    if (now - newDogOpenedAt < 500) return;
-    newDogOpenedAt = now;
-    event.preventDefault();
-    openDogDialog();
-  };
-  newDogBtn?.addEventListener("pointerup", (event) => {
-    if (event.pointerType === "mouse") return;
-    openNewDog(event);
-  });
-  newDogBtn?.addEventListener("click", openNewDog);
   const searchInput = document.getElementById("dogSearch");
   searchInput.addEventListener("input", () => {
     state.dogSearch = searchInput.value;
@@ -3049,6 +3038,24 @@ function openModal({
 
 function closeModal() {
   modalRoot.innerHTML = "";
+}
+
+function handleNewDogAction(event) {
+  const target = event.target?.closest ? event.target : event.target?.parentElement;
+  const trigger = target?.closest?.("[data-new-dog]");
+  if (!trigger) return;
+  if (event.type === "pointerup" && event.pointerType === "mouse") return;
+  event.preventDefault();
+  event.stopPropagation();
+  const now = Date.now();
+  if (now - lastNewDogActionAt < 500) return;
+  lastNewDogActionAt = now;
+  try {
+    openDogDialog();
+  } catch (err) {
+    console.error(err);
+    notify(err?.message || "Errore apertura nuova scheda");
+  }
 }
 
 function handlePhotoZoomClick(event) {

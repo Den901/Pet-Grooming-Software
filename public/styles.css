@@ -591,6 +591,13 @@ label {
   font-size: 0.9rem;
 }
 
+[data-new-dog] {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  touch-action: manipulation;
+}
+
 .segmented {
   padding: 4px;
   border-radius: var(--radius);
