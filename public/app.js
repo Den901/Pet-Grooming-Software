@@ -1127,7 +1127,7 @@ function renderDogs() {
         <h1>Schede animali</h1>
         <p>${state.dogs.length} schede salvate</p>
       </div>
-      <button class="btn" type="button" id="newDogBtn">Nuova scheda</button>
+      <button class="btn" type="button" id="newDogBtn" data-new-dog>Nuova scheda</button>
     </div>
     <div class="searchbar">
       <input id="dogSearch" type="search" value="${escapeAttr(state.dogSearch)}" placeholder="Cerca per cane, proprietario, telefono o note" />
@@ -1160,7 +1160,20 @@ function renderDogCard(dog) {
 }
 
 function bindDogs() {
-  document.getElementById("newDogBtn").addEventListener("click", () => openDogDialog());
+  const newDogBtn = document.getElementById("newDogBtn");
+  let newDogOpenedAt = 0;
+  const openNewDog = (event) => {
+    const now = Date.now();
+    if (now - newDogOpenedAt < 500) return;
+    newDogOpenedAt = now;
+    event.preventDefault();
+    openDogDialog();
+  };
+  newDogBtn?.addEventListener("pointerup", (event) => {
+    if (event.pointerType === "mouse") return;
+    openNewDog(event);
+  });
+  newDogBtn?.addEventListener("click", openNewDog);
   const searchInput = document.getElementById("dogSearch");
   searchInput.addEventListener("input", () => {
     state.dogSearch = searchInput.value;
@@ -2285,7 +2298,7 @@ function renderBreedField(dog, animal) {
     name: "breed",
     label: "Razza",
     customLabel: "Nuova razza",
-    placeholder: "Seleziona razza",
+    placeholder: "Scrivi o scegli razza",
     addLabel: "+ Aggiungi razza",
     customPlaceholder: "Scrivi nuova razza",
     current: dog.breed,
@@ -2298,7 +2311,7 @@ function renderColorField(dog, animal, required = true, quickRequired = false) {
     name: "color",
     label: "Colore cane",
     customLabel: "Nuovo colore",
-    placeholder: "Seleziona colore",
+    placeholder: "Scrivi o scegli colore",
     addLabel: "+ Aggiungi colore",
     customPlaceholder: "Scrivi nuovo colore",
     current: dog.color,
@@ -2308,24 +2321,42 @@ function renderColorField(dog, animal, required = true, quickRequired = false) {
   });
 }
 
-function renderChoiceField({ name, label, customLabel, placeholder, addLabel, customPlaceholder, current = "", options = [], required = false, quickRequired = false }) {
+function renderEstimatedTimeField(value = {}) {
+  const hours = Number(value.hours || 0);
+  const minutes = Number(value.minutes || 0);
+  const hourOptions = Array.from({ length: 13 }, (_, index) => index);
+  const minuteOptions = Array.from({ length: 12 }, (_, index) => index * 5);
+  return `
+    <fieldset class="field-group compact estimated-time-field">
+      <legend>Tempo stimato</legend>
+      <div class="time-parts">
+        <label>Ore
+          <select name="estimatedHours">
+            ${hourOptions.map((item) => `<option value="${item}" ${item === hours ? "selected" : ""}>${item}</option>`).join("")}
+          </select>
+        </label>
+        <label>Minuti
+          <select name="estimatedMinutesPart">
+            ${minuteOptions.map((item) => `<option value="${item}" ${item === minutes ? "selected" : ""}>${String(item).padStart(2, "0")}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+    </fieldset>
+  `;
+}
+
+function renderChoiceField({ name, label, placeholder, customPlaceholder, current = "", options = [], required = false, quickRequired = false }) {
   const values = uniqueValues([...(options || []), current].filter(Boolean));
   const selected = String(current || "").trim();
-  const matched = values.find((value) => value.toLowerCase() === selected.toLowerCase());
-  const customSelected = Boolean(current && !matched);
   const quickRequiredAttr = quickRequired ? "data-quick-required" : "";
+  const listId = `${name}Suggestions`;
   return `
     <label>${escapeHtml(label)}
-      <select name="${escapeAttr(name)}Choice" data-choice-select data-choice-custom="${escapeAttr(`${name}Custom`)}" ${required ? "required" : ""} ${quickRequiredAttr}>
-        <option value="">${escapeHtml(placeholder)}</option>
-        ${values
-          .map((value) => `<option value="${escapeAttr(value)}" ${matched === value ? "selected" : ""}>${escapeHtml(value)}</option>`)
-          .join("")}
-        <option value="${CUSTOM_OPTION_VALUE}" ${customSelected ? "selected" : ""}>${escapeHtml(addLabel)}</option>
-      </select>
-    </label>
-    <label class="choice-custom" data-choice-custom-row="${escapeAttr(`${name}Custom`)}" ${customSelected ? "" : "hidden"}>${escapeHtml(customLabel)}
-      <input name="${escapeAttr(`${name}Custom`)}" value="${customSelected ? escapeAttr(selected) : ""}" placeholder="${escapeAttr(customPlaceholder)}" ${customSelected ? "" : "disabled"} ${quickRequiredAttr} data-choice-custom-input />
+      <input name="${escapeAttr(name)}Choice" list="${escapeAttr(listId)}" value="${escapeAttr(selected)}" placeholder="${escapeAttr(placeholder)}" autocomplete="off" data-choice-input ${required ? "required" : ""} ${quickRequiredAttr} />
+      <datalist id="${escapeAttr(listId)}">
+        ${values.map((value) => `<option value="${escapeAttr(value)}"></option>`).join("")}
+      </datalist>
+      <small class="field-hint">${escapeHtml(customPlaceholder)} se non lo trovi nei suggerimenti.</small>
     </label>
   `;
 }
@@ -2341,8 +2372,8 @@ function renderServicePicker(selected = [], options = []) {
       <div class="service-picker-controls">
         <select data-service-select aria-label="Seleziona prestazione">
           <option value="">Seleziona prestazione</option>
-          ${serviceOptions.map((service) => `<option value="${escapeAttr(service)}">${escapeHtml(service)}</option>`).join("")}
           <option value="${CUSTOM_OPTION_VALUE}">+ Aggiungi prestazione</option>
+          ${serviceOptions.map((service) => `<option value="${escapeAttr(service)}">${escapeHtml(service)}</option>`).join("")}
         </select>
       </div>
       <div class="service-custom-row" data-service-custom hidden>
@@ -2364,21 +2395,12 @@ function renderServiceChip(service) {
 }
 
 function bindChoiceSelects(form) {
-  form.querySelectorAll("[data-choice-select]").forEach((select) => {
-    const customName = select.dataset.choiceCustom;
-    const row = form.querySelector(`[data-choice-custom-row="${customName}"]`);
-    const input = row?.querySelector("input");
+  form.querySelectorAll("[data-choice-input]").forEach((input) => {
+    const initiallyRequired = input.required;
     const sync = () => {
-      const custom = select.value === CUSTOM_OPTION_VALUE;
-      if (row) row.hidden = !custom || select.disabled;
-      if (input) {
-        input.disabled = select.disabled || !custom;
-        input.required = !select.disabled && custom && select.required;
-        if (!custom) input.value = "";
-      }
+      input.required = !input.disabled && (initiallyRequired || input.hasAttribute("data-quick-required"));
     };
-    select._syncChoiceCustom = sync;
-    select.addEventListener("change", sync);
+    input._syncChoiceCustom = sync;
     sync();
   });
 }
@@ -2522,15 +2544,14 @@ function updateServicePickerEmpty(picker) {
 }
 
 function selectedChoiceValue(formData, name) {
-  const choice = String(formData.get(`${name}Choice`) || "").trim();
-  if (choice === CUSTOM_OPTION_VALUE) return String(formData.get(`${name}Custom`) || "").trim();
-  return choice;
+  return String(formData.get(`${name}Choice`) || "").trim();
 }
 
 function openDogDialog(dog = {}) {
   const isEdit = Boolean(dog.id);
   const animal = getAnimalSettings();
   const dogServices = dog.services || [];
+  const estimatedTime = splitMinutes(dog.estimatedMinutes);
   openModal({
     title: isEdit ? "Modifica scheda" : "Nuova scheda",
     submitLabel: isEdit ? "Salva scheda" : "Crea scheda",
@@ -2539,9 +2560,7 @@ function openDogDialog(dog = {}) {
         <label>Nome cane
           <input name="dogName" value="${escapeAttr(dog.dogName || "")}" required />
         </label>
-        <label>Tempo stimato
-          <input name="estimatedTime" type="time" step="300" value="${escapeAttr(minutesToTimeInput(dog.estimatedMinutes))}" />
-        </label>
+        ${renderEstimatedTimeField(estimatedTime)}
         ${renderBreedField(dog, animal)}
         <label>Anno nascita
           <input name="birthYear" type="number" min="1980" max="${new Date().getFullYear()}" value="${escapeAttr(dog.birthYear || "")}" />
@@ -2636,7 +2655,7 @@ function openDogDialog(dog = {}) {
         imageConsent: formData.get("imageConsent"),
         manualTopClient: formData.get("manualTopClient") === "on",
         pathologies: formData.get("pathologies"),
-        estimatedMinutes: timeInputToMinutes(formData.get("estimatedTime")),
+        estimatedMinutes: timePartsToMinutes(formData.get("estimatedHours"), formData.get("estimatedMinutesPart")),
         reminderDaysBefore: formData.get("reminderDaysBefore"),
         services,
         notes: formData.get("notes")
@@ -2795,12 +2814,11 @@ function openAppointmentDialog(appointment = {}, options = {}) {
               if (hasLinkedDog) input.checked = false;
               return;
             }
-            if (input.hasAttribute("data-choice-custom-input")) return;
             input.disabled = hasLinkedDog || !wantsProfile;
             input.required = !hasLinkedDog && wantsProfile && input.hasAttribute("data-quick-required");
           });
         });
-        form.querySelectorAll("[data-choice-select]").forEach((select) => select._syncChoiceCustom?.());
+        form.querySelectorAll("[data-choice-input]").forEach((input) => input._syncChoiceCustom?.());
         if (form.elements.contactMissing) {
           const missing = form.elements.contactMissing.checked && !hasLinkedDog && wantsProfile;
           form.elements.contact.disabled = missing;
@@ -3311,18 +3329,21 @@ function uniqueValues(values) {
   return result;
 }
 
-function minutesToTimeInput(minutes) {
-  const total = Math.max(0, Math.min(Number(minutes || 0), 23 * 60 + 55));
-  if (!total) return "";
-  const hours = Math.floor(total / 60);
-  const rest = total % 60;
-  return `${String(hours).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+function splitMinutes(minutes) {
+  const max = 12 * 60 + 55;
+  const raw = Number(minutes || 0);
+  const total = Number.isFinite(raw) ? Math.max(0, Math.min(Math.round(raw / 5) * 5, max)) : 0;
+  return {
+    hours: Math.floor(total / 60),
+    minutes: total % 60
+  };
 }
 
-function timeInputToMinutes(value) {
-  const [hours, minutes] = String(value || "").split(":").map(Number);
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return 0;
-  return Math.max(0, hours * 60 + minutes);
+function timePartsToMinutes(hours, minutes) {
+  const hourValue = Math.max(0, Math.min(Number(hours || 0), 12));
+  const minuteValue = Math.max(0, Math.min(Number(minutes || 0), 55));
+  if (!Number.isFinite(hourValue) || !Number.isFinite(minuteValue)) return 0;
+  return hourValue * 60 + minuteValue;
 }
 
 function reminderLabel(days) {
