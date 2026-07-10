@@ -32,7 +32,8 @@ const state = {
   calendarDate: new Date(),
   calendarMode: "month",
   dogSearch: "",
-  serviceHistoryDogId: ""
+  serviceHistoryDogId: "",
+  serviceHistoryDogQuery: ""
 };
 
 const weekdayShort = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
@@ -110,6 +111,7 @@ async function boot() {
     }
     await loadData();
     renderShell();
+    checkUpdatesInBackground();
     promptDefaultPasswordChange();
   } catch {
     renderLogin();
@@ -317,6 +319,11 @@ function sidebarOrder(order = state.navigation?.sidebarOrder) {
 
 function renderNavSymbol(iconName) {
   return `<span class="nav-symbol" aria-hidden="true">${NAV_ICONS[iconName] || NAV_ICONS.calendar}</span>`;
+}
+
+function renderNavLabel(item) {
+  const hasUpdate = item.id === "settings" && state.updateCheck?.updateAvailable;
+  return `<span class="nav-label">${escapeHtml(item.label)}${hasUpdate ? `<i class="nav-update-badge" title="Update disponibile" aria-label="Update disponibile"></i>` : ""}</span>`;
 }
 
 function loginUserFromUser(user) {
@@ -548,6 +555,7 @@ function renderLogin(error = "") {
       state.initialAccessHint = false;
       await loadData();
       renderShell();
+      checkUpdatesInBackground();
       connectLiveUpdates();
       notify("Accesso effettuato");
       promptDefaultPasswordChange();
@@ -619,6 +627,7 @@ function openDefaultPasswordDialog() {
       state.me = response.user;
       await loadData();
       renderShell();
+      checkUpdatesInBackground();
       connectLiveUpdates();
       notify("Password admin aggiornata");
     }
@@ -650,7 +659,7 @@ function renderShell() {
               (item) => `
                 <button class="nav-item ${state.view === item.id ? "active" : ""}" data-nav="${item.id}" type="button">
                   ${renderNavSymbol(item.icon)}
-                  <span>${item.label}</span>
+                  ${renderNavLabel(item)}
                 </button>
               `
             )
@@ -668,7 +677,7 @@ function renderShell() {
             state.me.role === "admin"
               ? `<button class="nav-item nav-item-bottom ${state.view === "settings" ? "active" : ""}" data-nav="settings" type="button">
                   ${renderNavSymbol("settings")}
-                  <span>Impostazioni</span>
+                  ${renderNavLabel({ id: "settings", label: "Impostazioni" })}
                 </button>`
               : ""
           }
@@ -718,6 +727,8 @@ async function logout() {
   state.version = null;
   state.updateCheck = null;
   state.updateCheckLoading = false;
+  state.serviceHistoryDogId = "";
+  state.serviceHistoryDogQuery = "";
   state.eventSource?.close();
   state.eventSource = null;
   await loadPublicSettings();
@@ -1187,6 +1198,7 @@ function renderServiceHistory() {
   const photo = selectedDog?.photoUrl
     ? `<img src="${escapeAttr(selectedDog.photoUrl)}" alt="Foto di ${escapeAttr(selectedDog.dogName)}" />`
     : `<span>${escapeHtml(initials(selectedDog?.dogName))}</span>`;
+  const searchValue = state.serviceHistoryDogQuery || serviceHistoryDogLabel(selectedDog);
   return `
     <div class="topbar">
       <div class="page-title">
@@ -1196,11 +1208,12 @@ function renderServiceHistory() {
     </div>
     <section class="panel service-history-filter">
       <label>Animale
-        <select id="serviceHistoryDog">
+        <input id="serviceHistoryDogSearch" type="search" list="serviceHistoryDogOptions" value="${escapeAttr(searchValue)}" placeholder="Cerca animale" autocomplete="off" />
+        <datalist id="serviceHistoryDogOptions">
           ${state.dogs
-            .map((dog) => `<option value="${dog.id}" ${dog.id === selectedDog?.id ? "selected" : ""}>${escapeHtml(dog.dogName)}${dog.ownerName ? ` - ${escapeHtml(dog.ownerName)}` : ""}</option>`)
+            .map((dog) => `<option value="${escapeAttr(serviceHistoryDogLabel(dog))}"></option>`)
             .join("")}
-        </select>
+        </datalist>
       </label>
       <button class="btn secondary" type="button" data-service-history-open-dog="${escapeAttr(selectedDog?.id || "")}">Apri scheda</button>
     </section>
@@ -1263,10 +1276,31 @@ function renderServiceHistoryCard(appointment) {
 }
 
 function bindServiceHistory() {
-  const select = document.getElementById("serviceHistoryDog");
-  select?.addEventListener("change", () => {
-    state.serviceHistoryDogId = select.value;
+  const searchInput = document.getElementById("serviceHistoryDogSearch");
+  const applySearch = () => {
+    const dog = serviceHistoryDogFromSearch(searchInput.value);
+    if (!dog) {
+      notify("Seleziona un animale dall'elenco");
+      return;
+    }
+    state.serviceHistoryDogId = dog.id;
+    state.serviceHistoryDogQuery = serviceHistoryDogLabel(dog);
     renderView();
+  };
+  searchInput?.addEventListener("input", () => {
+    state.serviceHistoryDogQuery = searchInput.value;
+    const dog = serviceHistoryDogFromSearch(searchInput.value, true);
+    if (dog && dog.id !== state.serviceHistoryDogId) {
+      state.serviceHistoryDogId = dog.id;
+      state.serviceHistoryDogQuery = serviceHistoryDogLabel(dog);
+      renderView();
+    }
+  });
+  searchInput?.addEventListener("change", applySearch);
+  searchInput?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    applySearch();
   });
   document.querySelector("[data-service-history-open-dog]")?.addEventListener("click", (event) => {
     const dog = state.dogs.find((item) => item.id === event.currentTarget.dataset.serviceHistoryOpenDog);
@@ -2013,6 +2047,7 @@ function bindSettings() {
 
 async function refreshUpdateCheck(showToast = false) {
   const statusBox = document.getElementById("updateStatus");
+  const previousAvailable = Boolean(state.updateCheck?.updateAvailable);
   state.updateCheckLoading = true;
   if (statusBox) statusBox.innerHTML = renderUpdateStatus(state.updateCheck);
   try {
@@ -2024,8 +2059,19 @@ async function refreshUpdateCheck(showToast = false) {
     if (showToast) notify(err.message);
   } finally {
     state.updateCheckLoading = false;
-    if (state.view === "settings") renderView();
+    const currentAvailable = Boolean(state.updateCheck?.updateAvailable);
+    if (state.view === "settings") renderShell();
+    else if (state.me?.role === "admin" && currentAvailable !== previousAvailable) renderShell();
   }
+}
+
+function checkUpdatesInBackground() {
+  if (state.me?.role !== "admin" || state.updateCheck || state.updateCheckLoading) return;
+  setTimeout(() => {
+    if (state.me?.role === "admin" && !state.updateCheck && !state.updateCheckLoading) {
+      refreshUpdateCheck(false);
+    }
+  }, 700);
 }
 
 function bindThemePreset(form) {
@@ -3060,6 +3106,25 @@ function selectedServiceHistoryDog() {
   const selected = state.dogs.find((dog) => dog.id === state.serviceHistoryDogId) || state.dogs[0];
   state.serviceHistoryDogId = selected.id;
   return selected;
+}
+
+function serviceHistoryDogLabel(dog = {}) {
+  return [dog.dogName || "Senza nome", dog.ownerName].filter(Boolean).join(" - ");
+}
+
+function serviceHistoryDogFromSearch(value, exactOnly = false) {
+  const query = lowerText(value);
+  if (!query) return null;
+  const exact = state.dogs.find((dog) => lowerText(serviceHistoryDogLabel(dog)) === query);
+  if (exact || exactOnly) return exact || null;
+  const startsWith = state.dogs.filter((dog) =>
+    [dog.dogName, dog.ownerName, dog.contact, dog.breed, serviceHistoryDogLabel(dog)].some((field) => lowerText(field).startsWith(query))
+  );
+  if (startsWith.length === 1) return startsWith[0];
+  const contains = state.dogs.filter((dog) =>
+    [dog.dogName, dog.ownerName, dog.contact, dog.breed, serviceHistoryDogLabel(dog)].some((field) => lowerText(field).includes(query))
+  );
+  return contains.length === 1 ? contains[0] : null;
 }
 
 function appointmentPhotoCount(appointment) {
