@@ -2888,6 +2888,10 @@ label {
 }
 
 @media (max-width: 1024px) {
+  body {
+    font-size: 15px;
+  }
+
   .shell {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
@@ -2904,10 +2908,10 @@ label {
     align-self: start;
     top: 0;
     display: grid;
-    grid-template-columns: minmax(190px, auto) minmax(0, 1fr) auto;
+    grid-template-columns: minmax(138px, auto) minmax(0, 1fr) auto;
     align-items: center;
-    gap: 12px;
-    padding: 12px;
+    gap: 8px;
+    padding: 8px 10px;
   }
 
   .sidebar-head {
@@ -2915,25 +2919,72 @@ label {
     border-bottom: 0;
   }
 
-  .nav {
-    display: flex;
-    overflow-x: auto;
-    gap: 6px;
+  .sidebar-logo {
+    width: 42px;
+    height: 42px;
   }
 
-  .nav-item {
-    grid-template-columns: auto;
+  .sidebar-title strong {
+    font-size: 0.92rem;
+  }
+
+  .sidebar-title span {
+    font-size: 0.72rem;
+  }
+
+  .nav {
+    min-width: 0;
+    display: flex;
+    overflow-x: auto;
+    gap: 5px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-item,
+  .nav-item-bottom {
+    flex: 0 0 72px;
+    width: 72px;
+    min-width: 72px;
+    min-height: 58px;
+    grid-template-columns: 1fr;
     justify-items: center;
-    min-width: 92px;
-    padding: 9px 10px;
+    align-content: center;
+    gap: 4px;
+    padding: 5px 4px;
+    border-radius: 10px;
+    font-size: 0.66rem;
+    line-height: 1.1;
   }
 
   .nav-symbol {
-    display: none;
+    width: 30px;
+    height: 30px;
+    display: grid;
+  }
+
+  .nav-symbol svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .nav-label,
+  .nav-item span:last-child {
+    max-width: 100%;
+    justify-content: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .sidebar-bottom {
     margin-top: 0;
+    display: flex;
+    gap: 5px;
   }
 
   .user-card {
@@ -2942,7 +2993,68 @@ label {
 
   .main {
     grid-column: 1;
-    padding: 18px;
+    padding: 14px;
+  }
+
+  .topbar {
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .page-title h1 {
+    font-size: 1.35rem;
+  }
+
+  .page-title p {
+    margin-top: 4px;
+    line-height: 1.35;
+  }
+
+  .toolbar {
+    margin: 12px 0;
+  }
+
+  .btn {
+    min-height: 38px;
+    padding: 8px 12px;
+  }
+
+  .panel,
+  .settings-panel {
+    padding: 14px;
+  }
+
+  .content-grid {
+    gap: 14px;
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    gap: 9px;
+  }
+
+  .metric {
+    padding: 12px;
+  }
+
+  .metric strong {
+    font-size: 1.45rem;
+  }
+
+  .day-cell {
+    min-height: 118px;
+    padding: 7px;
+    gap: 5px;
+  }
+
+  .calendar-weekdays div {
+    padding: 8px;
+    font-size: 0.72rem;
+  }
+
+  .dog-mini-grid {
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: 12px;
   }
 
   .settings-grid {
