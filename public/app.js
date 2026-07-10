@@ -31,7 +31,8 @@ const state = {
   view: new URLSearchParams(window.location.search).get("view") || "calendar",
   calendarDate: new Date(),
   calendarMode: "month",
-  dogSearch: ""
+  dogSearch: "",
+  serviceHistoryDogId: ""
 };
 
 const weekdayShort = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
@@ -42,6 +43,7 @@ const NAV_ICONS = {
   calendar: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="3"></rect><path d="M8 3v4M16 3v4M4 10h16"></path><path d="M8 14h2M12 14h2M16 14h2M8 17h2M12 17h2"></path></svg>`,
   dashboard: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13a8 8 0 0 1 16 0"></path><path d="M12 13l4-5"></path><path d="M7 17h10"></path><path d="M6 13h2M16 13h2"></path></svg>`,
   dogs: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5z"></path><path d="M9.4 14.2c.7-1.6 4.5-1.6 5.2 0 .6 1.4-.8 2.4-2.6 2.4s-3.2-1-2.6-2.4Z"></path><circle cx="8.7" cy="10" r="1.3"></circle><circle cx="15.3" cy="10" r="1.3"></circle><circle cx="11" cy="8.2" r="1.2"></circle><circle cx="13" cy="8.2" r="1.2"></circle></svg>`,
+  serviceHistory: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5z"></path><path d="M8 9h8M8 13h5M8 17h8"></path><path d="M17 3v4M7 3v4"></path></svg>`,
   users: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"></circle><path d="M3.8 18c.8-3 3-4.5 5.2-4.5s4.4 1.5 5.2 4.5"></path><circle cx="16.8" cy="9" r="2.3"></circle><path d="M14.8 14.1c2.5.2 4.2 1.5 5 3.9"></path></svg>`,
   settings: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 3v3M12 18v3M4.2 7.5l2.6 1.5M17.2 15l2.6 1.5M4.2 16.5 6.8 15M17.2 9l2.6-1.5"></path></svg>`,
   logout: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H5v16h4"></path><path d="M14 8l4 4-4 4"></path><path d="M18 12H9"></path></svg>`
@@ -50,9 +52,10 @@ const SIDEBAR_DEFINITIONS = {
   calendar: { id: "calendar", label: "Calendario", icon: "calendar" },
   dashboard: { id: "dashboard", label: "Dashboard", icon: "dashboard" },
   dogs: { id: "dogs", label: "Schede", icon: "dogs" },
+  serviceHistory: { id: "serviceHistory", label: "Storico servizi", icon: "serviceHistory" },
   users: { id: "users", label: "Utenti", icon: "users", adminOnly: true }
 };
-const DEFAULT_SIDEBAR_ORDER = ["calendar", "dashboard", "dogs", "users"];
+const DEFAULT_SIDEBAR_ORDER = ["calendar", "dashboard", "dogs", "serviceHistory", "users"];
 const THEME_PRESETS = {
   light: {
     brand: "#234344",
@@ -83,6 +86,11 @@ window.addEventListener("appinstalled", () => {
   state.deferredInstallPrompt = null;
   renderPwaInstallPrompt();
   notify("App installata");
+});
+
+document.addEventListener("click", handlePhotoZoomClick);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closePhotoLightbox();
 });
 
 boot();
@@ -722,12 +730,14 @@ function renderView() {
   if (state.view === "calendar") main.innerHTML = renderCalendar();
   if (state.view === "dashboard") main.innerHTML = renderDashboard();
   if (state.view === "dogs") main.innerHTML = renderDogs();
+  if (state.view === "serviceHistory") main.innerHTML = renderServiceHistory();
   if (state.view === "users") main.innerHTML = renderUsers();
   if (state.view === "settings") main.innerHTML = renderSettings();
 
   if (state.view === "calendar") bindCalendar();
   if (state.view === "dashboard") bindDashboard();
   if (state.view === "dogs") bindDogs();
+  if (state.view === "serviceHistory") bindServiceHistory();
   if (state.view === "users") bindUsers();
   if (state.view === "settings") bindSettings();
   renderPwaInstallPrompt();
@@ -1154,6 +1164,118 @@ function bindDogs() {
     button.addEventListener("click", () => {
       const dog = state.dogs.find((item) => item.id === button.dataset.dogOpen);
       if (dog) openDogDetailsDialog(dog);
+    });
+  });
+}
+
+function renderServiceHistory() {
+  const selectedDog = selectedServiceHistoryDog();
+  if (!state.dogs.length) {
+    return `
+      <div class="topbar">
+        <div class="page-title">
+          <h1>Storico servizi</h1>
+          <p>Consulta servizi conclusi e foto prima/dopo.</p>
+        </div>
+      </div>
+      <section class="empty-state"><div><h2>Nessuna scheda animale</h2><p>Crea una scheda per iniziare a registrare lo storico servizi.</p></div></section>
+    `;
+  }
+  const history = selectedDog ? dogAppointmentHistory(selectedDog).filter((appointment) => appointment.status === "completato") : [];
+  const photoCount = history.reduce((sum, appointment) => sum + appointmentPhotoCount(appointment), 0);
+  const totalRevenue = history.reduce((sum, appointment) => sum + appointmentRevenue(appointment), 0);
+  const photo = selectedDog?.photoUrl
+    ? `<img src="${escapeAttr(selectedDog.photoUrl)}" alt="Foto di ${escapeAttr(selectedDog.dogName)}" />`
+    : `<span>${escapeHtml(initials(selectedDog?.dogName))}</span>`;
+  return `
+    <div class="topbar">
+      <div class="page-title">
+        <h1>Storico servizi</h1>
+        <p>Seleziona un animale e rivedi tutti i servizi conclusi con foto zoomabili.</p>
+      </div>
+    </div>
+    <section class="panel service-history-filter">
+      <label>Animale
+        <select id="serviceHistoryDog">
+          ${state.dogs
+            .map((dog) => `<option value="${dog.id}" ${dog.id === selectedDog?.id ? "selected" : ""}>${escapeHtml(dog.dogName)}${dog.ownerName ? ` - ${escapeHtml(dog.ownerName)}` : ""}</option>`)
+            .join("")}
+        </select>
+      </label>
+      <button class="btn secondary" type="button" data-service-history-open-dog="${escapeAttr(selectedDog?.id || "")}">Apri scheda</button>
+    </section>
+    <section class="service-history-layout">
+      <aside class="panel service-history-profile">
+        <div class="service-history-photo ${selectedDog && isTopDog(selectedDog) ? "top-client" : ""}">
+          ${photo}${selectedDog && isTopDog(selectedDog) ? `<img class="top-paw" src="/icons/top-client-paw.png" alt="Cliente top" />` : ""}
+        </div>
+        <div>
+          <h2>${escapeHtml(selectedDog?.dogName || "Animale")}</h2>
+          <p>${escapeHtml([selectedDog?.breed, selectedDog?.ownerName].filter(Boolean).join(" - ") || "Scheda animale")}</p>
+        </div>
+        <div class="service-history-metrics">
+          <div><span>Servizi conclusi</span><strong>${history.length}</strong></div>
+          <div><span>Incasso totale</span><strong>${escapeHtml(moneyLabel(totalRevenue))}</strong></div>
+          <div><span>Foto lavoro</span><strong>${photoCount}</strong></div>
+        </div>
+      </aside>
+      <div class="service-history-results">
+        ${
+          history.length
+            ? history.map(renderServiceHistoryCard).join("")
+            : `<section class="empty-history">Nessun servizio concluso per questo animale.</section>`
+        }
+      </div>
+    </section>
+  `;
+}
+
+function renderServiceHistoryCard(appointment) {
+  const serviceRows = appointmentServiceRows(appointment);
+  return `
+    <article class="service-history-card status-${escapeHtml(appointment.status)}">
+      <div class="service-history-card-head">
+        <div>
+          <strong>${escapeHtml(formatShortDate(appointment.date))}</strong>
+          <span>${escapeHtml([appointment.startTime, appointment.endTime].filter(Boolean).join(" - ") || "--:--")}</span>
+        </div>
+        <div class="history-amount">${escapeHtml(moneyLabel(appointment.paidAmount))}</div>
+      </div>
+      <div class="service-lines">
+        ${serviceRows
+          .map(
+            (item) => `
+              <div>
+                <span>${escapeHtml(item.service)}</span>
+                <strong>${escapeHtml(moneyLabel(item.amount))}</strong>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+      ${appointment.notes ? `<p class="service-history-note">${escapeHtml(appointment.notes)}</p>` : ""}
+      ${renderAppointmentGallery(appointment)}
+      <div class="service-history-actions">
+        <button class="btn secondary slim" type="button" data-service-history-edit="${appointment.id}">Modifica servizio</button>
+      </div>
+    </article>
+  `;
+}
+
+function bindServiceHistory() {
+  const select = document.getElementById("serviceHistoryDog");
+  select?.addEventListener("change", () => {
+    state.serviceHistoryDogId = select.value;
+    renderView();
+  });
+  document.querySelector("[data-service-history-open-dog]")?.addEventListener("click", (event) => {
+    const dog = state.dogs.find((item) => item.id === event.currentTarget.dataset.serviceHistoryOpenDog);
+    if (dog) openDogDetailsDialog(dog);
+  });
+  document.querySelectorAll("[data-service-history-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const appointment = state.appointments.find((item) => item.id === button.dataset.serviceHistoryEdit);
+      if (appointment) openAppointmentDialog(appointment);
     });
   });
 }
@@ -2096,7 +2218,7 @@ function renderHistoryAppointment(appointment) {
   const treatment = appointment.treatmentDone || appointment.service || "-";
   const gallery = renderAppointmentGallery(appointment);
   return `
-    <button class="history-item status-${escapeHtml(appointment.status)}" type="button" data-history-appointment="${appointment.id}" aria-label="Modifica appuntamento del ${escapeAttr(formatShortDate(appointment.date))}">
+    <article class="history-item status-${escapeHtml(appointment.status)}">
       <div class="history-main">
         <strong>${escapeHtml(formatShortDate(appointment.date))}</strong>
         <span>${escapeHtml(appointment.startTime || "--:--")} ${appointment.endTime ? `- ${escapeHtml(appointment.endTime)}` : ""}</span>
@@ -2106,9 +2228,9 @@ function renderHistoryAppointment(appointment) {
         <strong>${escapeHtml(treatment)}</strong>
       </div>
       <div class="history-amount">${escapeHtml(moneyLabel(appointment.paidAmount))}</div>
-      <span class="history-edit" aria-hidden="true">&#9998;</span>
+      <button class="history-edit" type="button" data-history-appointment="${appointment.id}" aria-label="Modifica appuntamento del ${escapeAttr(formatShortDate(appointment.date))}">&#9998;</button>
       ${gallery}
-    </button>
+    </article>
   `;
 }
 
@@ -2865,6 +2987,37 @@ function closeModal() {
   modalRoot.innerHTML = "";
 }
 
+function handlePhotoZoomClick(event) {
+  const trigger = event.target.closest("[data-photo-zoom]");
+  if (!trigger) return;
+  event.preventDefault();
+  event.stopPropagation();
+  openPhotoLightbox(trigger.dataset.photoSrc, trigger.dataset.photoTitle || "Foto servizio");
+}
+
+function openPhotoLightbox(src, title = "Foto servizio") {
+  if (!src) return;
+  closePhotoLightbox();
+  const viewer = document.createElement("div");
+  viewer.id = "photoLightbox";
+  viewer.className = "photo-lightbox";
+  viewer.innerHTML = `
+    <div class="photo-lightbox-backdrop" data-photo-close></div>
+    <figure class="photo-lightbox-card" role="dialog" aria-modal="true" aria-label="${escapeAttr(title)}">
+      <button class="modal-close photo-lightbox-close" type="button" data-photo-close aria-label="Chiudi foto">x</button>
+      <img src="${escapeAttr(src)}" alt="${escapeAttr(title)}" />
+      <figcaption>${escapeHtml(title)}</figcaption>
+    </figure>
+  `;
+  document.body.appendChild(viewer);
+  viewer.querySelectorAll("[data-photo-close]").forEach((button) => button.addEventListener("click", closePhotoLightbox));
+  viewer.querySelector(".photo-lightbox-close")?.focus();
+}
+
+function closePhotoLightbox() {
+  document.getElementById("photoLightbox")?.remove();
+}
+
 function confirmAction(message, onConfirm) {
   openModal({
     title: "Conferma",
@@ -2900,6 +3053,32 @@ function dogAppointmentHistory(dog) {
       return lowerText(appointment.dogName) === dogName && (!ownerName || lowerText(appointment.ownerName) === ownerName);
     })
     .sort((a, b) => `${b.date || ""} ${b.startTime || ""}`.localeCompare(`${a.date || ""} ${a.startTime || ""}`));
+}
+
+function selectedServiceHistoryDog() {
+  if (!state.dogs.length) return null;
+  const selected = state.dogs.find((dog) => dog.id === state.serviceHistoryDogId) || state.dogs[0];
+  state.serviceHistoryDogId = selected.id;
+  return selected;
+}
+
+function appointmentPhotoCount(appointment) {
+  return (Array.isArray(appointment.beforePhotos) ? appointment.beforePhotos.length : 0) + (Array.isArray(appointment.afterPhotos) ? appointment.afterPhotos.length : 0);
+}
+
+function appointmentServiceRows(appointment) {
+  if (Array.isArray(appointment?.serviceAmounts) && appointment.serviceAmounts.length) {
+    return appointment.serviceAmounts
+      .map((item) => ({
+        service: String(item?.service || "").trim() || "Servizio",
+        amount: Number(item?.amount || 0)
+      }))
+      .filter((item) => item.service);
+  }
+  const services = normalizeServiceList(appointment?.services?.length ? appointment.services : appointment?.treatmentDone || appointment?.service || "Servizio");
+  const total = Number(appointment?.paidAmount || 0);
+  const share = total > 0 && services.length ? total / services.length : 0;
+  return (services.length ? services : ["Servizio"]).map((service) => ({ service, amount: share }));
 }
 
 function isScheduledAppointment(appointment) {
@@ -3474,7 +3653,13 @@ function renderAppointmentGallery(appointment) {
     photos.length
       ? `<div class="appointment-gallery-group"><span>${escapeHtml(label)}</span>${photos
           .slice(0, 5)
-          .map((src) => `<img src="${escapeAttr(src)}" alt="" />`)
+          .map(
+            (src, index) => `
+              <button class="gallery-thumb" type="button" data-photo-zoom data-photo-src="${escapeAttr(src)}" data-photo-title="${escapeAttr(`${label} - ${formatShortDate(appointment.date)} #${index + 1}`)}" aria-label="Ingrandisci foto ${escapeAttr(label.toLowerCase())}">
+                <img src="${escapeAttr(src)}" alt="" />
+              </button>
+            `
+          )
           .join("")}</div>`
       : "";
   return `<div class="appointment-gallery">${group("Prima", before)}${group("Dopo", after)}</div>`;

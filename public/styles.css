@@ -1365,6 +1365,15 @@ label {
   font-weight: 850;
 }
 
+.gallery-thumb {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  background: transparent;
+}
+
 .appointment-gallery-group img,
 .gallery-preview img {
   width: 42px;
@@ -1372,6 +1381,210 @@ label {
   border-radius: 6px;
   border: 1px solid var(--line);
   object-fit: cover;
+}
+
+.gallery-thumb:hover,
+.gallery-thumb:focus-visible {
+  box-shadow: 0 0 0 3px rgba(35, 67, 68, 0.16);
+}
+
+.service-history-filter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.service-history-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.35fr) minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.service-history-profile {
+  align-content: start;
+  display: grid;
+  gap: 14px;
+}
+
+.service-history-photo {
+  position: relative;
+  width: min(180px, 100%);
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--brand);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
+  font-weight: 900;
+  border: 4px solid var(--blue);
+}
+
+.service-history-photo.top-client {
+  border-color: var(--gold);
+}
+
+.service-history-photo > img:not(.top-paw) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.service-history-profile h2,
+.service-history-profile p {
+  margin: 0;
+}
+
+.service-history-profile p {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.service-history-metrics {
+  display: grid;
+  gap: 8px;
+}
+
+.service-history-metrics div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-soft);
+}
+
+.service-history-metrics span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.service-history-metrics strong {
+  color: var(--brand);
+  font-size: 1.1rem;
+}
+
+.service-history-results {
+  display: grid;
+  gap: 12px;
+}
+
+.service-history-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--green);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.service-history-card-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.service-history-card-head div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.service-history-card-head span,
+.service-history-note {
+  color: var(--muted);
+}
+
+.service-lines {
+  display: grid;
+  gap: 7px;
+}
+
+.service-lines div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: var(--panel-soft);
+}
+
+.service-lines span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+}
+
+.service-lines strong {
+  color: var(--brand);
+  white-space: nowrap;
+}
+
+.service-history-note {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.service-history-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.photo-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.photo-lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 12, 12, 0.76);
+}
+
+.photo-lightbox-card {
+  position: relative;
+  z-index: 1;
+  width: min(980px, 100%);
+  max-height: min(90vh, 920px);
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.photo-lightbox-card img {
+  max-height: calc(90vh - 90px);
+  width: 100%;
+  object-fit: contain;
+  border-radius: 6px;
+  background: #111;
+}
+
+.photo-lightbox-card figcaption {
+  color: var(--muted);
+  font-weight: 850;
+  text-align: center;
+}
+
+.photo-lightbox-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
 }
 
 .empty-history {
@@ -2411,6 +2624,7 @@ label {
 :root[data-theme="dark"] .mobile-agenda-day,
 :root[data-theme="dark"] .table-card,
 :root[data-theme="dark"] .history-item,
+:root[data-theme="dark"] .service-history-card,
 :root[data-theme="dark"] .settings-panel,
 :root[data-theme="dark"] .panel,
 :root[data-theme="dark"] .card,
@@ -2428,6 +2642,8 @@ label {
 :root[data-theme="dark"] .service-selected,
 :root[data-theme="dark"] .service-chip,
 :root[data-theme="dark"] .service-amount-row,
+:root[data-theme="dark"] .service-history-metrics div,
+:root[data-theme="dark"] .service-lines div,
 :root[data-theme="dark"] .update-block,
 :root[data-theme="dark"] .empty-chart,
 :root[data-theme="dark"] .dog-history,
@@ -2454,6 +2670,7 @@ label {
 :root[data-theme="dark"] .week-day,
 :root[data-theme="dark"] .mobile-agenda-day,
 :root[data-theme="dark"] .history-item,
+:root[data-theme="dark"] .service-history-card,
 :root[data-theme="dark"] .detail-item,
 :root[data-theme="dark"] .access-box,
 :root[data-theme="dark"] .field-group,
@@ -2544,6 +2761,11 @@ label {
 :root[data-theme="dark"] .nav-item[data-nav="dogs"] .nav-symbol {
   background: rgba(104, 183, 173, 0.22);
   color: #a8efe4;
+}
+
+:root[data-theme="dark"] .nav-item[data-nav="serviceHistory"] .nav-symbol {
+  background: rgba(122, 92, 168, 0.24);
+  color: #d8c7ff;
 }
 
 :root[data-theme="dark"] .nav-item[data-nav="users"] .nav-symbol {
@@ -2683,7 +2905,8 @@ label {
 
   .dashboard-grid,
   .update-layout,
-  .pie-layout {
+  .pie-layout,
+  .service-history-layout {
     grid-template-columns: 1fr;
   }
 
@@ -2713,7 +2936,8 @@ label {
   }
 
   .metric-grid,
-  .form-grid {
+  .form-grid,
+  .service-history-filter {
     grid-template-columns: 1fr;
   }
 
@@ -2737,6 +2961,12 @@ label {
   .history-item {
     grid-template-columns: 1fr;
     align-items: start;
+  }
+
+  .service-history-card-head,
+  .service-history-actions {
+    display: grid;
+    justify-content: stretch;
   }
 
   .history-amount {
@@ -2873,7 +3103,7 @@ label {
 
   .nav {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(46px, 1fr));
     gap: 4px;
     overflow: visible;
   }
