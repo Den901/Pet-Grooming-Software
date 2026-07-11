@@ -14,6 +14,7 @@
   --danger: #b83e3e;
   --shadow: 0 18px 40px rgba(22, 38, 37, 0.1);
   --radius: 8px;
+  --ui-scale: 1;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--ink);
   background: var(--bg);
@@ -114,6 +115,18 @@ label {
   font-size: 0.76rem;
   font-weight: 600;
   line-height: 1.35;
+}
+
+.scale-field input[type="range"] {
+  height: 30px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--brand);
+}
+
+.scale-field strong {
+  color: var(--ink);
 }
 
 .boot-screen,
@@ -514,6 +527,27 @@ label {
   padding: 26px;
 }
 
+@media (min-width: 1025px) {
+  body {
+    font-size: calc(16px * var(--ui-scale, 1));
+  }
+
+  .shell {
+    grid-template-columns: calc(260px * var(--ui-scale, 1)) minmax(0, 1fr);
+  }
+
+  .sidebar {
+    width: calc(260px * var(--ui-scale, 1));
+    gap: calc(20px * var(--ui-scale, 1));
+    padding: calc(20px * var(--ui-scale, 1)) calc(16px * var(--ui-scale, 1));
+  }
+
+  .main {
+    padding: calc(26px * var(--ui-scale, 1));
+  }
+
+}
+
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -906,6 +940,19 @@ label {
 .week-day h3 {
   margin: 0;
   font-size: 0.95rem;
+}
+
+.day-view {
+  display: grid;
+}
+
+.day-view-card {
+  min-height: 420px;
+}
+
+.day-appointment-list {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: start;
 }
 
 .mobile-agenda {
@@ -2594,6 +2641,12 @@ label {
   border: 1px solid var(--line);
 }
 
+@media (min-width: 1025px) {
+  .modal-card {
+    width: min(calc(780px * var(--ui-scale, 1)), 100%);
+  }
+}
+
 .modal-head,
 .modal-body,
 .modal-actions {
@@ -2629,6 +2682,22 @@ label {
   background: #eef1ed;
   color: var(--ink);
   font-size: 1.2rem;
+}
+
+.modal-close-floating {
+  position: fixed;
+  top: max(18px, calc(env(safe-area-inset-top) + 10px));
+  right: max(18px, calc(env(safe-area-inset-right) + 10px));
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.modal-close-floating:hover {
+  background: rgba(255, 255, 255, 0.94);
 }
 
 .icon-btn {
@@ -2719,6 +2788,15 @@ label {
 :root[data-theme="dark"] .online-pill {
   background: var(--panel-soft);
   color: var(--ink);
+}
+
+:root[data-theme="dark"] .modal-close-floating {
+  background: rgba(18, 29, 32, 0.76);
+  border-color: rgba(238, 247, 243, 0.16);
+}
+
+:root[data-theme="dark"] .modal-close-floating:hover {
+  background: rgba(24, 38, 41, 0.94);
 }
 
 :root[data-theme="dark"] .calendar-grid,
@@ -2896,7 +2974,7 @@ label {
 
 @media (max-width: 1024px) {
   body {
-    font-size: 15px;
+    font-size: calc(15px * var(--ui-scale, 1));
   }
 
   .shell {
@@ -3000,7 +3078,7 @@ label {
 
   .main {
     grid-column: 1;
-    padding: 14px;
+    padding: calc(14px * var(--ui-scale, 1));
   }
 
   .topbar {
@@ -3222,6 +3300,10 @@ label {
     overscroll-behavior-y: none;
   }
 
+  body {
+    font-size: 15px;
+  }
+
   input,
   select,
   textarea {
@@ -3400,6 +3482,11 @@ label {
     place-items: center;
     padding: 10px 10px calc(92px + env(safe-area-inset-bottom));
     overflow-y: auto;
+  }
+
+  .modal-close-floating {
+    top: max(10px, calc(env(safe-area-inset-top) + 8px));
+    right: max(10px, calc(env(safe-area-inset-right) + 8px));
   }
 
   .modal-card {

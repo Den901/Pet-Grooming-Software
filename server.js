@@ -21,7 +21,7 @@ const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin123";
 const SIDEBAR_ITEM_IDS = ["calendar", "dashboard", "dogs", "serviceHistory", "users"];
 const APP_ID = "pet-grooming-software";
-const APP_VERSION = packageInfo.version || "0.0.1-beta.19";
+const APP_VERSION = packageInfo.version || "0.0.1-beta.20";
 const UPDATE_FORMAT = "PET_GROOMING_SOFTWARE_UPDATE";
 const UPDATE_FORMAT_VERSION = 1;
 const UPDATE_EXTENSION = ".pgs-update";
@@ -60,6 +60,7 @@ function defaultSettings() {
       email: "",
       address: "",
       logoUrl: "",
+      uiScale: 100,
       loginBackground: {
         mode: "pattern",
         solidColor: "#f6f3ed",
@@ -136,6 +137,7 @@ function ensureSettingsShape(settings = {}) {
       ...defaults.branding,
       ...(settings.branding || {}),
       theme: ["light", "dark", "custom"].includes(settings.branding?.theme) ? settings.branding.theme : defaults.branding.theme,
+      uiScale: cleanUiScale(settings.branding?.uiScale, defaults.branding.uiScale),
       loginBackground,
       colors
     },
@@ -412,6 +414,11 @@ function cleanNumber(value, fallback = 0) {
   return Number.isFinite(number) && number >= 0 ? number : fallback;
 }
 
+function cleanUiScale(value, fallback = 100) {
+  const number = cleanNumber(value, fallback);
+  return Math.min(105, Math.max(85, Math.round(number / 5) * 5));
+}
+
 function hasField(payload, key) {
   return Object.prototype.hasOwnProperty.call(payload || {}, key);
 }
@@ -482,6 +489,7 @@ function publicBrandingSettings(db) {
     email: cleanString(branding.email),
     address: cleanString(branding.address),
     logoUrl: cleanString(branding.logoUrl),
+    uiScale: cleanUiScale(branding.uiScale, 100),
     loginBackground: {
       mode: ["pattern", "solid", "gradient", "image"].includes(branding.loginBackground?.mode) ? branding.loginBackground.mode : "pattern",
       solidColor: cleanHexColor(branding.loginBackground?.solidColor, "#f6f3ed"),
@@ -1016,6 +1024,7 @@ function maybeCreateDogFromAppointment(payload, db) {
     contact,
     estimatedMinutes: 0,
     contactMissing: booleanField(payload, "contactMissing", !contact),
+    breed: cleanString(payload.breed),
     color: cleanString(payload.color),
     sex: cleanString(payload.sex),
     imageConsent: cleanString(payload.imageConsent),
@@ -1302,6 +1311,7 @@ async function handleApi(req, res, url) {
           email: cleanString(body.email),
           address: cleanString(body.address),
           logoUrl,
+          uiScale: cleanUiScale(body.uiScale, current.uiScale || 100),
           loginBackground: {
             mode: ["pattern", "solid", "gradient", "image"].includes(requestedLoginBackground.mode)
               ? requestedLoginBackground.mode

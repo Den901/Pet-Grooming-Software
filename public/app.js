@@ -252,6 +252,7 @@ function getBranding() {
     email: "",
     address: "",
     logoUrl: "",
+    uiScale: 100,
     loginBackground: {
       mode: "pattern",
       solidColor: "#f6f3ed",
@@ -271,6 +272,7 @@ function getBranding() {
     },
     ...(state.branding || {}),
     theme: ["light", "dark", "custom"].includes(state.branding?.theme) ? state.branding.theme : "light",
+    uiScale: normalizeUiScale(state.branding?.uiScale ?? 100),
     loginBackground: {
       mode: "pattern",
       solidColor: "#f6f3ed",
@@ -324,6 +326,12 @@ function renderNavSymbol(iconName) {
   return `<span class="nav-symbol" aria-hidden="true">${NAV_ICONS[iconName] || NAV_ICONS.calendar}</span>`;
 }
 
+function normalizeUiScale(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 100;
+  return Math.min(105, Math.max(85, Math.round(number / 5) * 5));
+}
+
 function renderNavLabel(item) {
   const hasUpdate = item.id === "settings" && state.updateCheck?.updateAvailable;
   return `<span class="nav-label">${escapeHtml(item.label)}${hasUpdate ? `<i class="nav-update-badge" title="Update disponibile" aria-label="Update disponibile"></i>` : ""}</span>`;
@@ -357,12 +365,15 @@ function applyBranding() {
     "--muted": theme === "dark" ? "#a5b6b1" : "#63716f",
     "--line": theme === "dark" ? "#2b3d42" : "#ded9cf",
     "--shadow": theme === "dark" ? "0 18px 40px rgba(0, 0, 0, 0.34)" : "0 18px 40px rgba(22, 38, 37, 0.1)",
+    "--ui-scale": String(normalizeUiScale(branding.uiScale) / 100),
     "--login-background": loginBackground.background,
     "--login-background-size": loginBackground.size,
     "--login-background-position": loginBackground.position
   };
   for (const [key, value] of Object.entries(variables)) {
-    if (key.startsWith("--login-") || key === "--shadow" || /^#[0-9a-f]{6}$/i.test(value)) document.documentElement.style.setProperty(key, value);
+    if (key === "--ui-scale" || key.startsWith("--login-") || key === "--shadow" || /^#[0-9a-f]{6}$/i.test(value)) {
+      document.documentElement.style.setProperty(key, value);
+    }
   }
 }
 
@@ -837,7 +848,7 @@ function renderCalendar() {
     <div class="topbar">
       <div class="page-title">
         <h1>Calendario</h1>
-        <p>${state.calendarMode === "month" ? capitalize(monthFormatter.format(state.calendarDate)) : weekTitle(state.calendarDate)}</p>
+        <p>${calendarTitle()}</p>
       </div>
       <button class="btn" type="button" id="newAppointmentBtn">Nuovo appuntamento</button>
     </div>
@@ -853,12 +864,25 @@ function renderCalendar() {
         <button class="btn secondary" type="button" id="nextPeriod">Avanti</button>
       </div>
       <div class="segmented" role="group" aria-label="Vista calendario">
-        <button type="button" data-calendar-mode="month" class="${state.calendarMode === "month" ? "active" : ""}">Mese</button>
+        <button type="button" data-calendar-mode="day" class="${state.calendarMode === "day" ? "active" : ""}">Giorno</button>
         <button type="button" data-calendar-mode="week" class="${state.calendarMode === "week" ? "active" : ""}">Settimana</button>
+        <button type="button" data-calendar-mode="month" class="${state.calendarMode === "month" ? "active" : ""}">Mese</button>
       </div>
     </div>
-    ${state.calendarMode === "month" ? renderMonthCalendar() : renderWeekCalendar()}
+    ${renderCalendarView()}
   `;
+}
+
+function calendarTitle() {
+  if (state.calendarMode === "month") return capitalize(monthFormatter.format(state.calendarDate));
+  if (state.calendarMode === "week") return weekTitle(state.calendarDate);
+  return capitalize(formatter.format(state.calendarDate));
+}
+
+function renderCalendarView() {
+  if (state.calendarMode === "month") return renderMonthCalendar();
+  if (state.calendarMode === "week") return renderWeekCalendar();
+  return renderDayCalendar();
 }
 
 function renderMonthCalendar() {
@@ -918,14 +942,37 @@ function renderWeekCalendar() {
   `;
 }
 
+function renderDayCalendar() {
+  const day = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), state.calendarDate.getDate());
+  const iso = toISODate(day);
+  const dayAppointments = appointmentsForDate(iso);
+  return `
+    <section class="day-view calendar-desktop">
+      <div class="week-day day-view-card ${iso === todayISO() ? "today" : ""}">
+        <div class="day-head">
+          <h3>${capitalize(formatter.format(day))}</h3>
+          <button class="add-day" type="button" title="Aggiungi appuntamento" data-day-add="${iso}">+</button>
+        </div>
+        <div class="appointment-list day-appointment-list">
+          ${dayAppointments.length ? dayAppointments.map(renderAppointmentPill).join("") : `<span class="muted">Nessun appuntamento</span>`}
+        </div>
+      </div>
+    </section>
+    ${renderMobileCalendarList()}
+  `;
+}
+
 function renderMobileCalendarList() {
-  const days =
-    state.calendarMode === "month"
-      ? Array.from(
-          { length: new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() + 1, 0).getDate() },
-          (_, index) => new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), index + 1)
-        )
-      : Array.from({ length: 7 }, (_, index) => addDays(startOfWeek(state.calendarDate), index));
+  let days = [new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), state.calendarDate.getDate())];
+  if (state.calendarMode === "month") {
+    days = Array.from(
+      { length: new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() + 1, 0).getDate() },
+      (_, index) => new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), index + 1)
+    );
+  }
+  if (state.calendarMode === "week") {
+    days = Array.from({ length: 7 }, (_, index) => addDays(startOfWeek(state.calendarDate), index));
+  }
   return `
     <section class="mobile-agenda" aria-label="Agenda mobile">
       ${days.map(renderMobileAgendaDay).join("")}
@@ -993,17 +1040,11 @@ function renderAppointmentPill(appointment) {
 function bindCalendar() {
   document.getElementById("newAppointmentBtn").addEventListener("click", () => openAppointmentDialog({ date: todayISO() }));
   document.getElementById("prevPeriod").addEventListener("click", () => {
-    state.calendarDate =
-      state.calendarMode === "month"
-        ? new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() - 1, 1)
-        : addDays(state.calendarDate, -7);
+    state.calendarDate = moveCalendarDate(-1);
     renderView();
   });
   document.getElementById("nextPeriod").addEventListener("click", () => {
-    state.calendarDate =
-      state.calendarMode === "month"
-        ? new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() + 1, 1)
-        : addDays(state.calendarDate, 7);
+    state.calendarDate = moveCalendarDate(1);
     renderView();
   });
   document.getElementById("todayBtn").addEventListener("click", () => {
@@ -1032,6 +1073,14 @@ function bindCalendar() {
       openAppointmentDialog(appointment, { completionMode: true });
     });
   });
+}
+
+function moveCalendarDate(direction) {
+  if (state.calendarMode === "month") {
+    return new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() + direction, 1);
+  }
+  if (state.calendarMode === "week") return addDays(state.calendarDate, direction * 7);
+  return addDays(state.calendarDate, direction);
 }
 
 function renderDashboard() {
@@ -1429,6 +1478,10 @@ function renderSettings() {
               <option value="custom" ${branding.theme === "custom" ? "selected" : ""}>Personalizzato</option>
             </select>
           </label>
+          <label class="scale-field">Dimensione desktop/tablet
+            <input name="uiScale" type="range" min="85" max="105" step="5" value="${escapeAttr(normalizeUiScale(branding.uiScale))}" data-ui-scale-range />
+            <small class="field-hint"><strong data-ui-scale-value>${escapeHtml(`${normalizeUiScale(branding.uiScale)}%`)}</strong></small>
+          </label>
           <label>Logo
             <input name="logo" type="file" accept="image/png,image/jpeg,image/webp" />
           </label>
@@ -1781,6 +1834,7 @@ function syncSidebarOrderButtons(list) {
 function bindSettings() {
   bindThemePreset(document.getElementById("brandingForm"));
   bindLoginBackgroundMode(document.getElementById("brandingForm"));
+  bindUiScaleRange(document.getElementById("brandingForm"));
 
   document.getElementById("brandingForm").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1797,6 +1851,7 @@ function bindSettings() {
       email: data.get("email"),
       address: data.get("address"),
       theme: data.get("theme"),
+      uiScale: normalizeUiScale(data.get("uiScale")),
       clearLogo: data.get("clearLogo") === "on",
       clearLoginBackgroundImage: data.get("clearLoginBackgroundImage") === "on",
       loginBackground: {
@@ -2110,6 +2165,19 @@ function bindLoginBackgroundMode(form) {
     });
   };
   modeSelect.addEventListener("change", sync);
+  sync();
+}
+
+function bindUiScaleRange(form) {
+  const range = form?.querySelector("[data-ui-scale-range]");
+  const value = form?.querySelector("[data-ui-scale-value]");
+  if (!range || !value) return;
+  const sync = () => {
+    const scale = normalizeUiScale(range.value);
+    value.textContent = `${scale}%`;
+    document.documentElement.style.setProperty("--ui-scale", String(scale / 100));
+  };
+  range.addEventListener("input", sync);
   sync();
 }
 
@@ -2720,6 +2788,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
                   <input name="contactMissing" type="checkbox" />
                   Numero non presente
                 </label>
+                ${renderBreedField({}, animal)}
                 ${renderColorField({}, animal, false, true)}
                 <fieldset class="field-group compact">
                   <legend>Sesso cane</legend>
@@ -2858,6 +2927,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
       if (!services.length) services.push("Toelettatura");
       payload.services = services;
       payload.service = services.join(", ");
+      payload.breed = selectedChoiceValue(formData, "breed");
       payload.color = selectedChoiceValue(formData, "color");
       payload.createDogProfile = formData.get("createDogProfile") === "on";
       if (completionMode) payload.status = "completato";
@@ -2974,13 +3044,13 @@ function openModal({
 }) {
   modalRoot.innerHTML = `
     <div class="modal-backdrop" role="presentation">
+      ${preventClose ? "" : `<button class="modal-close modal-close-floating" type="button" data-close aria-label="Chiudi">&times;</button>`}
       <form class="modal-card" role="dialog" aria-modal="true">
         <div class="modal-head">
           <div class="modal-title-row">
             <h2>${escapeHtml(title)}</h2>
             ${headerAction}
           </div>
-          ${preventClose ? "" : `<button class="modal-close" type="button" data-close aria-label="Chiudi">x</button>`}
         </div>
         <div class="modal-body">${content}</div>
         ${
