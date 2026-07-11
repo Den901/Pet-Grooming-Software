@@ -900,7 +900,7 @@ function renderMonthCalendar() {
         <div class="day-head">
           <button class="day-open-button" type="button" data-open-day="${iso}" title="Apri giornata ${escapeAttr(formatter.format(cursor))}">
             <span class="day-number">${cursor.getDate()}</span>
-            <span class="day-open-chevron" aria-hidden="true">&gt;</span>
+            <span class="day-open-icon" aria-hidden="true">${NAV_ICONS.calendar}</span>
           </button>
         </div>
         <div class="appointment-list">
@@ -933,7 +933,7 @@ function renderWeekCalendar() {
               <div class="day-head">
                 <button class="day-open-button week-day-open" type="button" data-open-day="${iso}" title="Apri giornata ${escapeAttr(formatter.format(day))}">
                   <span class="week-day-title">${capitalize(formatter.format(day))}</span>
-                  <span class="day-open-chevron" aria-hidden="true">&gt;</span>
+                  <span class="day-open-icon" aria-hidden="true">${NAV_ICONS.calendar}</span>
                 </button>
               </div>
               <div class="appointment-list">
@@ -1001,14 +1001,27 @@ function renderDayPlannerAppointment(appointment, planner) {
   const end = clampNumber(rawEnd ?? start + 60, start + 30, planner.end);
   const top = percentWithin(start, planner);
   const height = Math.max(6, ((end - start) / (planner.end - planner.start)) * 100);
+  const dogName = appointment.dogName || "Senza nome";
+  const timeRange = `${formatPlannerTime(start)}${rawEnd ? ` - ${formatPlannerTime(end)}` : ""}`;
   const services = appointment.services?.length ? appointment.services.join(", ") : appointment.service || statusLabel(appointment.status);
+  const expectedTime = appointmentPlannerDurationLabel(appointment, start, end, rawEnd !== null);
+  const details = [services, `Tempo ${expectedTime}`].filter(Boolean).join(" · ");
   return `
-    <button class="day-planner-appointment status-${escapeAttr(appointment.status)}" type="button" data-appointment-id="${escapeAttr(appointment.id)}" style="top: ${escapeAttr(top)}%; height: ${escapeAttr(height)}%;">
-      <span>${escapeHtml(formatPlannerTime(start))}${rawEnd ? ` - ${escapeHtml(formatPlannerTime(end))}` : ""}</span>
-      <strong>${escapeHtml(appointment.dogName || "Senza nome")}</strong>
-      <small>${escapeHtml(services)}</small>
+    <button class="day-planner-appointment status-${escapeAttr(appointment.status)}" type="button" data-appointment-id="${escapeAttr(appointment.id)}" title="${escapeAttr(`${timeRange} ${dogName} ${details}`)}" style="top: ${escapeAttr(top)}%; height: ${escapeAttr(height)}%;">
+      <span class="planner-time">${escapeHtml(timeRange)}</span>
+      <span class="planner-copy">
+        <strong>${escapeHtml(dogName)}</strong>
+        <small>${escapeHtml(details)}</small>
+      </span>
     </button>
   `;
+}
+
+function appointmentPlannerDurationLabel(appointment, start, end, hasEndTime) {
+  const dog = appointment.dogId ? state.dogs.find((item) => item.id === appointment.dogId) : null;
+  const estimatedMinutes = Number(dog?.estimatedMinutes || 0);
+  const scheduledMinutes = hasEndTime ? Math.max(0, end - start) : 0;
+  return durationLabel(scheduledMinutes || estimatedMinutes || 60);
 }
 
 function dayPlannerBounds(appointments, iso) {

@@ -1,0 +1,13 @@
+{
+  "format": "PET_GROOMING_SOFTWARE_UPDATE_MANIFEST",
+  "formatVersion": 1,
+  "app": "pet-grooming-software",
+  "version": "0.0.1-beta.23",
+  "releaseLabel": "0.0.1 beta 23",
+  "createdAt": "2026-07-11T12:34:02.252Z",
+  "packageName": "Pet-Grooming-Software-0.0.1-beta.23.pgs-update",
+  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v0.0.1-beta.23/Pet-Grooming-Software-0.0.1-beta.23.pgs-update",
+  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v0.0.1-beta.23",
+  "notes": "Groomly 0.0.1 beta 23",
+  "changelog": "Planning giorno: ora, nome cane, servizi e tempo previsto sempre visibili. Mobile/PWA: corrette sovrapposizioni nel popup giornata. Tema: il pulsante + segue il colore principale scelto ed e centrato. Calendario: i giorni cliccabili usano icona calendario al posto del simbolo >."
+}

@@ -907,25 +907,38 @@ label {
   color: var(--brand);
 }
 
-.day-open-chevron {
-  width: 14px;
-  height: 14px;
+.day-open-icon {
+  width: 18px;
+  height: 18px;
   display: grid;
   place-items: center;
   border-radius: 50%;
   background: rgba(47, 122, 101, 0.12);
   color: var(--brand);
-  font-weight: 900;
-  line-height: 1;
+  flex: 0 0 18px;
+}
+
+.day-open-icon svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .add-day {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
   border-radius: 50%;
   background: #edf4f1;
   color: var(--brand);
   font-weight: 900;
+  line-height: 1;
+  padding: 0;
 }
 
 .appointment-list {
@@ -1128,26 +1141,28 @@ label {
   left: 10px;
   right: 10px;
   z-index: 2;
-  min-height: 44px;
+  min-height: 42px;
   display: grid;
-  align-content: start;
-  gap: 2px;
-  padding: 8px 10px;
+  grid-template-columns: minmax(54px, max-content) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
   border: 1px solid rgba(47, 122, 101, 0.22);
   border-left: 4px solid var(--green);
   border-radius: 8px;
   background: #edf4f1;
   color: var(--ink);
   text-align: left;
+  overflow: hidden;
   box-shadow: 0 8px 18px rgba(22, 38, 37, 0.08);
 }
 
 .day-dialog-add,
 .day-view-card > .day-head .add-day,
 .mobile-day-add {
-  background: var(--accent);
+  background: var(--brand);
   color: #fff;
-  box-shadow: 0 8px 16px rgba(207, 97, 85, 0.24);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.18);
 }
 
 .mobile-day-add {
@@ -1156,23 +1171,36 @@ label {
   flex: 0 0 34px;
 }
 
-.day-planner-appointment span {
+.day-planner-appointment .planner-time {
   color: var(--green);
   font-size: 0.76rem;
   font-weight: 900;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
-.day-planner-appointment strong,
-.day-planner-appointment small {
+.day-planner-appointment .planner-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+  line-height: 1.15;
+}
+
+.day-planner-appointment .planner-copy strong,
+.day-planner-appointment .planner-copy small {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.day-planner-appointment small {
+.day-planner-appointment .planner-copy strong {
+  font-size: 0.86rem;
+}
+
+.day-planner-appointment .planner-copy small {
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 750;
 }
 
@@ -3094,7 +3122,7 @@ label {
 :root[data-theme="dark"] .day-dialog-add,
 :root[data-theme="dark"] .day-view-card > .day-head .add-day,
 :root[data-theme="dark"] .mobile-day-add {
-  background: var(--accent);
+  background: var(--brand);
   color: #fff;
 }
 
@@ -3751,6 +3779,47 @@ label {
   .mobile-agenda {
     display: grid;
     gap: 10px;
+  }
+
+  .day-dialog {
+    gap: 10px;
+  }
+
+  .day-dialog-summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .day-planner {
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .day-planner-scale,
+  .day-planner-body {
+    min-height: calc(var(--planner-hours, 13) * 48px);
+  }
+
+  .day-planner-appointment {
+    left: 8px;
+    right: 8px;
+    min-height: 40px;
+    grid-template-columns: 50px minmax(0, 1fr);
+    gap: 6px;
+    padding: 5px 7px;
+  }
+
+  .day-planner-appointment .planner-time {
+    font-size: 0.72rem;
+  }
+
+  .day-planner-appointment .planner-copy strong {
+    font-size: 0.82rem;
+  }
+
+  .day-planner-appointment .planner-copy small {
+    font-size: 0.68rem;
   }
 
   .panel-heading-row {
