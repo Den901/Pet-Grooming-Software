@@ -334,7 +334,7 @@ function normalizeUiScale(value) {
 
 function renderNavLabel(item) {
   const hasUpdate = item.id === "settings" && state.updateCheck?.updateAvailable;
-  return `<span class="nav-label">${escapeHtml(item.label)}${hasUpdate ? `<i class="nav-update-badge" title="Update disponibile" aria-label="Update disponibile"></i>` : ""}</span>`;
+  return `<span class="nav-label"><span class="nav-label-text">${escapeHtml(item.label)}</span>${hasUpdate ? `<i class="nav-update-badge" title="Update disponibile" aria-label="Update disponibile"></i>` : ""}</span>`;
 }
 
 function loginUserFromUser(user) {
@@ -896,8 +896,10 @@ function renderMonthCalendar() {
     cells.push(`
       <div class="day-cell ${outside ? "outside" : ""} ${iso === todayISO() ? "today" : ""}">
         <div class="day-head">
-          <span class="day-number">${cursor.getDate()}</span>
-          <button class="add-day" type="button" title="Aggiungi appuntamento" data-day-add="${iso}">+</button>
+          <button class="day-open-button" type="button" data-open-day="${iso}" title="Apri giornata ${escapeAttr(formatter.format(cursor))}">
+            <span class="day-number">${cursor.getDate()}</span>
+            <span class="day-open-chevron" aria-hidden="true">›</span>
+          </button>
         </div>
         <div class="appointment-list">
           ${dayAppointments.map(renderAppointmentPill).join("")}
@@ -907,7 +909,7 @@ function renderMonthCalendar() {
     cursor = addDays(cursor, 1);
   }
   return `
-    <section class="calendar calendar-desktop">
+    <section class="calendar month-calendar calendar-desktop">
       <div class="calendar-weekdays">${weekdayShort.map((day) => `<div>${day}</div>`).join("")}</div>
       <div class="calendar-grid">${cells.join("")}</div>
     </section>
@@ -927,8 +929,10 @@ function renderWeekCalendar() {
           return `
             <div class="week-day ${iso === todayISO() ? "today" : ""}">
               <div class="day-head">
-                <h3>${capitalize(formatter.format(day))}</h3>
-                <button class="add-day" type="button" title="Aggiungi appuntamento" data-day-add="${iso}">+</button>
+                <button class="day-open-button week-day-open" type="button" data-open-day="${iso}" title="Apri giornata ${escapeAttr(formatter.format(day))}">
+                  <span class="week-day-title">${capitalize(formatter.format(day))}</span>
+                  <span class="day-open-chevron" aria-hidden="true">›</span>
+                </button>
               </div>
               <div class="appointment-list">
                 ${dayAppointments.length ? dayAppointments.map(renderAppointmentPill).join("") : `<span class="muted">Nessun appuntamento</span>`}
@@ -946,6 +950,7 @@ function renderDayCalendar() {
   const day = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), state.calendarDate.getDate());
   const iso = toISODate(day);
   const dayAppointments = appointmentsForDate(iso);
+  const planner = dayPlannerBounds(dayAppointments, iso);
   return `
     <section class="day-view calendar-desktop">
       <div class="week-day day-view-card ${iso === todayISO() ? "today" : ""}">
@@ -953,13 +958,93 @@ function renderDayCalendar() {
           <h3>${capitalize(formatter.format(day))}</h3>
           <button class="add-day" type="button" title="Aggiungi appuntamento" data-day-add="${iso}">+</button>
         </div>
-        <div class="appointment-list day-appointment-list">
-          ${dayAppointments.length ? dayAppointments.map(renderAppointmentPill).join("") : `<span class="muted">Nessun appuntamento</span>`}
-        </div>
+        ${renderDayPlanner(iso, dayAppointments, planner)}
       </div>
     </section>
     ${renderMobileCalendarList()}
   `;
+}
+
+function renderDayPlanner(iso, appointments, planner) {
+  const hours = Array.from({ length: Math.ceil((planner.end - planner.start) / 60) + 1 }, (_, index) => planner.start + index * 60);
+  const hourSlots = hours.slice(0, -1);
+  const current = iso === todayISO() ? currentMinutesOfDay() : null;
+  const currentBar =
+    current !== null && current >= planner.start && current <= planner.end
+      ? `<div class="current-time-bar" style="top: ${escapeAttr(percentWithin(current, planner))}%"><span>${escapeHtml(formatPlannerTime(current))}</span></div>`
+      : "";
+  return `
+    <div class="day-planner" style="--planner-hours: ${escapeAttr((planner.end - planner.start) / 60)}">
+      <div class="day-planner-scale" aria-hidden="true">
+        ${hours.map((minutes) => `<span style="top: ${escapeAttr(percentWithin(minutes, planner))}%">${escapeHtml(formatPlannerTime(minutes))}</span>`).join("")}
+      </div>
+      <div class="day-planner-body">
+        ${hourSlots
+          .map(
+            (minutes) => `
+              <button class="day-planner-hour" type="button" style="top: ${escapeAttr(percentWithin(minutes, planner))}%" data-day-add="${escapeAttr(iso)}" data-day-add-time="${escapeAttr(formatPlannerTime(minutes))}" aria-label="Nuovo appuntamento alle ${escapeAttr(formatPlannerTime(minutes))}">
+                <span></span>
+              </button>
+            `
+          )
+          .join("")}
+        ${currentBar}
+        ${appointments.length ? appointments.map((appointment) => renderDayPlannerAppointment(appointment, planner)).join("") : `<div class="day-planner-empty">Nessun appuntamento</div>`}
+      </div>
+    </div>
+  `;
+}
+
+function renderDayPlannerAppointment(appointment, planner) {
+  const start = clampNumber(timeToMinutes(appointment.startTime) ?? planner.start, planner.start, Math.max(planner.start, planner.end - 15));
+  const rawEnd = timeToMinutes(appointment.endTime);
+  const end = clampNumber(rawEnd ?? start + 60, start + 30, planner.end);
+  const top = percentWithin(start, planner);
+  const height = Math.max(6, ((end - start) / (planner.end - planner.start)) * 100);
+  const services = appointment.services?.length ? appointment.services.join(", ") : appointment.service || statusLabel(appointment.status);
+  return `
+    <button class="day-planner-appointment status-${escapeAttr(appointment.status)}" type="button" data-appointment-id="${escapeAttr(appointment.id)}" style="top: ${escapeAttr(top)}%; height: ${escapeAttr(height)}%;">
+      <span>${escapeHtml(formatPlannerTime(start))}${rawEnd ? ` - ${escapeHtml(formatPlannerTime(end))}` : ""}</span>
+      <strong>${escapeHtml(appointment.dogName || "Senza nome")}</strong>
+      <small>${escapeHtml(services)}</small>
+    </button>
+  `;
+}
+
+function dayPlannerBounds(appointments, iso) {
+  const defaultStart = 7 * 60;
+  const defaultEnd = 20 * 60;
+  const points = [];
+  appointments.forEach((appointment) => {
+    const start = timeToMinutes(appointment.startTime);
+    const end = timeToMinutes(appointment.endTime);
+    if (start !== null) points.push(start);
+    if (end !== null) points.push(end);
+  });
+  if (iso === todayISO()) points.push(currentMinutesOfDay());
+  const start = Math.max(0, Math.floor(Math.min(defaultStart, ...points) / 60) * 60);
+  const end = Math.min(24 * 60, Math.ceil(Math.max(defaultEnd, ...points) / 60) * 60);
+  return { start, end: Math.max(end, start + 8 * 60) };
+}
+
+function openDayPlannerDialog(iso) {
+  const day = parseISODate(iso);
+  const appointments = appointmentsForDate(iso);
+  const planner = dayPlannerBounds(appointments, iso);
+  openModal({
+    title: capitalize(formatter.format(day)),
+    hideActions: true,
+    content: `
+      <section class="day-dialog">
+        <div class="day-dialog-summary">
+          <strong>${escapeHtml(appointments.length ? `${appointments.length} appuntamenti` : "Giornata libera")}</strong>
+          <span>Clicca una fascia oraria per creare un appuntamento.</span>
+        </div>
+        ${renderDayPlanner(iso, appointments, planner)}
+      </section>
+    `,
+    onOpen: (form) => bindCalendarDayActions(form)
+  });
 }
 
 function renderMobileCalendarList() {
@@ -987,11 +1072,10 @@ function renderMobileAgendaDay(day) {
   return `
     <article class="mobile-agenda-day ${iso === todayISO() ? "today" : ""}">
       <div class="mobile-day-head">
-        <div>
+        <button class="mobile-day-open" type="button" data-open-day="${escapeAttr(iso)}" title="Apri giornata ${escapeAttr(title)}">
           <strong>${escapeHtml(title)}</strong>
           <span>${dayAppointments.length ? `${dayAppointments.length} appuntamenti` : "Libero"}</span>
-        </div>
-        <button class="add-day" type="button" title="Aggiungi appuntamento" data-day-add="${iso}">+</button>
+        </button>
       </div>
       <div class="mobile-appointment-list">
         ${dayAppointments.length ? dayAppointments.map(renderMobileAppointmentCard).join("") : `<span class="mobile-empty">Nessun appuntamento</span>`}
@@ -1057,20 +1141,27 @@ function bindCalendar() {
       renderView();
     });
   });
-  document.querySelectorAll("[data-day-add]").forEach((button) => {
-    button.addEventListener("click", () => openAppointmentDialog({ date: button.dataset.dayAdd }));
-  });
-  document.querySelectorAll("[data-appointment-id]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const appointment = state.appointments.find((item) => item.id === button.dataset.appointmentId);
-      openAppointmentDialog(appointment);
-    });
-  });
+  bindCalendarDayActions(document);
   document.querySelectorAll("[data-complete-appointment-id]").forEach((button) => {
     button.addEventListener("click", () => {
       const appointment = state.appointments.find((item) => item.id === button.dataset.completeAppointmentId);
       if (!appointment) return;
       openAppointmentDialog(appointment, { completionMode: true });
+    });
+  });
+}
+
+function bindCalendarDayActions(root) {
+  root.querySelectorAll("[data-open-day]").forEach((button) => {
+    button.addEventListener("click", () => openDayPlannerDialog(button.dataset.openDay));
+  });
+  root.querySelectorAll("[data-day-add]").forEach((button) => {
+    button.addEventListener("click", () => openAppointmentDialog({ date: button.dataset.dayAdd, startTime: button.dataset.dayAddTime || undefined }));
+  });
+  root.querySelectorAll("[data-appointment-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const appointment = state.appointments.find((item) => item.id === button.dataset.appointmentId);
+      openAppointmentDialog(appointment);
     });
   });
 }
@@ -3044,13 +3135,13 @@ function openModal({
 }) {
   modalRoot.innerHTML = `
     <div class="modal-backdrop" role="presentation">
-      ${preventClose ? "" : `<button class="modal-close modal-close-floating" type="button" data-close aria-label="Chiudi">&times;</button>`}
       <form class="modal-card" role="dialog" aria-modal="true">
         <div class="modal-head">
           <div class="modal-title-row">
             <h2>${escapeHtml(title)}</h2>
             ${headerAction}
           </div>
+          ${preventClose ? "" : `<button class="modal-close" type="button" data-close aria-label="Chiudi">&times;</button>`}
         </div>
         <div class="modal-body">${content}</div>
         ${
@@ -3267,6 +3358,39 @@ function currentTimeInput() {
     date.setMinutes(minutes);
   }
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function currentMinutesOfDay() {
+  const date = new Date();
+  return date.getHours() * 60 + date.getMinutes();
+}
+
+function timeToMinutes(value) {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function formatPlannerTime(minutes) {
+  const total = clampNumber(Math.round(Number(minutes || 0)), 0, 24 * 60);
+  if (total === 24 * 60) return "24:00";
+  const hours = Math.floor(total / 60) % 24;
+  const minutePart = total % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutePart).padStart(2, "0")}`;
+}
+
+function percentWithin(minutes, range) {
+  const total = Math.max(1, range.end - range.start);
+  return Number((((minutes - range.start) / total) * 100).toFixed(3));
+}
+
+function clampNumber(value, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return min;
+  return Math.min(max, Math.max(min, number));
 }
 
 function toISODate(date) {
