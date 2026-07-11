@@ -845,31 +845,33 @@ function renderCalendar() {
   const future = state.appointments.filter((item) => item.date >= today && item.status !== "annullato");
   const completed = state.appointments.filter((item) => item.status === "completato");
   return `
-    <div class="topbar">
-      <div class="page-title">
-        <h1>Calendario</h1>
-        <p>${calendarTitle()}</p>
+    <div class="calendar-page">
+      <div class="topbar">
+        <div class="page-title">
+          <h1>Calendario</h1>
+          <p>${calendarTitle()}</p>
+        </div>
+        <button class="btn" type="button" id="newAppointmentBtn">Nuovo appuntamento</button>
       </div>
-      <button class="btn" type="button" id="newAppointmentBtn">Nuovo appuntamento</button>
+      <section class="metric-grid" aria-label="Riepilogo agenda">
+        <div class="metric"><span>Oggi</span><strong>${todayAppointments.length}</strong></div>
+        <div class="metric"><span>Prossimi</span><strong>${future.length}</strong></div>
+        <div class="metric"><span>Completati</span><strong>${completed.length}</strong></div>
+      </section>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <button class="btn secondary" type="button" id="prevPeriod">Indietro</button>
+          <button class="btn secondary" type="button" id="todayBtn">Oggi</button>
+          <button class="btn secondary" type="button" id="nextPeriod">Avanti</button>
+        </div>
+        <div class="segmented" role="group" aria-label="Vista calendario">
+          <button type="button" data-calendar-mode="day" class="${state.calendarMode === "day" ? "active" : ""}">Giorno</button>
+          <button type="button" data-calendar-mode="week" class="${state.calendarMode === "week" ? "active" : ""}">Settimana</button>
+          <button type="button" data-calendar-mode="month" class="${state.calendarMode === "month" ? "active" : ""}">Mese</button>
+        </div>
+      </div>
+      ${renderCalendarView()}
     </div>
-    <section class="metric-grid" aria-label="Riepilogo agenda">
-      <div class="metric"><span>Oggi</span><strong>${todayAppointments.length}</strong></div>
-      <div class="metric"><span>Prossimi</span><strong>${future.length}</strong></div>
-      <div class="metric"><span>Completati</span><strong>${completed.length}</strong></div>
-    </section>
-    <div class="toolbar">
-      <div class="toolbar-left">
-        <button class="btn secondary" type="button" id="prevPeriod">Indietro</button>
-        <button class="btn secondary" type="button" id="todayBtn">Oggi</button>
-        <button class="btn secondary" type="button" id="nextPeriod">Avanti</button>
-      </div>
-      <div class="segmented" role="group" aria-label="Vista calendario">
-        <button type="button" data-calendar-mode="day" class="${state.calendarMode === "day" ? "active" : ""}">Giorno</button>
-        <button type="button" data-calendar-mode="week" class="${state.calendarMode === "week" ? "active" : ""}">Settimana</button>
-        <button type="button" data-calendar-mode="month" class="${state.calendarMode === "month" ? "active" : ""}">Mese</button>
-      </div>
-    </div>
-    ${renderCalendarView()}
   `;
 }
 
@@ -898,7 +900,7 @@ function renderMonthCalendar() {
         <div class="day-head">
           <button class="day-open-button" type="button" data-open-day="${iso}" title="Apri giornata ${escapeAttr(formatter.format(cursor))}">
             <span class="day-number">${cursor.getDate()}</span>
-            <span class="day-open-chevron" aria-hidden="true">›</span>
+            <span class="day-open-chevron" aria-hidden="true">&gt;</span>
           </button>
         </div>
         <div class="appointment-list">
@@ -931,7 +933,7 @@ function renderWeekCalendar() {
               <div class="day-head">
                 <button class="day-open-button week-day-open" type="button" data-open-day="${iso}" title="Apri giornata ${escapeAttr(formatter.format(day))}">
                   <span class="week-day-title">${capitalize(formatter.format(day))}</span>
-                  <span class="day-open-chevron" aria-hidden="true">›</span>
+                  <span class="day-open-chevron" aria-hidden="true">&gt;</span>
                 </button>
               </div>
               <div class="appointment-list">
@@ -982,9 +984,7 @@ function renderDayPlanner(iso, appointments, planner) {
         ${hourSlots
           .map(
             (minutes) => `
-              <button class="day-planner-hour" type="button" style="top: ${escapeAttr(percentWithin(minutes, planner))}%" data-day-add="${escapeAttr(iso)}" data-day-add-time="${escapeAttr(formatPlannerTime(minutes))}" aria-label="Nuovo appuntamento alle ${escapeAttr(formatPlannerTime(minutes))}">
-                <span></span>
-              </button>
+              <div class="day-planner-hour" style="top: ${escapeAttr(percentWithin(minutes, planner))}%"></div>
             `
           )
           .join("")}
@@ -1034,11 +1034,12 @@ function openDayPlannerDialog(iso) {
   openModal({
     title: capitalize(formatter.format(day)),
     hideActions: true,
+    headerAction: `<button class="add-day day-dialog-add" type="button" data-day-add="${escapeAttr(iso)}" title="Aggiungi appuntamento" aria-label="Aggiungi appuntamento">+</button>`,
     content: `
       <section class="day-dialog">
         <div class="day-dialog-summary">
           <strong>${escapeHtml(appointments.length ? `${appointments.length} appuntamenti` : "Giornata libera")}</strong>
-          <span>Clicca una fascia oraria per creare un appuntamento.</span>
+          <span>Usa il + per creare un appuntamento, poi scegli data e ora.</span>
         </div>
         ${renderDayPlanner(iso, appointments, planner)}
       </section>
@@ -1069,6 +1070,7 @@ function renderMobileAgendaDay(day) {
   const iso = toISODate(day);
   const dayAppointments = appointmentsForDate(iso);
   const title = capitalize(formatter.format(day));
+  const showDayAdd = state.calendarMode === "day";
   return `
     <article class="mobile-agenda-day ${iso === todayISO() ? "today" : ""}">
       <div class="mobile-day-head">
@@ -1076,6 +1078,7 @@ function renderMobileAgendaDay(day) {
           <strong>${escapeHtml(title)}</strong>
           <span>${dayAppointments.length ? `${dayAppointments.length} appuntamenti` : "Libero"}</span>
         </button>
+        ${showDayAdd ? `<button class="add-day mobile-day-add" type="button" title="Nuovo appuntamento" data-day-add="${escapeAttr(iso)}">+</button>` : ""}
       </div>
       <div class="mobile-appointment-list">
         ${dayAppointments.length ? dayAppointments.map(renderMobileAppointmentCard).join("") : `<span class="mobile-empty">Nessun appuntamento</span>`}

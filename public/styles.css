@@ -771,8 +771,54 @@ label {
   overflow: hidden;
 }
 
+.calendar-page {
+  display: grid;
+  gap: 10px;
+}
+
+.calendar-page .topbar {
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.calendar-page .page-title h1 {
+  font-size: 1.55rem;
+}
+
+.calendar-page .page-title p {
+  margin-top: 4px;
+}
+
+.calendar-page .metric-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.calendar-page .metric {
+  padding: 10px 14px;
+}
+
+.calendar-page .metric strong {
+  margin-top: 4px;
+  font-size: 1.25rem;
+}
+
+.calendar-page .toolbar {
+  margin: 0;
+}
+
+.calendar-page .btn {
+  min-height: 36px;
+  padding: 8px 12px;
+}
+
+.calendar-page .segmented button {
+  min-height: 30px;
+  padding: 6px 10px;
+}
+
 .month-calendar .calendar-grid {
-  height: clamp(460px, calc(100svh - 252px), 650px);
+  height: clamp(380px, calc(100svh - 306px), 560px);
   grid-template-rows: repeat(6, minmax(0, 1fr));
 }
 
@@ -790,9 +836,9 @@ label {
 }
 
 .calendar-weekdays div {
-  padding: 11px 10px;
+  padding: 7px 10px;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 850;
   text-transform: uppercase;
 }
@@ -804,13 +850,13 @@ label {
 
 .day-cell {
   min-height: 112px;
-  padding: 9px;
+  padding: 7px;
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   background: #fff;
   display: grid;
   align-content: start;
-  gap: 7px;
+  gap: 5px;
 }
 
 .month-calendar .day-cell {
@@ -849,7 +895,7 @@ label {
   align-items: center;
   gap: 5px;
   border-radius: 999px;
-  padding: 4px 7px;
+  padding: 2px 6px;
   background: transparent;
   color: var(--ink);
   text-align: left;
@@ -862,8 +908,8 @@ label {
 }
 
 .day-open-chevron {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -884,27 +930,27 @@ label {
 
 .appointment-list {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .appt-row {
   width: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 26px;
-  gap: 7px;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  gap: 4px;
   align-items: center;
   border-radius: 6px;
   background: #edf4f1;
   border-left: 4px solid var(--green);
-  min-height: 35px;
-  padding: 5px;
+  min-height: 29px;
+  padding: 3px 4px;
 }
 
 .appt-pill {
   min-width: 0;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 7px;
+  gap: 5px;
   align-items: center;
   text-align: left;
   color: var(--ink);
@@ -914,7 +960,7 @@ label {
 
 .appt-pill span {
   font-weight: 850;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   color: var(--green);
 }
 
@@ -923,17 +969,19 @@ label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 0.78rem;
 }
 
 .appt-complete {
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   display: grid;
   place-items: center;
   border-radius: 50%;
   background: #fff;
   color: var(--green);
   font-weight: 900;
+  font-size: 0.78rem;
   border: 1px solid rgba(47, 122, 101, 0.22);
 }
 
@@ -1041,7 +1089,7 @@ label {
 .day-planner-scale,
 .day-planner-body {
   position: relative;
-  min-height: calc(var(--planner-hours, 13) * 58px);
+  min-height: calc(var(--planner-hours, 13) * 46px);
 }
 
 .day-planner-scale span {
@@ -1068,14 +1116,11 @@ label {
   height: calc(100% / var(--planner-hours, 13));
   border-top: 1px solid var(--line);
   background: transparent;
+  pointer-events: none;
 }
 
 .day-planner-hour:first-child {
   border-top: 0;
-}
-
-.day-planner-hour:hover {
-  background: rgba(47, 122, 101, 0.07);
 }
 
 .day-planner-appointment {
@@ -1095,6 +1140,20 @@ label {
   color: var(--ink);
   text-align: left;
   box-shadow: 0 8px 18px rgba(22, 38, 37, 0.08);
+}
+
+.day-dialog-add,
+.day-view-card > .day-head .add-day,
+.mobile-day-add {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 8px 16px rgba(207, 97, 85, 0.24);
+}
+
+.mobile-day-add {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
 }
 
 .day-planner-appointment span {
@@ -3030,6 +3089,13 @@ label {
 :root[data-theme="dark"] .mobile-appt-row,
 :root[data-theme="dark"] .state-pill.active {
   background: rgba(104, 183, 173, 0.14);
+}
+
+:root[data-theme="dark"] .day-dialog-add,
+:root[data-theme="dark"] .day-view-card > .day-head .add-day,
+:root[data-theme="dark"] .mobile-day-add {
+  background: var(--accent);
+  color: #fff;
 }
 
 :root[data-theme="dark"] .online-pill.online {
