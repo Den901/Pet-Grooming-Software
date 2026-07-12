@@ -3447,6 +3447,26 @@ function formatShortDate(value) {
   }).format(date);
 }
 
+function formatLongDate(value) {
+  if (!value) return "-";
+  const date = parseISODate(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("it-IT", {
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  }).format(date);
+}
+
+function formatMonthYear(value) {
+  const date = parseISODate(`${String(value || "").slice(0, 7)}-01`);
+  if (Number.isNaN(date.getTime())) return value || "-";
+  return new Intl.DateTimeFormat("it-IT", {
+    month: "long",
+    year: "numeric"
+  }).format(date);
+}
+
 function statusLabel(status) {
   return {
     programmato: "Programmato",
@@ -3753,13 +3773,12 @@ function appointmentRevenue(appointment) {
 
 function renderTopClientMetric(topClient) {
   if (!topClient) return `<strong>-</strong>`;
-  const topDog = topClient.dog ? isTopDog(topClient.dog) : false;
   const photo = topClient.dog?.photoUrl
     ? `<img src="${escapeAttr(topClient.dog.photoUrl)}" alt="Foto di ${escapeAttr(topClient.name)}" />`
     : `<span>${escapeHtml(initials(topClient.name))}</span>`;
   return `
     <div class="metric-client">
-      <div class="metric-client-photo ${topDog ? "top-client" : ""}">${photo}${topDog ? `<img class="top-paw metric" src="/icons/top-client-paw.png" alt="Cliente top" />` : ""}</div>
+      <div class="metric-client-photo">${photo}</div>
       <div class="metric-client-copy">
         <strong>${escapeHtml(topClient.name)}</strong>
         <small>${escapeHtml(topClient.count === 1 ? "1 prestazione" : `${topClient.count} prestazioni`)}</small>
@@ -3825,7 +3844,7 @@ function renderRevenueLineChart(series) {
               return `
               <g class="revenue-point ${isSelected ? "selected" : ""}" data-revenue-point="${escapeAttr(point.key)}" role="button" tabindex="0">
                 <circle cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="${isSelected ? 7 : point.total > 0 ? 5 : 3}">
-                  <title>${escapeHtml(`${point.label}: ${moneyLabel(point.total)}`)}</title>
+                  <title>${escapeHtml(`${revenuePointDetailLabel(series.range, point)}: ${moneyLabel(point.total)}`)}</title>
                 </circle>
                 ${shouldShowRevenueTick(series.range, index, points.length) ? `<text x="${point.x.toFixed(1)}" y="${height - 22}" text-anchor="middle">${escapeHtml(point.label)}</text>` : ""}
               </g>
@@ -3852,6 +3871,9 @@ function shouldShowRevenueTick(range, index, total) {
 
 function revenuePointDetailLabel(range, point) {
   if (!point) return "Nessun punto";
+  if ((range === "week" || range === "month") && point.key) return formatLongDate(point.key);
+  if (range === "year" && point.key) return formatMonthYear(point.key);
+  if (range === "day" && point.key) return `${formatLongDate(String(point.key).slice(0, 10))}, ore ${point.label}:00`;
   return {
     day: `Ore ${point.label}:00`,
     week: point.label,
@@ -3871,13 +3893,12 @@ function revenueRangeLabel(range) {
 
 function renderRevenueClientMetric(topClient) {
   if (!topClient) return `<strong>-</strong>`;
-  const topDog = topClient.dog ? isTopDog(topClient.dog) : false;
   const photo = topClient.dog?.photoUrl
     ? `<img src="${escapeAttr(topClient.dog.photoUrl)}" alt="Foto di ${escapeAttr(topClient.name)}" />`
     : `<span>${escapeHtml(initials(topClient.name))}</span>`;
   return `
     <div class="metric-client">
-      <div class="metric-client-photo ${topDog ? "top-client" : ""}">${photo}${topDog ? `<img class="top-paw metric" src="/icons/top-client-paw.png" alt="Cliente top" />` : ""}</div>
+      <div class="metric-client-photo">${photo}</div>
       <div class="metric-client-copy">
         <strong>${escapeHtml(topClient.name)}</strong>
         <small>${escapeHtml(moneyLabel(topClient.total))}</small>
