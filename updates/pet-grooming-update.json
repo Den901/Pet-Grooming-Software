@@ -2,12 +2,12 @@
   "format": "PET_GROOMING_SOFTWARE_UPDATE_MANIFEST",
   "formatVersion": 1,
   "app": "pet-grooming-software",
-  "version": "0.0.1-beta.25",
-  "releaseLabel": "0.0.1 beta 25",
-  "createdAt": "2026-07-12T19:08:58.198Z",
-  "packageName": "Pet-Grooming-Software-0.0.1-beta.25.pgs-update",
-  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v0.0.1-beta.25/Pet-Grooming-Software-0.0.1-beta.25.pgs-update",
-  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v0.0.1-beta.25",
-  "notes": "Groomly 0.0.1 beta 25",
-  "changelog": "Dashboard: rimosso il badge sovrapposto dalle foto di cliente piu presente e cane piu redditizio. Andamento incassi: il dettaglio dei punti mostra la data completa, ad esempio 10 luglio 2026."
+  "version": "0.0.1-beta.26",
+  "releaseLabel": "0.0.1 beta 26",
+  "createdAt": "2026-07-12T19:19:55.562Z",
+  "packageName": "Pet-Grooming-Software-0.0.1-beta.26.pgs-update",
+  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v0.0.1-beta.26/Pet-Grooming-Software-0.0.1-beta.26.pgs-update",
+  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v0.0.1-beta.26",
+  "notes": "Groomly 0.0.1 beta 26",
+  "changelog": "Interfaccia: il toast in basso a destra, incluso il messaggio Portale aggiornato, ora usa colori ad alto contrasto indipendenti dal tema e resta leggibile con colori base, tema scuro e palette personalizzate."
 }

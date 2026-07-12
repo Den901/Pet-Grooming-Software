@@ -2825,11 +2825,14 @@ label {
   transform: translateY(18px);
   opacity: 0;
   pointer-events: none;
-  background: var(--ink);
-  color: #fff;
+  background: #111918;
+  color: #f7fffb;
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: var(--radius);
   padding: 12px 14px;
-  box-shadow: var(--shadow);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.26);
+  font-weight: 800;
+  line-height: 1.35;
   transition: 180ms ease;
   z-index: 50;
 }
