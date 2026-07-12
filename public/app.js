@@ -97,7 +97,27 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closePhotoLightbox();
 });
 
+setupViewportAnchoring();
 boot();
+
+function setupViewportAnchoring() {
+  const root = document.documentElement;
+  const sync = () => {
+    const viewport = window.visualViewport;
+    if (!viewport) {
+      root.style.setProperty("--viewport-bottom-offset", "0px");
+      return;
+    }
+    const bottomOffset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+    root.style.setProperty("--viewport-bottom-offset", `${Math.round(bottomOffset)}px`);
+  };
+  const schedule = () => requestAnimationFrame(sync);
+  sync();
+  window.visualViewport?.addEventListener("resize", schedule);
+  window.visualViewport?.addEventListener("scroll", schedule);
+  window.addEventListener("resize", schedule);
+  window.addEventListener("orientationchange", () => setTimeout(sync, 250));
+}
 
 async function boot() {
   setupServiceWorkerUpdates();
