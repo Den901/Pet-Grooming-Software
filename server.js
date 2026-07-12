@@ -21,7 +21,7 @@ const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin123";
 const SIDEBAR_ITEM_IDS = ["calendar", "dashboard", "dogs", "serviceHistory", "users"];
 const APP_ID = "pet-grooming-software";
-const APP_VERSION = packageInfo.version || "0.0.1-beta.23";
+const APP_VERSION = packageInfo.version || "0.0.1-beta.24";
 const UPDATE_FORMAT = "PET_GROOMING_SOFTWARE_UPDATE";
 const UPDATE_FORMAT_VERSION = 1;
 const UPDATE_EXTENSION = ".pgs-update";
@@ -477,7 +477,42 @@ function savePhotoList(dataUris, id, existing = [], limit = MAX_GALLERY_PHOTOS_P
   return kept.slice(0, limit);
 }
 
-function publicBrandingSettings(db) {
+function cleanBrandingPreferences(preferences = {}, fallback = defaultSettings().branding) {
+  const baseLoginBackground = {
+    ...defaultSettings().branding.loginBackground,
+    ...(fallback.loginBackground || {})
+  };
+  const baseColors = {
+    ...defaultSettings().branding.colors,
+    ...(fallback.colors || {})
+  };
+  const requestedLoginBackground = preferences.loginBackground || {};
+  return {
+    theme: ["light", "dark", "custom"].includes(preferences.theme) ? preferences.theme : fallback.theme || "light",
+    uiScale: cleanUiScale(preferences.uiScale, fallback.uiScale || 100),
+    loginBackground: {
+      mode: ["pattern", "solid", "gradient", "image"].includes(requestedLoginBackground.mode)
+        ? requestedLoginBackground.mode
+        : baseLoginBackground.mode || "pattern",
+      solidColor: cleanHexColor(requestedLoginBackground.solidColor, baseLoginBackground.solidColor || "#f6f3ed"),
+      patternColor: cleanHexColor(requestedLoginBackground.patternColor, baseLoginBackground.patternColor || "#f6f3ed"),
+      patternAccentColor: cleanHexColor(requestedLoginBackground.patternAccentColor, baseLoginBackground.patternAccentColor || "#ded9cf"),
+      gradientTop: cleanHexColor(requestedLoginBackground.gradientTop, baseLoginBackground.gradientTop || "#f6f3ed"),
+      gradientBottom: cleanHexColor(requestedLoginBackground.gradientBottom, baseLoginBackground.gradientBottom || "#dfe9e4"),
+      imageUrl: cleanString(requestedLoginBackground.imageUrl || baseLoginBackground.imageUrl)
+    },
+    colors: {
+      brand: cleanHexColor(preferences.colors?.brand, baseColors.brand || "#234344"),
+      brandStrong: cleanHexColor(preferences.colors?.brandStrong, baseColors.brandStrong || "#183233"),
+      accent: cleanHexColor(preferences.colors?.accent, baseColors.accent || "#cf6155"),
+      background: cleanHexColor(preferences.colors?.background, baseColors.background || "#f6f3ed"),
+      panel: cleanHexColor(preferences.colors?.panel, baseColors.panel || "#ffffff"),
+      text: cleanHexColor(preferences.colors?.text, baseColors.text || "#162625")
+    }
+  };
+}
+
+function basePublicBrandingSettings(db) {
   const branding = ensureSettingsShape(db.settings).branding;
   return {
     theme: ["light", "dark", "custom"].includes(branding.theme) ? branding.theme : "light",
@@ -506,6 +541,25 @@ function publicBrandingSettings(db) {
       background: cleanHexColor(branding.colors?.background, "#f6f3ed"),
       panel: cleanHexColor(branding.colors?.panel, "#ffffff"),
       text: cleanHexColor(branding.colors?.text, "#162625")
+    }
+  };
+}
+
+function publicBrandingSettings(db, user = null) {
+  const base = basePublicBrandingSettings(db);
+  const preferences = user?.preferences?.branding ? cleanBrandingPreferences(user.preferences.branding, base) : null;
+  if (!preferences) return base;
+  return {
+    ...base,
+    theme: preferences.theme,
+    uiScale: preferences.uiScale,
+    loginBackground: {
+      ...base.loginBackground,
+      ...preferences.loginBackground
+    },
+    colors: {
+      ...base.colors,
+      ...preferences.colors
     }
   };
 }
@@ -983,10 +1037,11 @@ function addEventClient(req, res, user) {
   });
 }
 
-function validateDogForSave(dog) {
+function validateDogForSave(dog, options = {}) {
+  const requireColor = options.requireColor !== false;
   if (!dog.dogName) return "Inserisci il nome del cane";
   if (!dog.contactMissing && !dog.contact) return "Inserisci il numero di telefono o spunta non presente";
-  if (!dog.color) return "Inserisci il colore del cane";
+  if (requireColor && !dog.color) return "Inserisci il colore del cane";
   if (!["M", "F"].includes(dog.sex)) return "Seleziona il sesso del cane";
   if (!["yes", "no"].includes(dog.imageConsent)) return "Seleziona il consenso immagini";
   return "";
@@ -1031,7 +1086,7 @@ function maybeCreateDogFromAppointment(payload, db) {
     services: selectedServices(payload, []),
     notes: `Scheda creata da appuntamento del ${cleanString(payload.date) || "giorno non indicato"}.`
   });
-  const validationError = validateDogForSave(dog);
+  const validationError = validateDogForSave(dog, { requireColor: false });
   if (validationError) return { payload, dog: null, error: validationError };
   updateAnimalOptionsFromDog(db, dog);
   db.dogs.push(dog);
@@ -1286,23 +1341,41 @@ async function handleApi(req, res, url) {
     }
 
     if (parts[1] === "settings" && parts[2] === "branding") {
-      if (user.role !== "admin") return sendError(res, 403, "Solo amministratore");
       if (method === "GET") {
-        return sendJson(res, 200, { branding: publicBrandingSettings(db) });
+        return sendJson(res, 200, { branding: publicBrandingSettings(db, user) });
       }
+      if (user.role !== "admin") return sendError(res, 403, "Solo amministratore");
       if (method === "PUT") {
         const body = await readBody(req);
         const current = db.settings.branding || {};
-        const currentColors = current.colors || {};
+        const currentPreferences = user.preferences?.branding || {};
+        const currentVisual = publicBrandingSettings(db, user);
         const currentLoginBackground = current.loginBackground || {};
         const logoUrl = savePhoto(body.logoData, "branding-logo") || (body.clearLogo === true ? "" : current.logoUrl || "");
+        const currentPreferenceLoginBackground = currentPreferences.loginBackground || {};
         const loginBackgroundImageUrl =
-          savePhoto(body.loginBackgroundImageData, "login-background") ||
-          (body.clearLoginBackgroundImage === true ? "" : currentLoginBackground.imageUrl || "");
+          savePhoto(body.loginBackgroundImageData, `login-background-${user.id}`) ||
+          (body.clearLoginBackgroundImage === true
+            ? ""
+            : currentPreferenceLoginBackground.imageUrl || currentLoginBackground.imageUrl || "");
         const requestedLoginBackground = body.loginBackground || {};
+        user.preferences = {
+          ...(user.preferences || {}),
+          branding: cleanBrandingPreferences(
+            {
+              theme: body.theme,
+              uiScale: body.uiScale,
+              loginBackground: {
+                ...requestedLoginBackground,
+                imageUrl: loginBackgroundImageUrl
+              },
+              colors: body.colors || {}
+            },
+            currentVisual
+          )
+        };
         db.settings.branding = {
           ...current,
-          theme: ["light", "dark", "custom"].includes(body.theme) ? body.theme : current.theme || "light",
           portalName: cleanString(body.portalName) || "Groomly",
           businessName: cleanString(body.businessName) || "Groomly",
           tagline: cleanString(body.tagline),
@@ -1311,31 +1384,11 @@ async function handleApi(req, res, url) {
           email: cleanString(body.email),
           address: cleanString(body.address),
           logoUrl,
-          uiScale: cleanUiScale(body.uiScale, current.uiScale || 100),
-          loginBackground: {
-            mode: ["pattern", "solid", "gradient", "image"].includes(requestedLoginBackground.mode)
-              ? requestedLoginBackground.mode
-              : currentLoginBackground.mode || "pattern",
-            solidColor: cleanHexColor(requestedLoginBackground.solidColor, currentLoginBackground.solidColor || "#f6f3ed"),
-            patternColor: cleanHexColor(requestedLoginBackground.patternColor, currentLoginBackground.patternColor || "#f6f3ed"),
-            patternAccentColor: cleanHexColor(requestedLoginBackground.patternAccentColor, currentLoginBackground.patternAccentColor || "#ded9cf"),
-            gradientTop: cleanHexColor(requestedLoginBackground.gradientTop, currentLoginBackground.gradientTop || "#f6f3ed"),
-            gradientBottom: cleanHexColor(requestedLoginBackground.gradientBottom, currentLoginBackground.gradientBottom || "#dfe9e4"),
-            imageUrl: loginBackgroundImageUrl
-          },
-          colors: {
-            brand: cleanHexColor(body.colors?.brand, currentColors.brand || "#234344"),
-            brandStrong: cleanHexColor(body.colors?.brandStrong, currentColors.brandStrong || "#183233"),
-            accent: cleanHexColor(body.colors?.accent, currentColors.accent || "#cf6155"),
-            background: cleanHexColor(body.colors?.background, currentColors.background || "#f6f3ed"),
-            panel: cleanHexColor(body.colors?.panel, currentColors.panel || "#ffffff"),
-            text: cleanHexColor(body.colors?.text, currentColors.text || "#162625")
-          },
           updatedAt: new Date().toISOString()
         };
         writeDb(db);
         broadcastDataChange("settings", { section: "branding" });
-        return sendJson(res, 200, { branding: publicBrandingSettings(db) });
+        return sendJson(res, 200, { branding: publicBrandingSettings(db, user) });
       }
     }
 

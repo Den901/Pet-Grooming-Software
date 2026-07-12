@@ -440,23 +440,25 @@ function renderBrandMark(className) {
 }
 
 async function loadData() {
-  const [meResponse, dogsResponse, appointmentsResponse, animalResponse, navigationResponse] = await Promise.all([
+  const [meResponse, dogsResponse, appointmentsResponse, animalResponse, navigationResponse, brandingResponse] = await Promise.all([
     api("/api/me"),
     api("/api/dogs"),
     api("/api/appointments"),
     api("/api/settings/animal"),
-    api("/api/settings/navigation")
+    api("/api/settings/navigation"),
+    api("/api/settings/branding")
   ]);
   state.me = meResponse.user || state.me;
   state.dogs = dogsResponse.dogs || [];
   state.appointments = appointmentsResponse.appointments || [];
   state.animalSettings = animalResponse.animal || state.animalSettings;
   state.navigation = navigationResponse.navigation || state.navigation;
+  state.branding = brandingResponse.branding || state.branding;
+  applyBranding();
   if (state.me?.role === "admin") {
-    const [usersResponse, duckdnsResponse, brandingResponse, whatsappResponse, versionResponse] = await Promise.all([
+    const [usersResponse, duckdnsResponse, whatsappResponse, versionResponse] = await Promise.all([
       api("/api/users"),
       api("/api/settings/duckdns"),
-      api("/api/settings/branding"),
       api("/api/settings/whatsapp"),
       api("/api/version")
     ]);
@@ -464,10 +466,8 @@ async function loadData() {
     state.onlineUserIds = state.users.filter((user) => user.online).map((user) => user.id);
     state.loginUsers = state.users.filter((user) => user.active).map(loginUserFromUser);
     state.duckdns = duckdnsResponse.duckdns || null;
-    state.branding = brandingResponse.branding || state.branding;
     state.whatsapp = whatsappResponse.whatsapp || null;
     state.version = versionResponse || null;
-    applyBranding();
   } else {
     state.users = [];
     state.onlineUserIds = [];
@@ -1552,7 +1552,7 @@ function renderSettings() {
         <div class="settings-heading-row">
           <div>
             <h2>Identita azienda</h2>
-            <p class="settings-note">Personalizza nome, logo, informazioni aziendali e colori del portale.</p>
+            <p class="settings-note">Nome, logo e informazioni aziendali sono comuni; tema, colori e sfondo restano personali per questo utente.</p>
           </div>
           ${renderBrandMark("settings-logo-preview")}
         </div>
@@ -1988,7 +1988,7 @@ function bindSettings() {
       state.branding = response.branding;
       applyBranding();
       renderShell();
-      notify("Identita azienda salvata");
+      notify("Identita e preferenze salvate");
     } catch (err) {
       notify(err.message);
     }
@@ -2896,7 +2896,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
                   Numero non presente
                 </label>
                 ${renderBreedField({}, animal)}
-                ${renderColorField({}, animal, false, true)}
+                ${renderColorField({}, animal, false, false)}
                 <fieldset class="field-group compact">
                   <legend>Sesso cane</legend>
                   <label class="choice-line"><input name="sex" type="radio" value="M" data-quick-required /> Maschio</label>
@@ -3166,7 +3166,6 @@ function openModal({
             : `<div class="modal-actions">
                 ${dangerLabel ? `<button class="btn danger" type="button" data-danger>${escapeHtml(dangerLabel)}</button>` : ""}
                 ${extraActions}
-                ${preventClose ? "" : `<button class="btn secondary" type="button" data-close>Annulla</button>`}
                 <button class="btn" type="submit">${escapeHtml(submitLabel)}</button>
               </div>`
         }
@@ -3175,9 +3174,6 @@ function openModal({
   `;
   const form = modalRoot.querySelector("form");
   modalRoot.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", closeModal));
-  modalRoot.querySelector(".modal-backdrop").addEventListener("click", (event) => {
-    if (!preventClose && event.target.classList.contains("modal-backdrop")) closeModal();
-  });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!onSubmit) return;
