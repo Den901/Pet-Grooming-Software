@@ -1570,6 +1570,25 @@ label {
   font-weight: 850;
 }
 
+.dog-detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.visit-frequency {
+  width: max-content;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(47, 122, 101, 0.12);
+  color: var(--green);
+  border: 1px solid rgba(47, 122, 101, 0.22);
+}
+
 .top-badge {
   width: max-content;
   display: inline-flex;
@@ -3450,6 +3469,22 @@ label {
     font-size: 0.72rem;
   }
 
+  .week-grid {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .week-day {
+    flex: 0 0 calc((100% - 30px) / 4);
+    min-width: 178px;
+    min-height: 420px;
+    scroll-snap-align: start;
+  }
+
   .dog-mini-grid {
     grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
     gap: 12px;
@@ -3610,10 +3645,12 @@ label {
     width: 100%;
     min-height: 100%;
     overflow-x: hidden;
-    overscroll-behavior-y: none;
+    overflow-y: auto;
+    overscroll-behavior-y: auto;
   }
 
   body {
+    height: auto;
     font-size: 15px;
   }
 
@@ -3626,11 +3663,15 @@ label {
   .shell {
     display: block;
     min-height: 100svh;
+    height: auto;
+    overflow: visible;
   }
 
   .main {
-    min-height: 100svh;
+    min-height: auto;
     padding: 12px 12px calc(96px + env(safe-area-inset-bottom));
+    overflow: visible;
+    -webkit-overflow-scrolling: touch;
   }
 
   .sidebar {

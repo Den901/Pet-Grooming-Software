@@ -21,7 +21,7 @@ const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin123";
 const SIDEBAR_ITEM_IDS = ["calendar", "dashboard", "dogs", "serviceHistory", "users"];
 const APP_ID = "pet-grooming-software";
-const APP_VERSION = packageInfo.version || "0.0.1-beta.26";
+const APP_VERSION = packageInfo.version || "0.0.1-beta.27";
 const UPDATE_FORMAT = "PET_GROOMING_SOFTWARE_UPDATE";
 const UPDATE_FORMAT_VERSION = 1;
 const UPDATE_EXTENSION = ".pgs-update";
@@ -1151,6 +1151,7 @@ function updateAnimalOptionsFromAppointment(db, appointment) {
   db.settings.animal = {
     ...current,
     ...(db.settings.animal || {}),
+    breeds: cleanStringList([...current.breeds, appointment.breed], current.breeds),
     services: cleanStringList([...current.services, ...(appointment.services || [])], current.services)
   };
 }
@@ -1180,6 +1181,7 @@ function normalizeAppointment(payload, db, existing = {}) {
     dogName: cleanString(dog?.dogName || stringField(payload, "dogName", existing.dogName)),
     ownerName: cleanString(dog?.ownerName || stringField(payload, "ownerName", existing.ownerName)),
     contact: cleanString(dog?.contact || stringField(payload, "contact", existing.contact)),
+    breed: cleanString(dog?.breed || stringField(payload, "breed", existing.breed)),
     date: stringField(payload, "date", existing.date),
     startTime: stringField(payload, "startTime", existing.startTime),
     endTime: stringField(payload, "endTime", existing.endTime),
@@ -1553,7 +1555,7 @@ async function handleApi(req, res, url) {
         db.dogs[index] = dog;
         db.appointments = db.appointments.map((appointment) =>
           appointment.dogId === dog.id
-            ? { ...appointment, dogName: dog.dogName, ownerName: dog.ownerName, contact: dog.contact, updatedAt: new Date().toISOString() }
+            ? { ...appointment, dogName: dog.dogName, ownerName: dog.ownerName, contact: dog.contact, breed: dog.breed, updatedAt: new Date().toISOString() }
             : appointment
         );
         writeDb(db);

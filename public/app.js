@@ -1001,16 +1001,16 @@ function renderDayPlannerAppointment(appointment, planner) {
   const end = clampNumber(rawEnd ?? start + 60, start + 30, planner.end);
   const top = percentWithin(start, planner);
   const height = Math.max(6, ((end - start) / (planner.end - planner.start)) * 100);
-  const dogName = appointment.dogName || "Senza nome";
+  const dogLabel = appointmentDogDisplayLabel(appointment);
   const timeRange = `${formatPlannerTime(start)}${rawEnd ? ` - ${formatPlannerTime(end)}` : ""}`;
   const services = appointment.services?.length ? appointment.services.join(", ") : appointment.service || statusLabel(appointment.status);
   const expectedTime = appointmentPlannerDurationLabel(appointment, start, end, rawEnd !== null);
   const details = [services, `Tempo ${expectedTime}`].filter(Boolean).join(" · ");
   return `
-    <button class="day-planner-appointment status-${escapeAttr(appointment.status)}" type="button" data-appointment-id="${escapeAttr(appointment.id)}" title="${escapeAttr(`${timeRange} ${dogName} ${details}`)}" style="top: ${escapeAttr(top)}%; height: ${escapeAttr(height)}%;">
+    <button class="day-planner-appointment status-${escapeAttr(appointment.status)}" type="button" data-appointment-id="${escapeAttr(appointment.id)}" title="${escapeAttr(`${timeRange} ${dogLabel} ${details}`)}" style="top: ${escapeAttr(top)}%; height: ${escapeAttr(height)}%;">
       <span class="planner-time">${escapeHtml(timeRange)}</span>
       <span class="planner-copy">
-        <strong>${escapeHtml(dogName)}</strong>
+        <strong>${escapeHtml(dogLabel)}</strong>
         <small>${escapeHtml(details)}</small>
       </span>
     </button>
@@ -1104,11 +1104,12 @@ function renderMobileAppointmentCard(appointment) {
   const isCompleted = appointment.status === "completato";
   const timeRange = [appointment.startTime, appointment.endTime].filter(Boolean).join(" - ") || "--";
   const subtitle = [appointment.service, appointment.ownerName].filter(Boolean).join(" - ");
+  const dogLabel = appointmentDogDisplayLabel(appointment);
   return `
     <div class="mobile-appt-row status-${escapeAttr(appointment.status)}">
       <button class="mobile-appt-card" type="button" data-appointment-id="${appointment.id}">
         <span>${escapeHtml(timeRange)}</span>
-        <strong>${escapeHtml(appointment.dogName || "Senza nome")}</strong>
+        <strong>${escapeHtml(dogLabel)}</strong>
         <small>${escapeHtml(subtitle || statusLabel(appointment.status))}</small>
       </button>
       ${
@@ -1122,11 +1123,12 @@ function renderMobileAppointmentCard(appointment) {
 
 function renderAppointmentPill(appointment) {
   const isCompleted = appointment.status === "completato";
+  const dogLabel = appointmentDogDisplayLabel(appointment);
   return `
     <div class="appt-row status-${escapeHtml(appointment.status)}">
       <button class="appt-pill" type="button" data-appointment-id="${appointment.id}">
         <span>${escapeHtml(appointment.startTime || "--")}</span>
-        <small>${escapeHtml(appointment.dogName || "Senza nome")}</small>
+        <small>${escapeHtml(dogLabel)}</small>
       </button>
       ${
         isCompleted
@@ -2292,6 +2294,7 @@ function openDogDetailsDialog(dog = {}) {
   const history = dogAppointmentHistory(dog);
   const scheduledCount = history.filter(isScheduledAppointment).length;
   const topDog = isTopDog(dog);
+  const visitFrequency = dogVisitFrequencyLabel(dog);
   const photo = dog.photoUrl
     ? `<img src="${escapeAttr(dog.photoUrl)}" alt="Foto di ${escapeAttr(dog.dogName)}" />`
     : `<span>${escapeHtml(initials(dog.dogName))}</span>`;
@@ -2305,8 +2308,11 @@ function openDogDetailsDialog(dog = {}) {
         <div class="dog-detail-body">
           <div class="dog-detail-heading">
             <strong>${escapeHtml(dog.dogName || "Scheda cane")}</strong>
-            ${topDog ? `<span class="top-badge"><img src="/icons/top-client-paw.png" alt="" /> Cliente top</span>` : ""}
-            ${scheduledCount ? `<span>${escapeHtml(scheduledAppointmentLabel(scheduledCount))}</span>` : ""}
+            <div class="dog-detail-meta">
+              ${topDog ? `<span class="top-badge"><img src="/icons/top-client-paw.png" alt="" /> Cliente top</span>` : ""}
+              <span class="visit-frequency">${escapeHtml(visitFrequency)}</span>
+            </div>
+            ${scheduledCount ? `<span class="scheduled-count">${escapeHtml(scheduledAppointmentLabel(scheduledCount))}</span>` : ""}
           </div>
           <div class="detail-list">
             <div class="detail-item">
@@ -3287,6 +3293,32 @@ function appointmentsForDate(iso) {
     .sort((a, b) => `${a.startTime || ""}`.localeCompare(`${b.startTime || ""}`));
 }
 
+function appointmentDog(appointment = {}) {
+  if (appointment.dogId) {
+    const linkedDog = state.dogs.find((dog) => dog.id === appointment.dogId);
+    if (linkedDog) return linkedDog;
+  }
+  const dogName = lowerText(appointment.dogName);
+  if (!dogName) return null;
+  const ownerName = lowerText(appointment.ownerName);
+  const contact = lowerText(appointment.contact);
+  return (
+    state.dogs.find((dog) => {
+      if (lowerText(dog.dogName) !== dogName) return false;
+      if (ownerName && lowerText(dog.ownerName) !== ownerName) return false;
+      if (contact && lowerText(dog.contact) !== contact) return false;
+      return true;
+    }) || null
+  );
+}
+
+function appointmentDogDisplayLabel(appointment = {}) {
+  const dog = appointmentDog(appointment);
+  const name = dog?.dogName || appointment.dogName || "Senza nome";
+  const breed = dog?.breed || appointment.breed || "";
+  return [name, breed].filter(Boolean).join(" - ");
+}
+
 function dogAppointmentHistory(dog) {
   const dogName = lowerText(dog.dogName);
   const ownerName = lowerText(dog.ownerName);
@@ -3350,6 +3382,37 @@ function isScheduledAppointment(appointment) {
 
 function scheduledAppointmentLabel(count) {
   return count === 1 ? "1 appuntamento programmato" : `${count} appuntamenti programmati`;
+}
+
+function dogVisitFrequencyLabel(dog) {
+  const dates = dogAppointmentHistory(dog)
+    .filter((appointment) => appointment.status === "completato" && appointment.date)
+    .map((appointment) => parseISODate(appointment.date))
+    .filter((date) => !Number.isNaN(date.getTime()))
+    .sort((a, b) => a.getTime() - b.getTime());
+  const intervals = [];
+  for (let index = 1; index < dates.length; index += 1) {
+    const days = Math.round((dates[index].getTime() - dates[index - 1].getTime()) / 86400000);
+    if (days > 0) intervals.push(days);
+  }
+  if (!intervals.length) return "Frequenza: non abbastanza storico";
+  const averageDays = Math.max(1, Math.round(average(intervals)));
+  return `Passa ogni ${visitIntervalLabel(averageDays)}`;
+}
+
+function visitIntervalLabel(days) {
+  if (days <= 1) return "giorno";
+  if (days < 14) return `${days} giorni`;
+  if (days < 70) {
+    const weeks = Math.max(1, Math.round(days / 7));
+    return weeks === 1 ? "settimana" : `${weeks} settimane`;
+  }
+  if (days < 365) {
+    const months = Math.max(1, Math.round(days / 30));
+    return months === 1 ? "mese" : `${months} mesi`;
+  }
+  const years = Math.max(1, Math.round(days / 365));
+  return years === 1 ? "anno" : `${years} anni`;
 }
 
 function lowerText(value) {

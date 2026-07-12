@@ -2,12 +2,12 @@
   "format": "PET_GROOMING_SOFTWARE_UPDATE_MANIFEST",
   "formatVersion": 1,
   "app": "pet-grooming-software",
-  "version": "0.0.1-beta.26",
-  "releaseLabel": "0.0.1 beta 26",
-  "createdAt": "2026-07-12T19:19:55.562Z",
-  "packageName": "Pet-Grooming-Software-0.0.1-beta.26.pgs-update",
-  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v0.0.1-beta.26/Pet-Grooming-Software-0.0.1-beta.26.pgs-update",
-  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v0.0.1-beta.26",
-  "notes": "Groomly 0.0.1 beta 26",
-  "changelog": "Interfaccia: il toast in basso a destra, incluso il messaggio Portale aggiornato, ora usa colori ad alto contrasto indipendenti dal tema e resta leggibile con colori base, tema scuro e palette personalizzate."
+  "version": "0.0.1-beta.27",
+  "releaseLabel": "0.0.1 beta 27",
+  "createdAt": "2026-07-12T23:39:38.614Z",
+  "packageName": "Pet-Grooming-Software-0.0.1-beta.27.pgs-update",
+  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v0.0.1-beta.27/Pet-Grooming-Software-0.0.1-beta.27.pgs-update",
+  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v0.0.1-beta.27",
+  "notes": "Groomly 0.0.1 beta 27",
+  "changelog": "Calendario: gli appuntamenti mostrano nome cane e razza, ad esempio Penny - Volpino. Tablet: la settimana mostra circa quattro giorni leggibili alla volta con scorrimento laterale. PWA Android: corretto lo scroll verticale delle schermate. Scheda cane: aggiunta la frequenza media di passaggio in toelettatura accanto al badge Cliente top, o da sola quando il cane non e top."
 }
