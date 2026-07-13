@@ -2,12 +2,12 @@
   "format": "PET_GROOMING_SOFTWARE_UPDATE_MANIFEST",
   "formatVersion": 1,
   "app": "pet-grooming-software",
-  "version": "0.0.1-beta.31",
-  "releaseLabel": "0.0.1 beta 31",
-  "createdAt": "2026-07-13T11:16:36.813Z",
-  "packageName": "Pet-Grooming-Software-0.0.1-beta.31.pgs-update",
-  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v0.0.1-beta.31/Pet-Grooming-Software-0.0.1-beta.31.pgs-update",
-  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v0.0.1-beta.31",
-  "notes": "Groomly 0.0.1 beta 31",
-  "changelog": "Aggiunge il menu Monitor con vista fullscreen per la giornata, foto cane, nome, razza, tempo lavoro, servizi/prodotti e indicazione tra quanto. Sposta il promemoria interno degli appuntamenti nelle impostazioni globali, mantiene separato il promemoria WhatsApp cliente, aggiorna live la scaletta e usa una foto predefinita quando manca la foto del cane."
+  "version": "0.0.1-beta.32",
+  "releaseLabel": "0.0.1 beta 32",
+  "createdAt": "2026-07-13T12:09:43.037Z",
+  "packageName": "Pet-Grooming-Software-0.0.1-beta.32.pgs-update",
+  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v0.0.1-beta.32/Pet-Grooming-Software-0.0.1-beta.32.pgs-update",
+  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v0.0.1-beta.32",
+  "notes": "Groomly 0.0.1 beta 32",
+  "changelog": "Pulisce l'orologio del Monitor mostrando ora HH:mm:ss senza alle ore, mantiene l'ultimo appuntamento visibile fino a mezzanotte quando non ci sono appuntamenti successivi e ordina alfabeticamente le schede animali."
 }

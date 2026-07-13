@@ -1036,15 +1036,20 @@ function renderMonitorEmpty() {
 
 function monitorAppointments() {
   const now = new Date();
-  return appointmentsForDate(todayISO()).filter((appointment) => isMonitorAppointmentVisible(appointment, now));
-}
-
-function isMonitorAppointmentVisible(appointment, now = new Date()) {
-  if (["annullato", "completato"].includes(appointment.status)) return false;
-  const start = timeToMinutes(appointment.startTime);
-  if (start === null) return true;
   const current = now.getHours() * 60 + now.getMinutes();
-  return appointmentMonitorEndMinutes(appointment, start) >= current;
+  const appointments = appointmentsForDate(todayISO()).filter((appointment) => appointment.status !== "annullato");
+  const floating = appointments.filter((appointment) => timeToMinutes(appointment.startTime) === null);
+  const timed = appointments
+    .map((appointment) => ({ appointment, start: timeToMinutes(appointment.startTime) }))
+    .filter((item) => item.start !== null)
+    .sort((a, b) => a.start - b.start);
+  const future = timed.filter((item) => item.start > current && item.appointment.status !== "completato").map((item) => item.appointment);
+  const latestStarted = [...timed].reverse().find((item) => item.start <= current)?.appointment || null;
+  const visible = floating.filter((appointment) => appointment.status !== "completato");
+  if (latestStarted && (latestStarted.status !== "completato" || !future.length)) visible.push(latestStarted);
+  visible.push(...future);
+  if (!visible.length && latestStarted) visible.push(latestStarted);
+  return [...new Map(visible.map((appointment) => [appointment.id, appointment])).values()];
 }
 
 function appointmentMonitorEndMinutes(appointment, startMinutes = timeToMinutes(appointment.startTime) || 0) {
@@ -1070,7 +1075,7 @@ function monitorRelativeLabel(appointment) {
   const diff = start - current;
   if (diff > 0) return `tra ${friendlyDurationLabel(diff)}`;
   if (appointmentMonitorEndMinutes(appointment, start) >= current) return "adesso";
-  return "superato";
+  return "ultimo di oggi";
 }
 
 function friendlyDurationLabel(minutes) {
@@ -1083,17 +1088,20 @@ function friendlyDurationLabel(minutes) {
 }
 
 function monitorClockLabel() {
-  return capitalize(
-    new Intl.DateTimeFormat("it-IT", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit"
-    }).format(new Date())
-  );
+  const now = new Date();
+  const date = new Intl.DateTimeFormat("it-IT", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric"
+  }).format(now);
+  const time = new Intl.DateTimeFormat("it-IT", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).format(now);
+  return `${capitalize(date)} ora ${time}`;
 }
 
 function monitorReminderLabel(minutes) {
@@ -3676,12 +3684,14 @@ function confirmAction(message, onConfirm) {
 
 function filteredDogList() {
   const query = state.dogSearch.trim().toLowerCase();
-  if (!query) return state.dogs;
-  return state.dogs.filter((dog) =>
-    [dog.dogName, dog.ownerName, dog.contact, dog.alternateContact, dog.breed, dog.color, dog.pathologies, dog.notes, ...(dog.services || [])].some((field) =>
-      String(field || "").toLowerCase().includes(query)
-    )
-  );
+  const dogs = !query
+    ? state.dogs
+    : state.dogs.filter((dog) =>
+        [dog.dogName, dog.ownerName, dog.contact, dog.alternateContact, dog.breed, dog.color, dog.pathologies, dog.notes, ...(dog.services || [])].some((field) =>
+          String(field || "").toLowerCase().includes(query)
+        )
+      );
+  return [...dogs].sort((a, b) => String(a.dogName || "").localeCompare(String(b.dogName || ""), "it", { sensitivity: "base" }));
 }
 
 function appointmentsForDate(iso) {
