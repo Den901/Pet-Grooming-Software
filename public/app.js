@@ -1750,6 +1750,15 @@ function bindServiceHistory() {
   const picker = document.querySelector("[data-service-history-picker]");
   const dropdown = document.getElementById("serviceHistoryDogOptions");
   const toggle = document.querySelector("[data-service-history-toggle]");
+  const menuOnly = window.matchMedia("(max-width: 760px), (max-width: 932px) and (max-height: 480px)").matches;
+  if (menuOnly && searchInput) {
+    searchInput.readOnly = true;
+    searchInput.inputMode = "none";
+    searchInput.setAttribute("inputmode", "none");
+    searchInput.setAttribute("aria-readonly", "true");
+    searchInput.placeholder = "Seleziona animale";
+    picker?.classList.add("is-menu-only");
+  }
   const setDropdownOpen = (open) => {
     if (!dropdown || !searchInput || !toggle) return;
     dropdown.hidden = !open;
@@ -1757,7 +1766,7 @@ function bindServiceHistory() {
     toggle.setAttribute("aria-expanded", String(open));
   };
   const refreshDropdown = () => {
-    if (dropdown && searchInput) dropdown.innerHTML = renderServiceHistoryDogOptions(searchInput.value);
+    if (dropdown && searchInput) dropdown.innerHTML = renderServiceHistoryDogOptions(menuOnly ? "" : searchInput.value);
   };
   const applySearch = () => {
     const dog = serviceHistoryDogFromSearch(searchInput.value);
@@ -1773,7 +1782,13 @@ function bindServiceHistory() {
     refreshDropdown();
     setDropdownOpen(true);
   });
+  searchInput?.addEventListener("click", () => {
+    if (!menuOnly) return;
+    refreshDropdown();
+    setDropdownOpen(true);
+  });
   searchInput?.addEventListener("input", () => {
+    if (menuOnly) return;
     state.serviceHistoryDogQuery = searchInput.value;
     refreshDropdown();
     setDropdownOpen(true);
@@ -3680,10 +3695,12 @@ function openModal({
                 <button class="btn" type="submit">${escapeHtml(submitLabel)}</button>
               </div>`
         }
+        <button class="modal-resize-handle" type="button" data-modal-resize aria-label="Ridimensiona finestra"></button>
       </form>
     </div>
   `;
   const form = modalRoot.querySelector("form");
+  bindDraggableModal(form);
   modalRoot.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", closeModal));
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -3734,6 +3751,122 @@ function openModal({
   onOpen?.(form);
   const firstInput = form.querySelector("input, select, textarea, button");
   firstInput?.focus();
+}
+
+function bindDraggableModal(form) {
+  const head = form?.querySelector(".modal-head");
+  const resizeHandle = form?.querySelector("[data-modal-resize]");
+  if (!form || !head || !window.matchMedia("(min-width: 768px) and (min-height: 600px)").matches) return;
+  let offsetX = 0;
+  let offsetY = 0;
+  let drag = null;
+  let resize = null;
+  form.classList.add("modal-draggable");
+  form.classList.add("modal-resizable");
+
+  const applyOffset = () => {
+    form.style.transform = `translate3d(${Math.round(offsetX)}px, ${Math.round(offsetY)}px, 0)`;
+  };
+
+  const clampDrag = (nextX, nextY, startRect, deltaX, deltaY) => {
+    const margin = 10;
+    let x = nextX;
+    let y = nextY;
+    const width = startRect.width;
+    const height = startRect.height;
+    if (width < window.innerWidth - margin * 2) {
+      const left = startRect.left + deltaX;
+      const right = startRect.right + deltaX;
+      if (left < margin) x += margin - left;
+      if (right > window.innerWidth - margin) x -= right - (window.innerWidth - margin);
+    }
+    if (height < window.innerHeight - margin * 2) {
+      const top = startRect.top + deltaY;
+      const bottom = startRect.bottom + deltaY;
+      if (top < margin) y += margin - top;
+      if (bottom > window.innerHeight - margin) y -= bottom - (window.innerHeight - margin);
+    }
+    return { x, y };
+  };
+
+  head.addEventListener("pointerdown", (event) => {
+    const target = event.target?.closest ? event.target : event.target?.parentElement;
+    if (event.button !== 0 || target?.closest("button, input, select, textarea, a")) return;
+    event.preventDefault();
+    drag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      offsetX,
+      offsetY,
+      rect: form.getBoundingClientRect()
+    };
+    form.classList.add("modal-dragging");
+    head.setPointerCapture?.(event.pointerId);
+  });
+
+  head.addEventListener("pointermove", (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    const next = clampDrag(drag.offsetX + deltaX, drag.offsetY + deltaY, drag.rect, deltaX, deltaY);
+    offsetX = next.x;
+    offsetY = next.y;
+    applyOffset();
+  });
+
+  const endDrag = (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    form.classList.remove("modal-dragging");
+    head.releasePointerCapture?.(event.pointerId);
+    drag = null;
+  };
+  head.addEventListener("pointerup", endDrag);
+  head.addEventListener("pointercancel", endDrag);
+  head.addEventListener("dblclick", () => {
+    offsetX = 0;
+    offsetY = 0;
+    applyOffset();
+  });
+
+  resizeHandle?.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = form.getBoundingClientRect();
+    resize = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      width: rect.width,
+      height: rect.height
+    };
+    form.classList.add("modal-resizing");
+    resizeHandle.setPointerCapture?.(event.pointerId);
+  });
+
+  resizeHandle?.addEventListener("pointermove", (event) => {
+    if (!resize || event.pointerId !== resize.pointerId) return;
+    const margin = 20;
+    const minWidth = Math.min(520, window.innerWidth - margin * 2);
+    const minHeight = 360;
+    const maxWidth = window.innerWidth - margin * 2;
+    const maxHeight = window.innerHeight - margin * 2;
+    const width = Math.min(maxWidth, Math.max(minWidth, resize.width + event.clientX - resize.startX));
+    const height = Math.min(maxHeight, Math.max(minHeight, resize.height + event.clientY - resize.startY));
+    form.style.width = `${Math.round(width)}px`;
+    form.style.height = `${Math.round(height)}px`;
+    form.style.maxHeight = "none";
+  });
+
+  const endResize = (event) => {
+    if (!resize || event.pointerId !== resize.pointerId) return;
+    form.classList.remove("modal-resizing");
+    resizeHandle.releasePointerCapture?.(event.pointerId);
+    resize = null;
+  };
+  resizeHandle?.addEventListener("pointerup", endResize);
+  resizeHandle?.addEventListener("pointercancel", endResize);
 }
 
 function closeModal() {
