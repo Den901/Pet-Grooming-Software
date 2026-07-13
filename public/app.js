@@ -1123,7 +1123,7 @@ function renderMobileAgendaDay(day) {
 function renderMobileAppointmentCard(appointment) {
   const isCompleted = appointment.status === "completato";
   const timeRange = [appointment.startTime, appointment.endTime].filter(Boolean).join(" - ") || "--";
-  const subtitle = [appointment.service, appointment.ownerName].filter(Boolean).join(" - ");
+  const subtitle = appointmentCalendarMeta(appointment, { includeStatus: true });
   const dogLabel = appointmentDogDisplayLabel(appointment);
   return `
     <div class="mobile-appt-row status-${escapeAttr(appointment.status)}">
@@ -1144,11 +1144,15 @@ function renderMobileAppointmentCard(appointment) {
 function renderAppointmentPill(appointment) {
   const isCompleted = appointment.status === "completato";
   const dogLabel = appointmentDogDisplayLabel(appointment);
+  const meta = appointmentCalendarMeta(appointment);
   return `
     <div class="appt-row status-${escapeHtml(appointment.status)}">
-      <button class="appt-pill" type="button" data-appointment-id="${appointment.id}">
-        <span>${escapeHtml(appointment.startTime || "--")}</span>
-        <small>${escapeHtml(dogLabel)}</small>
+      <button class="appt-pill" type="button" data-appointment-id="${appointment.id}" title="${escapeAttr([appointment.startTime || "--", dogLabel, meta].filter(Boolean).join(" "))}">
+        <span class="appt-time">${escapeHtml(appointment.startTime || "--")}</span>
+        <span class="appt-copy">
+          <small>${escapeHtml(dogLabel)}</small>
+          ${meta ? `<em>${escapeHtml(meta)}</em>` : ""}
+        </span>
       </button>
       ${
         isCompleted
@@ -2945,11 +2949,11 @@ function openAppointmentDialog(appointment = {}, options = {}) {
           <input name="contact" value="${escapeAttr(selectedDog?.contact || appointment.contact || "")}" inputmode="tel" />
         </label>
         <fieldset class="field-group full">
-          <legend data-service-legend>${currentStatus === "completato" ? "Servizi eseguiti" : "Prestazioni previste"}</legend>
+          <legend data-service-legend>${currentStatus === "completato" ? "Servizi e prodotti forniti" : "Prestazioni previste"}</legend>
           ${renderServicePicker(selectedServices, serviceOptions)}
         </fieldset>
         <fieldset class="field-group full service-amounts" data-completion-field data-service-amounts>
-          <legend>Prezzi servizi</legend>
+          <legend>Prezzi servizi e prodotti</legend>
           <div class="service-amount-list" data-service-amount-list>
             ${renderServiceAmountRows(selectedServices, appointment)}
           </div>
@@ -2986,7 +2990,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
       const syncAmounts = () => syncServiceAmountRows(form, appointment);
       const syncCompletionFields = () => {
         const isCompleted = form.elements.status.value === "completato";
-        if (serviceLegend) serviceLegend.textContent = isCompleted ? "Servizi eseguiti" : "Prestazioni previste";
+        if (serviceLegend) serviceLegend.textContent = isCompleted ? "Servizi e prodotti forniti" : "Prestazioni previste";
         completionFields.forEach((field) => {
           field.hidden = !isCompleted;
           field.querySelectorAll("input, textarea, select").forEach((input) => {
@@ -3022,7 +3026,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
         syncCompletionFields();
         syncAmounts();
         form.querySelector("[data-service-select]")?.focus();
-        notify("Completa servizio e importo, poi salva la prestazione");
+        notify("Completa servizi, prodotti e importi, poi salva la prestazione");
       });
       form.elements.status.addEventListener("change", syncCompletionFields);
       form.addEventListener("change", (event) => {
@@ -3337,6 +3341,27 @@ function appointmentDogDisplayLabel(appointment = {}) {
   const name = dog?.dogName || appointment.dogName || "Senza nome";
   const breed = dog?.breed || appointment.breed || "";
   return [name, breed].filter(Boolean).join(" - ");
+}
+
+function appointmentServiceLabel(appointment = {}, fallbackStatus = false) {
+  const services = normalizeServiceList(appointment?.services?.length ? appointment.services : appointment?.treatmentDone || appointment?.service || "");
+  if (services.length) return services.join(", ");
+  return fallbackStatus ? statusLabel(appointment.status) : "";
+}
+
+function appointmentDurationLabel(appointment = {}) {
+  const start = timeToMinutes(appointment.startTime);
+  const end = timeToMinutes(appointment.endTime);
+  if (start !== null && end !== null && end > start) return durationLabel(end - start);
+  const dog = appointmentDog(appointment);
+  const estimatedMinutes = Number(dog?.estimatedMinutes || 0);
+  return estimatedMinutes > 0 ? durationLabel(estimatedMinutes) : "";
+}
+
+function appointmentCalendarMeta(appointment = {}, options = {}) {
+  const service = appointmentServiceLabel(appointment, options.includeStatus);
+  const duration = appointmentDurationLabel(appointment);
+  return [service, duration ? `Tempo ${duration}` : ""].filter(Boolean).join(" - ");
 }
 
 function dogAppointmentHistory(dog) {

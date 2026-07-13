@@ -2,12 +2,12 @@
   "format": "PET_GROOMING_SOFTWARE_UPDATE_MANIFEST",
   "formatVersion": 1,
   "app": "pet-grooming-software",
-  "version": "0.0.1-beta.28",
-  "releaseLabel": "0.0.1 beta 28",
-  "createdAt": "2026-07-12T23:49:37.678Z",
-  "packageName": "Pet-Grooming-Software-0.0.1-beta.28.pgs-update",
-  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v0.0.1-beta.28/Pet-Grooming-Software-0.0.1-beta.28.pgs-update",
-  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v0.0.1-beta.28",
-  "notes": "Groomly 0.0.1 beta 28",
-  "changelog": "PWA iPhone: stabilizzata la barra mobile in basso durante lo scroll delle viste calendario settimana e mese. La barra ora si ancora al viewport visibile reale e non usa piu il layer trasformato che poteva farla staccare dalla parte bassa dello schermo."
+  "version": "0.0.1-beta.29",
+  "releaseLabel": "0.0.1 beta 29",
+  "createdAt": "2026-07-13T10:14:03.800Z",
+  "packageName": "Pet-Grooming-Software-0.0.1-beta.29.pgs-update",
+  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v0.0.1-beta.29/Pet-Grooming-Software-0.0.1-beta.29.pgs-update",
+  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v0.0.1-beta.29",
+  "notes": "Groomly 0.0.1 beta 29",
+  "changelog": "Settimana iPad piu leggibile con tre giorni larghi per volta; mese desktop piu ampio; tempi di lavoro visibili in settimana e mese; chiusura rinominata in Servizi e prodotti forniti con prezzi dedicati."
 }
