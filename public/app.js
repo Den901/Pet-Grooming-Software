@@ -23,6 +23,7 @@ const state = {
   eventSource: null,
   liveRefreshTimer: null,
   monitorClockTimer: null,
+  dashboardClockTimer: null,
   serviceWorkerRegistration: null,
   appUpdateReady: false,
   appUpdatePromptDismissed: false,
@@ -793,6 +794,12 @@ function clearMonitorClock() {
   state.monitorClockTimer = null;
 }
 
+function clearDashboardClock() {
+  if (!state.dashboardClockTimer) return;
+  clearInterval(state.dashboardClockTimer);
+  state.dashboardClockTimer = null;
+}
+
 async function logout() {
   await api("/api/logout", { method: "POST", body: "{}" }).catch(() => {});
   state.me = null;
@@ -812,6 +819,7 @@ async function logout() {
   state.serviceHistoryDogId = "";
   state.serviceHistoryDogQuery = "";
   clearMonitorClock();
+  clearDashboardClock();
   state.eventSource?.close();
   state.eventSource = null;
   await loadPublicSettings();
@@ -821,6 +829,7 @@ async function logout() {
 
 function renderView() {
   clearMonitorClock();
+  clearDashboardClock();
   const main = document.getElementById("mainContent");
   if (state.view === "calendar") main.innerHTML = renderCalendar();
   if (state.view === "monitor") main.innerHTML = renderMonitor();
@@ -1488,6 +1497,7 @@ function renderDashboard() {
         <h1>Dashboard</h1>
         <p>Servizi, incassi, clienti e andamento economico.</p>
       </div>
+      <div class="dashboard-clock" data-dashboard-clock>${escapeHtml(monitorClockLabel())}</div>
     </div>
     <section class="metric-grid" aria-label="Riepilogo dashboard">
       <div class="metric"><span>Da fare</span><strong>${planned.length}</strong></div>
@@ -1496,15 +1506,24 @@ function renderDashboard() {
       <div class="metric top-client-metric"><span>Cane piu redditizio</span>${renderRevenueClientMetric(topRevenue)}</div>
       <div class="metric"><span>Tempo medio scheda</span><strong>${escapeHtml(durationLabel(avgMinutes))}</strong></div>
     </section>
-    <section class="dashboard-grid revenue-dashboard-grid">
-      <div class="panel">
-        <h2>Tipi di servizi</h2>
-        ${renderPieChart(serviceStats)}
+    <section class="dashboard-grid overview-dashboard-grid">
+      <div class="panel dashboard-combo-panel">
+        <h2>Servizi e razze</h2>
+        <div class="combo-chart-grid">
+          <div class="chart-tile">
+            <h3>Tipi di servizi</h3>
+            ${renderPieChart(serviceStats)}
+          </div>
+          <div class="chart-tile">
+            <h3>Razze</h3>
+            ${renderPieChart(breedStats)}
+          </div>
+        </div>
       </div>
-      <div class="panel">
-        <h2>Incasso per servizio</h2>
-        ${renderRevenueBars(serviceRevenueStats)}
-      </div>
+    </section>
+    <section class="panel service-revenue-panel">
+      <h2>Incasso per servizio</h2>
+      ${renderRevenueBars(serviceRevenueStats)}
     </section>
     <section class="panel revenue-line-panel">
       <div class="panel-heading-row">
@@ -1519,14 +1538,9 @@ function renderDashboard() {
     </section>
     <section class="dashboard-grid secondary-dashboard-grid">
       <div class="panel">
-        <h2>Razze piu trattate</h2>
-        ${renderPieChart(breedStats)}
-      </div>
-      <div class="panel">
         <h2>Altre classifiche</h2>
         <div class="stat-lists">
           ${renderStatList("Animali", dogStats)}
-          ${renderStatList("Razze", breedStats)}
         </div>
       </div>
     </section>
@@ -1534,6 +1548,8 @@ function renderDashboard() {
 }
 
 function bindDashboard() {
+  syncDashboardClock();
+  state.dashboardClockTimer = setInterval(syncDashboardClock, 1000);
   document.querySelectorAll("[data-revenue-range]").forEach((button) => {
     button.addEventListener("click", () => {
       state.revenueRange = button.dataset.revenueRange;
@@ -1553,6 +1569,11 @@ function bindDashboard() {
       renderView();
     });
   });
+}
+
+function syncDashboardClock() {
+  const clock = document.querySelector("[data-dashboard-clock]");
+  if (clock) clock.textContent = monitorClockLabel();
 }
 
 function renderDogs() {
@@ -4303,12 +4324,12 @@ function renderRevenueBars(stats = []) {
 function renderRevenueLineChart(series) {
   const points = series?.points || [];
   if (!points.length || !series.total) return `<div class="empty-chart">Nessun incasso nel periodo.</div>`;
-  const width = 640;
-  const height = 230;
-  const left = 34;
-  const right = 22;
-  const top = 24;
-  const bottom = 58;
+  const width = 960;
+  const height = 320;
+  const left = 48;
+  const right = 28;
+  const top = 30;
+  const bottom = 70;
   const chartWidth = width - left - right;
   const chartHeight = height - top - bottom;
   const max = Math.max(series.max || 0, 1);
