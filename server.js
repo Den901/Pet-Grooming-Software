@@ -19,9 +19,9 @@ const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const MAX_GALLERY_PHOTOS_PER_TYPE = 5;
 const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin123";
-const SIDEBAR_ITEM_IDS = ["calendar", "dashboard", "dogs", "serviceHistory", "users"];
+const SIDEBAR_ITEM_IDS = ["calendar", "monitor", "dashboard", "dogs", "serviceHistory", "users"];
 const APP_ID = "pet-grooming-software";
-const APP_VERSION = packageInfo.version || "0.0.1-beta.30";
+const APP_VERSION = packageInfo.version || "0.0.1-beta.31";
 const UPDATE_FORMAT = "PET_GROOMING_SOFTWARE_UPDATE";
 const UPDATE_FORMAT_VERSION = 1;
 const UPDATE_EXTENSION = ".pgs-update";
@@ -113,6 +113,9 @@ function defaultSettings() {
       colors: ["Nero", "Bianco", "Marrone", "Fulvo", "Grigio", "Beige", "Crema", "Rosso", "Dorato", "Tricolore", "Pezzato", "Tigrato", "Merle"],
       loyaltyTopVisitsPerYear: 8
     },
+    appointments: {
+      internalReminderMinutes: 15
+    },
     navigation: {
       sidebarOrder: SIDEBAR_ITEM_IDS
     }
@@ -142,6 +145,11 @@ function ensureSettingsShape(settings = {}) {
     ...(settings.navigation || {}),
     sidebarOrder: cleanSidebarOrder(settings.navigation?.sidebarOrder, defaults.navigation.sidebarOrder)
   };
+  const appointments = {
+    ...defaults.appointments,
+    ...(settings.appointments || {}),
+    internalReminderMinutes: cleanNumber(settings.appointments?.internalReminderMinutes, defaults.appointments.internalReminderMinutes)
+  };
   return {
     branding: {
       ...defaults.branding,
@@ -164,6 +172,7 @@ function ensureSettingsShape(settings = {}) {
       ...(settings.alexa || {})
     },
     animal,
+    appointments,
     navigation
   };
 }
@@ -406,6 +415,7 @@ function cleanStringList(value, fallback = []) {
 
 function cleanSidebarOrder(value, fallback = SIDEBAR_ITEM_IDS) {
   const source = Array.isArray(value) ? value : typeof value === "string" ? value.split(/\r?\n|,/) : fallback;
+  const sourceHadMonitor = source.map((item) => cleanString(item)).includes("monitor");
   const seen = new Set();
   const result = [];
   for (const item of source) {
@@ -418,6 +428,10 @@ function cleanSidebarOrder(value, fallback = SIDEBAR_ITEM_IDS) {
     if (!SIDEBAR_ITEM_IDS.includes(id) || seen.has(id)) continue;
     seen.add(id);
     result.push(id);
+  }
+  if (!sourceHadMonitor && result.includes("monitor") && result.includes("calendar")) {
+    const monitor = result.splice(result.indexOf("monitor"), 1)[0];
+    result.splice(result.indexOf("calendar") + 1, 0, monitor);
   }
   return result;
 }
@@ -585,6 +599,13 @@ function publicAnimalSettings(db) {
     services: cleanStringList(animal.services, defaultSettings().animal.services),
     colors: cleanStringList(animal.colors, defaultSettings().animal.colors),
     loyaltyTopVisitsPerYear: cleanNumber(animal.loyaltyTopVisitsPerYear, defaultSettings().animal.loyaltyTopVisitsPerYear)
+  };
+}
+
+function publicAppointmentSettings(db) {
+  const appointments = ensureSettingsShape(db.settings).appointments;
+  return {
+    internalReminderMinutes: Math.min(1440, cleanNumber(appointments.internalReminderMinutes, defaultSettings().appointments.internalReminderMinutes))
   };
 }
 
@@ -1724,6 +1745,23 @@ async function handleApi(req, res, url) {
         writeDb(db);
         broadcastDataChange("settings", { section: "animal" });
         return sendJson(res, 200, { animal: publicAnimalSettings(db) });
+      }
+    }
+
+    if (parts[1] === "settings" && parts[2] === "appointments") {
+      if (method === "GET") {
+        return sendJson(res, 200, { appointments: publicAppointmentSettings(db) });
+      }
+      if (user.role !== "admin") return sendError(res, 403, "Solo amministratore");
+      if (method === "PUT") {
+        const body = await readBody(req);
+        db.settings.appointments = {
+          internalReminderMinutes: Math.min(1440, cleanNumber(body.internalReminderMinutes, defaultSettings().appointments.internalReminderMinutes)),
+          updatedAt: new Date().toISOString()
+        };
+        writeDb(db);
+        broadcastDataChange("settings", { section: "appointments" });
+        return sendJson(res, 200, { appointments: publicAppointmentSettings(db) });
       }
     }
 

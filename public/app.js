@@ -13,6 +13,7 @@ const state = {
   whatsapp: null,
   alexa: null,
   animalSettings: null,
+  appointmentSettings: null,
   navigation: null,
   loginUsers: [],
   version: null,
@@ -21,6 +22,7 @@ const state = {
   updateCheckLoading: false,
   eventSource: null,
   liveRefreshTimer: null,
+  monitorClockTimer: null,
   serviceWorkerRegistration: null,
   appUpdateReady: false,
   appUpdatePromptDismissed: false,
@@ -41,8 +43,10 @@ const weekdayShort = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 const formatter = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "2-digit", month: "short" });
 const monthFormatter = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" });
 const CUSTOM_OPTION_VALUE = "__add_new__";
+const DEFAULT_DOG_PHOTO = "/icons/default-dog.jpg";
 const NAV_ICONS = {
   calendar: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="3"></rect><path d="M8 3v4M16 3v4M4 10h16"></path><path d="M8 14h2M12 14h2M16 14h2M8 17h2M12 17h2"></path></svg>`,
+  monitor: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path><path d="M7 9h4M7 12h7"></path><circle cx="17" cy="10" r="1.5"></circle></svg>`,
   dashboard: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13a8 8 0 0 1 16 0"></path><path d="M12 13l4-5"></path><path d="M7 17h10"></path><path d="M6 13h2M16 13h2"></path></svg>`,
   dogs: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5z"></path><path d="M9.4 14.2c.7-1.6 4.5-1.6 5.2 0 .6 1.4-.8 2.4-2.6 2.4s-3.2-1-2.6-2.4Z"></path><circle cx="8.7" cy="10" r="1.3"></circle><circle cx="15.3" cy="10" r="1.3"></circle><circle cx="11" cy="8.2" r="1.2"></circle><circle cx="13" cy="8.2" r="1.2"></circle></svg>`,
   serviceHistory: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5z"></path><path d="M8 9h8M8 13h5M8 17h8"></path><path d="M17 3v4M7 3v4"></path></svg>`,
@@ -52,12 +56,13 @@ const NAV_ICONS = {
 };
 const SIDEBAR_DEFINITIONS = {
   calendar: { id: "calendar", label: "Calendario", icon: "calendar" },
+  monitor: { id: "monitor", label: "Monitor", icon: "monitor" },
   dashboard: { id: "dashboard", label: "Dashboard", icon: "dashboard" },
   dogs: { id: "dogs", label: "Schede", icon: "dogs" },
   serviceHistory: { id: "serviceHistory", label: "Storico servizi", icon: "serviceHistory" },
   users: { id: "users", label: "Utenti", icon: "users", adminOnly: true }
 };
-const DEFAULT_SIDEBAR_ORDER = ["calendar", "dashboard", "dogs", "serviceHistory", "users"];
+const DEFAULT_SIDEBAR_ORDER = ["calendar", "monitor", "dashboard", "dogs", "serviceHistory", "users"];
 let lastNewDogActionAt = 0;
 const THEME_PRESETS = {
   light: {
@@ -326,10 +331,28 @@ function getAnimalSettings() {
   };
 }
 
+function getAppointmentSettings() {
+  return {
+    internalReminderMinutes: 15,
+    ...(state.appointmentSettings || {})
+  };
+}
+
+function dogPhotoSrc(dog = {}) {
+  return dog?.photoUrl || DEFAULT_DOG_PHOTO;
+}
+
+function dogPhotoMarkup(dog = {}, altName = "") {
+  const name = altName || dog?.dogName || "cane";
+  const alt = dog?.photoUrl ? `Foto di ${name}` : "Foto cane predefinita";
+  return `<img src="${escapeAttr(dogPhotoSrc(dog))}" alt="${escapeAttr(alt)}" />`;
+}
+
 function sidebarOrder(order = state.navigation?.sidebarOrder) {
   const seen = new Set();
   const result = [];
   const source = Array.isArray(order) ? order : DEFAULT_SIDEBAR_ORDER;
+  const sourceHadMonitor = source.includes("monitor");
   for (const id of source) {
     if (!SIDEBAR_DEFINITIONS[id] || seen.has(id)) continue;
     seen.add(id);
@@ -339,6 +362,10 @@ function sidebarOrder(order = state.navigation?.sidebarOrder) {
     if (seen.has(id)) continue;
     seen.add(id);
     result.push(id);
+  }
+  if (!sourceHadMonitor && result.includes("monitor") && result.includes("calendar")) {
+    const monitor = result.splice(result.indexOf("monitor"), 1)[0];
+    result.splice(result.indexOf("calendar") + 1, 0, monitor);
   }
   return result;
 }
@@ -461,11 +488,12 @@ function renderBrandMark(className) {
 }
 
 async function loadData() {
-  const [meResponse, dogsResponse, appointmentsResponse, animalResponse, navigationResponse, brandingResponse] = await Promise.all([
+  const [meResponse, dogsResponse, appointmentsResponse, animalResponse, appointmentSettingsResponse, navigationResponse, brandingResponse] = await Promise.all([
     api("/api/me"),
     api("/api/dogs"),
     api("/api/appointments"),
     api("/api/settings/animal"),
+    api("/api/settings/appointments"),
     api("/api/settings/navigation"),
     api("/api/settings/branding")
   ]);
@@ -473,6 +501,7 @@ async function loadData() {
   state.dogs = dogsResponse.dogs || [];
   state.appointments = appointmentsResponse.appointments || [];
   state.animalSettings = animalResponse.animal || state.animalSettings;
+  state.appointmentSettings = appointmentSettingsResponse.appointments || state.appointmentSettings;
   state.navigation = navigationResponse.navigation || state.navigation;
   state.branding = brandingResponse.branding || state.branding;
   applyBranding();
@@ -515,7 +544,14 @@ function connectLiveUpdates() {
     clearTimeout(state.liveRefreshTimer);
     state.liveRefreshTimer = setTimeout(async () => {
       await loadData();
-      if (state.me) renderShell();
+      if (state.me) {
+        if (state.view === "monitor") {
+          refreshMonitorList();
+          syncMonitorRealtime();
+        } else {
+          renderShell();
+        }
+      }
       notify("Portale aggiornato");
     }, 350);
   };
@@ -751,6 +787,12 @@ function canAccessView(view) {
   return navItems().some((item) => item.id === view) || (view === "settings" && state.me?.role === "admin");
 }
 
+function clearMonitorClock() {
+  if (!state.monitorClockTimer) return;
+  clearInterval(state.monitorClockTimer);
+  state.monitorClockTimer = null;
+}
+
 async function logout() {
   await api("/api/logout", { method: "POST", body: "{}" }).catch(() => {});
   state.me = null;
@@ -762,12 +804,14 @@ async function logout() {
   state.whatsapp = null;
   state.alexa = null;
   state.animalSettings = null;
+  state.appointmentSettings = null;
   state.navigation = null;
   state.version = null;
   state.updateCheck = null;
   state.updateCheckLoading = false;
   state.serviceHistoryDogId = "";
   state.serviceHistoryDogQuery = "";
+  clearMonitorClock();
   state.eventSource?.close();
   state.eventSource = null;
   await loadPublicSettings();
@@ -776,8 +820,10 @@ async function logout() {
 }
 
 function renderView() {
+  clearMonitorClock();
   const main = document.getElementById("mainContent");
   if (state.view === "calendar") main.innerHTML = renderCalendar();
+  if (state.view === "monitor") main.innerHTML = renderMonitor();
   if (state.view === "dashboard") main.innerHTML = renderDashboard();
   if (state.view === "dogs") main.innerHTML = renderDogs();
   if (state.view === "serviceHistory") main.innerHTML = renderServiceHistory();
@@ -785,6 +831,7 @@ function renderView() {
   if (state.view === "settings") main.innerHTML = renderSettings();
 
   if (state.view === "calendar") bindCalendar();
+  if (state.view === "monitor") bindMonitor();
   if (state.view === "dashboard") bindDashboard();
   if (state.view === "dogs") bindDogs();
   if (state.view === "serviceHistory") bindServiceHistory();
@@ -862,6 +909,197 @@ function isAppleMobile() {
 
 function mediaMatches(query) {
   return typeof window.matchMedia === "function" && window.matchMedia(query).matches;
+}
+
+function renderMonitor() {
+  const items = monitorAppointments();
+  const settings = getAppointmentSettings();
+  return `
+    <section class="monitor-page" id="monitorPage">
+      <div class="monitor-top">
+        <div class="monitor-title">
+          <span>Monitor giornata</span>
+          <strong data-monitor-summary>${escapeHtml(monitorSummaryLabel(items.length))}</strong>
+        </div>
+        <div class="monitor-clock" data-monitor-clock>${escapeHtml(monitorClockLabel())}</div>
+        <div class="monitor-actions">
+          <span class="monitor-reminder">${escapeHtml(monitorReminderLabel(settings.internalReminderMinutes))}</span>
+          <button class="btn secondary" type="button" id="monitorFullscreenBtn">Schermo intero</button>
+        </div>
+      </div>
+      <div class="monitor-list" data-monitor-list>
+        ${
+          items.length
+            ? items.map(renderMonitorAppointment).join("")
+            : renderMonitorEmpty()
+        }
+      </div>
+    </section>
+  `;
+}
+
+function renderMonitorAppointment(appointment) {
+  const dog = appointmentDog(appointment) || {
+    dogName: appointment.dogName,
+    breed: appointment.breed,
+    photoUrl: ""
+  };
+  const dogName = dog.dogName || appointment.dogName || "Senza nome";
+  const breed = dog.breed || appointment.breed || "Razza non indicata";
+  const services = appointmentServiceLabel(appointment, true) || "Servizio da definire";
+  const duration = appointmentDurationLabel(appointment);
+  const timeRange = [appointment.startTime, appointment.endTime].filter(Boolean).join(" - ") || "Orario da definire";
+  return `
+    <article class="monitor-card status-${escapeAttr(appointment.status)}" data-monitor-card="${escapeAttr(appointment.id)}">
+      <div class="monitor-photo">${dogPhotoMarkup(dog, dogName)}</div>
+      <div class="monitor-card-body">
+        <div class="monitor-card-head">
+          <div>
+            <h2>${escapeHtml(dogName)}</h2>
+            <p>${escapeHtml(breed)}</p>
+          </div>
+          <span class="monitor-countdown" data-monitor-countdown="${escapeAttr(appointment.id)}">${escapeHtml(monitorRelativeLabel(appointment))}</span>
+        </div>
+        <div class="monitor-card-grid">
+          <div>
+            <span>Orario</span>
+            <strong>${escapeHtml(timeRange)}</strong>
+          </div>
+          <div>
+            <span>Tempo lavoro</span>
+            <strong>${escapeHtml(duration)}</strong>
+          </div>
+          <div class="wide">
+            <span>Servizi e prodotti</span>
+            <strong>${escapeHtml(services)}</strong>
+          </div>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function bindMonitor() {
+  const page = document.getElementById("monitorPage");
+  const button = document.getElementById("monitorFullscreenBtn");
+  button?.addEventListener("click", async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else if (page?.requestFullscreen) await page.requestFullscreen();
+      else throw new Error("fullscreen unavailable");
+      syncMonitorRealtime();
+    } catch {
+      notify("Schermo intero non disponibile su questo dispositivo");
+    }
+  });
+  syncMonitorRealtime();
+  state.monitorClockTimer = setInterval(syncMonitorRealtime, 1000);
+}
+
+function syncMonitorRealtime() {
+  if (state.view !== "monitor") return;
+  const clock = document.querySelector("[data-monitor-clock]");
+  if (clock) clock.textContent = monitorClockLabel();
+  document.querySelectorAll("[data-monitor-countdown]").forEach((item) => {
+    const appointment = state.appointments.find((entry) => entry.id === item.dataset.monitorCountdown);
+    if (appointment) item.textContent = monitorRelativeLabel(appointment);
+  });
+  const button = document.getElementById("monitorFullscreenBtn");
+  if (button) button.textContent = document.fullscreenElement ? "Esci schermo intero" : "Schermo intero";
+  const page = document.getElementById("monitorPage");
+  const minuteKey = `${todayISO()}-${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}`;
+  if (page && page.dataset.monitorMinute && page.dataset.monitorMinute !== minuteKey) {
+    refreshMonitorList();
+  }
+  if (page) page.dataset.monitorMinute = minuteKey;
+}
+
+function refreshMonitorList() {
+  const items = monitorAppointments();
+  const list = document.querySelector("[data-monitor-list]");
+  if (list) list.innerHTML = items.length ? items.map(renderMonitorAppointment).join("") : renderMonitorEmpty();
+  const summary = document.querySelector("[data-monitor-summary]");
+  if (summary) summary.textContent = monitorSummaryLabel(items.length);
+}
+
+function monitorSummaryLabel(count) {
+  if (!count) return "Nessun appuntamento in corso";
+  return count === 1 ? "1 appuntamento da seguire" : `${count} appuntamenti da seguire`;
+}
+
+function renderMonitorEmpty() {
+  return `<div class="monitor-empty">
+    <strong>Giornata libera</strong>
+    <span>Quando arriva un nuovo appuntamento lo vedrai qui automaticamente.</span>
+  </div>`;
+}
+
+function monitorAppointments() {
+  const now = new Date();
+  return appointmentsForDate(todayISO()).filter((appointment) => isMonitorAppointmentVisible(appointment, now));
+}
+
+function isMonitorAppointmentVisible(appointment, now = new Date()) {
+  if (["annullato", "completato"].includes(appointment.status)) return false;
+  const start = timeToMinutes(appointment.startTime);
+  if (start === null) return true;
+  const current = now.getHours() * 60 + now.getMinutes();
+  return appointmentMonitorEndMinutes(appointment, start) >= current;
+}
+
+function appointmentMonitorEndMinutes(appointment, startMinutes = timeToMinutes(appointment.startTime) || 0) {
+  const end = timeToMinutes(appointment.endTime);
+  if (end !== null && end > startMinutes) return end;
+  const duration = appointmentDurationMinutes(appointment);
+  return Math.min(24 * 60, startMinutes + Math.max(duration || 30, 30));
+}
+
+function appointmentDurationMinutes(appointment = {}) {
+  const start = timeToMinutes(appointment.startTime);
+  const end = timeToMinutes(appointment.endTime);
+  if (start !== null && end !== null && end > start) return end - start;
+  const dog = appointmentDog(appointment);
+  const estimatedMinutes = Number(dog?.estimatedMinutes || 0);
+  return Number.isFinite(estimatedMinutes) && estimatedMinutes > 0 ? estimatedMinutes : 0;
+}
+
+function monitorRelativeLabel(appointment) {
+  const start = timeToMinutes(appointment.startTime);
+  if (start === null) return "orario da definire";
+  const current = currentMinutesOfDay();
+  const diff = start - current;
+  if (diff > 0) return `tra ${friendlyDurationLabel(diff)}`;
+  if (appointmentMonitorEndMinutes(appointment, start) >= current) return "adesso";
+  return "superato";
+}
+
+function friendlyDurationLabel(minutes) {
+  const total = Math.max(0, Math.round(Number(minutes || 0)));
+  if (total < 60) return `${total} min`;
+  const hours = Math.floor(total / 60);
+  const rest = total % 60;
+  if (!rest) return `${hours} ${hours === 1 ? "ora" : "ore"}`;
+  return `${hours}h ${rest}m`;
+}
+
+function monitorClockLabel() {
+  return capitalize(
+    new Intl.DateTimeFormat("it-IT", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    }).format(new Date())
+  );
+}
+
+function monitorReminderLabel(minutes) {
+  const value = Number(minutes || 0);
+  if (!value) return "Avviso interno disattivato";
+  return `Avviso interno ${friendlyDurationLabel(value)} prima`;
 }
 
 function renderCalendar() {
@@ -1336,9 +1574,7 @@ function renderDogs() {
 
 function renderDogCard(dog) {
   const topDog = isTopDog(dog);
-  const photo = dog.photoUrl
-    ? `<img src="${escapeAttr(dog.photoUrl)}" alt="Foto di ${escapeAttr(dog.dogName)}" />`
-    : `<span>${escapeHtml(initials(dog.dogName))}</span>`;
+  const photo = dogPhotoMarkup(dog);
   return `
     <button class="dog-tile ${topDog ? "top-client" : ""}" type="button" data-dog-open="${dog.id}" aria-label="Apri scheda di ${escapeAttr(dog.dogName || "cane")}">
       <div class="dog-thumb">${photo}${topDog ? `<img class="top-paw" src="/icons/top-client-paw.png" alt="Cliente top" />` : ""}</div>
@@ -1384,9 +1620,7 @@ function renderServiceHistory() {
   const history = selectedDog ? dogAppointmentHistory(selectedDog).filter((appointment) => appointment.status === "completato") : [];
   const photoCount = history.reduce((sum, appointment) => sum + appointmentPhotoCount(appointment), 0);
   const totalRevenue = history.reduce((sum, appointment) => sum + appointmentRevenue(appointment), 0);
-  const photo = selectedDog?.photoUrl
-    ? `<img src="${escapeAttr(selectedDog.photoUrl)}" alt="Foto di ${escapeAttr(selectedDog.dogName)}" />`
-    : `<span>${escapeHtml(initials(selectedDog?.dogName))}</span>`;
+  const photo = dogPhotoMarkup(selectedDog || {});
   const searchValue = state.serviceHistoryDogQuery || serviceHistoryDogLabel(selectedDog);
   return `
     <div class="topbar">
@@ -1565,6 +1799,7 @@ function renderSettings() {
   const alexa = state.alexa || {};
   const duckdns = state.duckdns || {};
   const animal = getAnimalSettings();
+  const appointmentSettings = getAppointmentSettings();
   const version = state.version || {};
   const updateCheck = state.updateCheck;
   const localUrls = duckdns.localUrls || [];
@@ -1713,6 +1948,32 @@ function renderSettings() {
         </div>
         <div class="settings-actions">
           <button class="btn" type="submit">Salva scheda animale</button>
+        </div>
+      </form>
+      <form class="settings-panel wide" id="appointmentSettingsForm">
+        <div class="settings-heading-row">
+          <div>
+            <h2>Appuntamenti e monitor</h2>
+            <p class="settings-note">Promemoria interno globale per operatori, monitor e integrazioni future. Separato dal promemoria WhatsApp cliente.</p>
+          </div>
+          <span class="badge">${escapeHtml(monitorReminderLabel(appointmentSettings.internalReminderMinutes))}</span>
+        </div>
+        <div class="form-grid">
+          <label>Avviso interno prima dell'appuntamento
+            <select name="internalReminderMinutes">
+              ${[0, 5, 10, 15, 30, 45, 60, 90, 120]
+                .map(
+                  (minutes) =>
+                    `<option value="${minutes}" ${Number(appointmentSettings.internalReminderMinutes || 0) === minutes ? "selected" : ""}>${escapeHtml(
+                      minutes ? `${friendlyDurationLabel(minutes)} prima` : "Disattivato"
+                    )}</option>`
+                )
+                .join("")}
+            </select>
+          </label>
+        </div>
+        <div class="settings-actions">
+          <button class="btn" type="submit">Salva appuntamenti</button>
         </div>
       </form>
       <form class="settings-panel wide" id="navigationSettingsForm">
@@ -2112,6 +2373,24 @@ function bindSettings() {
     }
   });
 
+  document.getElementById("appointmentSettingsForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    try {
+      const response = await api("/api/settings/appointments", {
+        method: "PUT",
+        body: JSON.stringify({
+          internalReminderMinutes: data.get("internalReminderMinutes")
+        })
+      });
+      state.appointmentSettings = response.appointments;
+      renderView();
+      notify("Impostazioni appuntamenti salvate");
+    } catch (err) {
+      notify(err.message);
+    }
+  });
+
   const navigationForm = document.getElementById("navigationSettingsForm");
   const orderList = navigationForm.querySelector("[data-sidebar-order-list]");
   orderList.addEventListener("click", (event) => {
@@ -2415,9 +2694,7 @@ function openDogDetailsDialog(dog = {}) {
   const scheduledCount = history.filter(isScheduledAppointment).length;
   const topDog = isTopDog(dog);
   const visitFrequency = dogVisitFrequencyLabel(dog);
-  const photo = dog.photoUrl
-    ? `<img src="${escapeAttr(dog.photoUrl)}" alt="Foto di ${escapeAttr(dog.dogName)}" />`
-    : `<span>${escapeHtml(initials(dog.dogName))}</span>`;
+  const photo = dogPhotoMarkup(dog);
   openModal({
     title: dog.dogName || "Scheda cane",
     hideActions: true,
@@ -3977,9 +4254,7 @@ function appointmentRevenue(appointment) {
 
 function renderTopClientMetric(topClient) {
   if (!topClient) return `<strong>-</strong>`;
-  const photo = topClient.dog?.photoUrl
-    ? `<img src="${escapeAttr(topClient.dog.photoUrl)}" alt="Foto di ${escapeAttr(topClient.name)}" />`
-    : `<span>${escapeHtml(initials(topClient.name))}</span>`;
+  const photo = dogPhotoMarkup(topClient.dog || {}, topClient.name);
   return `
     <div class="metric-client">
       <div class="metric-client-photo">${photo}</div>
@@ -4097,9 +4372,7 @@ function revenueRangeLabel(range) {
 
 function renderRevenueClientMetric(topClient) {
   if (!topClient) return `<strong>-</strong>`;
-  const photo = topClient.dog?.photoUrl
-    ? `<img src="${escapeAttr(topClient.dog.photoUrl)}" alt="Foto di ${escapeAttr(topClient.name)}" />`
-    : `<span>${escapeHtml(initials(topClient.name))}</span>`;
+  const photo = dogPhotoMarkup(topClient.dog || {}, topClient.name);
   return `
     <div class="metric-client">
       <div class="metric-client-photo">${photo}</div>
