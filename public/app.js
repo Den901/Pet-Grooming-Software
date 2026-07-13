@@ -11,6 +11,7 @@ const state = {
   duckdns: null,
   branding: null,
   whatsapp: null,
+  alexa: null,
   animalSettings: null,
   navigation: null,
   loginUsers: [],
@@ -476,10 +477,11 @@ async function loadData() {
   state.branding = brandingResponse.branding || state.branding;
   applyBranding();
   if (state.me?.role === "admin") {
-    const [usersResponse, duckdnsResponse, whatsappResponse, versionResponse] = await Promise.all([
+    const [usersResponse, duckdnsResponse, whatsappResponse, alexaResponse, versionResponse] = await Promise.all([
       api("/api/users"),
       api("/api/settings/duckdns"),
       api("/api/settings/whatsapp"),
+      api("/api/settings/alexa"),
       api("/api/version")
     ]);
     state.users = usersResponse.users || [];
@@ -487,12 +489,14 @@ async function loadData() {
     state.loginUsers = state.users.filter((user) => user.active).map(loginUserFromUser);
     state.duckdns = duckdnsResponse.duckdns || null;
     state.whatsapp = whatsappResponse.whatsapp || null;
+    state.alexa = alexaResponse.alexa || null;
     state.version = versionResponse || null;
   } else {
     state.users = [];
     state.onlineUserIds = [];
     state.duckdns = null;
     state.whatsapp = null;
+    state.alexa = null;
     state.version = null;
   }
 }
@@ -756,6 +760,7 @@ async function logout() {
   state.onlineUserIds = [];
   state.duckdns = null;
   state.whatsapp = null;
+  state.alexa = null;
   state.animalSettings = null;
   state.navigation = null;
   state.version = null;
@@ -1557,6 +1562,7 @@ function renderSettings() {
   const branding = getBranding();
   const loginBackground = branding.loginBackground;
   const whatsapp = state.whatsapp || {};
+  const alexa = state.alexa || {};
   const duckdns = state.duckdns || {};
   const animal = getAnimalSettings();
   const version = state.version || {};
@@ -1570,7 +1576,7 @@ function renderSettings() {
     <div class="topbar">
       <div class="page-title">
         <h1>Impostazioni</h1>
-        <p>Identita aziendale, colori, WhatsApp, DuckDNS e backup.</p>
+        <p>Identita aziendale, colori, WhatsApp, Alexa, DuckDNS e backup.</p>
       </div>
     </div>
     <section class="settings-grid">
@@ -1766,6 +1772,71 @@ function renderSettings() {
         <p class="settings-note">Variabili disponibili: {ownerName}, {dogName}, {businessName}, {date}, {time}, {service}, {address}, {phone}.</p>
         <div class="settings-actions">
           <button class="btn" type="submit">Salva WhatsApp</button>
+        </div>
+      </form>
+      <form class="settings-panel wide" id="alexaForm">
+        <div class="settings-heading-row">
+          <div>
+            <h2>Alexa</h2>
+            <p class="settings-note">Permette a una skill Alexa di leggere cani/servizi e creare appuntamenti nel calendario Groomly.</p>
+          </div>
+          <span class="badge">${alexa.enabled ? "Attiva" : "Disattiva"}</span>
+        </div>
+        <div class="access-grid">
+          <div class="access-box">
+            <h3>Endpoint skill</h3>
+            ${
+              alexa.endpointUrl
+                ? `<code class="settings-code">${escapeHtml(alexa.endpointUrl)}</code>`
+                : `<span class="muted">Configura DuckDNS/HTTPS per ottenere l'URL pubblico.</span>`
+            }
+            <p class="settings-note">Amazon deve raggiungere questo endpoint da internet con HTTPS valido.</p>
+          </div>
+          <div class="access-box">
+            <h3>Stato sicurezza</h3>
+            <p class="settings-note">Token ${alexa.hasApiToken ? "salvato" : "mancante"} · PIN ${alexa.hasPin ? "salvato" : "non impostato"}</p>
+            ${alexa.generatedToken ? `<code class="settings-code secret">${escapeHtml(alexa.generatedToken)}</code><p class="settings-note">Copia questa chiave ora: dopo non verra piu mostrata.</p>` : ""}
+          </div>
+        </div>
+        <div class="form-grid">
+          <label class="checkbox-line full">
+            <input name="enabled" type="checkbox" ${alexa.enabled ? "checked" : ""} />
+            Abilita integrazione Alexa
+          </label>
+          <label>Nome invocazione skill
+            <input name="invocationName" value="${escapeAttr(alexa.invocationName || "groomly")}" placeholder="groomly" />
+          </label>
+          <label>Token API Alexa
+            <input name="apiToken" type="password" autocomplete="new-password" placeholder="${alexa.hasApiToken ? "Lascia vuoto per non cambiarlo" : "Incolla token o genera nuova chiave"}" />
+          </label>
+          <label class="checkbox-line">
+            <input name="generateApiToken" type="checkbox" />
+            Genera nuova chiave
+          </label>
+          <label class="checkbox-line">
+            <input name="clearApiToken" type="checkbox" />
+            Rimuovi token salvato
+          </label>
+          <label class="checkbox-line">
+            <input name="requirePin" type="checkbox" ${alexa.requirePin ? "checked" : ""} />
+            Richiedi PIN per salvare appuntamenti
+          </label>
+          <label>PIN vocale
+            <input name="pin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="new-password" placeholder="${alexa.hasPin ? "Lascia vuoto per non cambiarlo" : "4-8 cifre"}" />
+          </label>
+          <label class="checkbox-line">
+            <input name="clearPin" type="checkbox" />
+            Rimuovi PIN salvato
+          </label>
+        </div>
+        <p class="settings-note">Flusso previsto: "Alexa, apri Groomly", cane, data, ora, servizi/prodotti, conferma finale e salvataggio nel calendario.</p>
+        ${
+          alexa.lastUpdateAt
+            ? `<p class="settings-note">Ultima attivita: ${escapeHtml(formatDateTime(alexa.lastUpdateAt))} - ${escapeHtml(alexa.lastResult || "-")}</p>`
+            : ""
+        }
+        <div class="settings-actions">
+          <button class="btn" type="submit">Salva Alexa</button>
         </div>
       </form>
       <form class="settings-panel wide" id="duckDnsForm">
@@ -2095,6 +2166,31 @@ function bindSettings() {
       state.whatsapp = response.whatsapp;
       renderView();
       notify("Impostazioni WhatsApp salvate");
+    } catch (err) {
+      notify(err.message);
+    }
+  });
+
+  document.getElementById("alexaForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    try {
+      const response = await api("/api/settings/alexa", {
+        method: "PUT",
+        body: JSON.stringify({
+          enabled: data.get("enabled") === "on",
+          invocationName: data.get("invocationName"),
+          apiToken: data.get("apiToken"),
+          generateApiToken: data.get("generateApiToken") === "on",
+          clearApiToken: data.get("clearApiToken") === "on",
+          requirePin: data.get("requirePin") === "on",
+          pin: data.get("pin"),
+          clearPin: data.get("clearPin") === "on"
+        })
+      });
+      state.alexa = response.alexa;
+      renderView();
+      notify(response.alexa?.generatedToken ? "Chiave Alexa generata: copiala ora" : "Impostazioni Alexa salvate");
     } catch (err) {
       notify(err.message);
     }

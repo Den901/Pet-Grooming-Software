@@ -2381,6 +2381,25 @@ label {
   gap: 12px;
 }
 
+.settings-code {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-soft);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.settings-code.secret {
+  border-color: rgba(207, 97, 85, 0.38);
+  background: rgba(207, 97, 85, 0.09);
+}
+
 .order-list {
   display: grid;
   gap: 8px;

@@ -2,12 +2,12 @@
   "format": "PET_GROOMING_SOFTWARE_UPDATE_MANIFEST",
   "formatVersion": 1,
   "app": "pet-grooming-software",
-  "version": "0.0.1-beta.29",
-  "releaseLabel": "0.0.1 beta 29",
-  "createdAt": "2026-07-13T10:14:03.800Z",
-  "packageName": "Pet-Grooming-Software-0.0.1-beta.29.pgs-update",
-  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v0.0.1-beta.29/Pet-Grooming-Software-0.0.1-beta.29.pgs-update",
-  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v0.0.1-beta.29",
-  "notes": "Groomly 0.0.1 beta 29",
-  "changelog": "Settimana iPad piu leggibile con tre giorni larghi per volta; mese desktop piu ampio; tempi di lavoro visibili in settimana e mese; chiusura rinominata in Servizi e prodotti forniti con prezzi dedicati."
+  "version": "0.0.1-beta.30",
+  "releaseLabel": "0.0.1 beta 30",
+  "createdAt": "2026-07-13T10:46:53.229Z",
+  "packageName": "Pet-Grooming-Software-0.0.1-beta.30.pgs-update",
+  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v0.0.1-beta.30/Pet-Grooming-Software-0.0.1-beta.30.pgs-update",
+  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v0.0.1-beta.30",
+  "notes": "Groomly 0.0.1 beta 30",
+  "changelog": "Base integrazione Alexa: pannello impostazioni dedicato, token API, PIN opzionale, endpoint protetti per ricerca cani, servizi/prodotti e creazione appuntamenti, piu guida docs/alexa-integrazione.md per collegare una Custom Skill Alexa."
 }

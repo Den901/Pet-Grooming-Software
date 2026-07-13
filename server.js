@@ -21,7 +21,7 @@ const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin123";
 const SIDEBAR_ITEM_IDS = ["calendar", "dashboard", "dogs", "serviceHistory", "users"];
 const APP_ID = "pet-grooming-software";
-const APP_VERSION = packageInfo.version || "0.0.1-beta.29";
+const APP_VERSION = packageInfo.version || "0.0.1-beta.30";
 const UPDATE_FORMAT = "PET_GROOMING_SOFTWARE_UPDATE";
 const UPDATE_FORMAT_VERSION = 1;
 const UPDATE_EXTENSION = ".pgs-update";
@@ -97,6 +97,16 @@ function defaultSettings() {
       lastResult: "",
       lastUpdateAt: ""
     },
+    alexa: {
+      enabled: false,
+      invocationName: "groomly",
+      apiToken: "",
+      requirePin: false,
+      pinHash: "",
+      pinSalt: "",
+      lastResult: "",
+      lastUpdateAt: ""
+    },
     animal: {
       breeds: ["Meticcio"],
       services: ["Bagno", "Taglio", "Snodatura", "Stripping"],
@@ -148,6 +158,10 @@ function ensureSettingsShape(settings = {}) {
     whatsapp: {
       ...defaults.whatsapp,
       ...(settings.whatsapp || {})
+    },
+    alexa: {
+      ...defaults.alexa,
+      ...(settings.alexa || {})
     },
     animal,
     navigation
@@ -607,6 +621,29 @@ function publicWhatsappSettings(db) {
   };
 }
 
+function requestBaseUrl(req) {
+  const forwardedProto = cleanString(req.headers["x-forwarded-proto"]).split(",")[0].trim();
+  const protocol = forwardedProto || (req.socket.encrypted ? "https" : "http");
+  const host = cleanString(req.headers["x-forwarded-host"]).split(",")[0].trim() || cleanString(req.headers.host);
+  return host ? `${protocol}://${host}` : "";
+}
+
+function publicAlexaSettings(db, req = null) {
+  const alexa = ensureSettingsShape(db.settings).alexa;
+  const duckdnsUrl = buildPublicUrl(ensureSettingsShape(db.settings).duckdns);
+  const endpointBase = duckdnsUrl || (req ? requestBaseUrl(req) : "");
+  return {
+    enabled: Boolean(alexa.enabled),
+    invocationName: cleanString(alexa.invocationName) || "groomly",
+    hasApiToken: Boolean(alexa.apiToken),
+    requirePin: Boolean(alexa.requirePin),
+    hasPin: Boolean(alexa.pinHash && alexa.pinSalt),
+    endpointUrl: endpointBase ? `${endpointBase.replace(/\/$/, "")}/api/alexa` : "",
+    lastResult: cleanString(alexa.lastResult),
+    lastUpdateAt: cleanString(alexa.lastUpdateAt)
+  };
+}
+
 function sortAppointments(appointments) {
   return [...appointments].sort((a, b) => `${a.date || ""} ${a.startTime || ""}`.localeCompare(`${b.date || ""} ${b.startTime || ""}`));
 }
@@ -1037,6 +1074,123 @@ function addEventClient(req, res, user) {
   });
 }
 
+function generateAccessToken(prefix = "groomly") {
+  return `${prefix}_${crypto.randomBytes(32).toString("base64url")}`;
+}
+
+function timingSafeEquals(left, right) {
+  const a = Buffer.from(cleanString(left));
+  const b = Buffer.from(cleanString(right));
+  if (!a.length || !b.length || a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+function alexaRequestToken(req, url) {
+  const auth = cleanString(req.headers.authorization);
+  if (auth.toLowerCase().startsWith("bearer ")) return auth.slice(7).trim();
+  return cleanString(req.headers["x-groomly-alexa-token"]);
+}
+
+function requireAlexaAccess(req, url, db) {
+  const alexa = ensureSettingsShape(db.settings).alexa;
+  if (!alexa.enabled) return { error: "Integrazione Alexa disattivata", status: 403 };
+  if (!alexa.apiToken) return { error: "Token Alexa non configurato", status: 403 };
+  if (!timingSafeEquals(alexaRequestToken(req, url), alexa.apiToken)) return { error: "Token Alexa non valido", status: 401 };
+  return { alexa };
+}
+
+function verifyAlexaPin(alexa, pin) {
+  if (!alexa.requirePin) return true;
+  const cleanPin = cleanString(pin);
+  if (!cleanPin || !alexa.pinHash || !alexa.pinSalt) return false;
+  return verifyPassword(cleanPin, { passwordHash: alexa.pinHash, passwordSalt: alexa.pinSalt });
+}
+
+function publicAlexaDog(dog) {
+  return {
+    id: dog.id,
+    dogName: cleanString(dog.dogName),
+    ownerName: cleanString(dog.ownerName),
+    breed: cleanString(dog.breed),
+    color: cleanString(dog.color),
+    sex: cleanString(dog.sex),
+    contactMissing: Boolean(dog.contactMissing),
+    services: cleanStringList(dog.services, []),
+    estimatedMinutes: cleanNumber(dog.estimatedMinutes, 0)
+  };
+}
+
+function publicAlexaAppointment(appointment, db) {
+  const dog = appointment.dogId ? db.dogs.find((item) => item.id === appointment.dogId) : null;
+  return {
+    id: appointment.id,
+    dogId: cleanString(appointment.dogId),
+    dogName: cleanString(dog?.dogName || appointment.dogName),
+    ownerName: cleanString(dog?.ownerName || appointment.ownerName),
+    breed: cleanString(dog?.breed || appointment.breed),
+    date: cleanString(appointment.date),
+    startTime: cleanString(appointment.startTime),
+    endTime: cleanString(appointment.endTime),
+    services: cleanStringList(appointment.services, appointment.service ? [appointment.service] : []),
+    status: cleanString(appointment.status)
+  };
+}
+
+function searchAlexaDogs(db, query, limit = 8) {
+  const q = lowerMatch(query);
+  const dogs = q
+    ? db.dogs.filter((dog) =>
+        [dog.dogName, dog.ownerName, dog.breed, dog.contact].some((field) => lowerMatch(field).includes(q))
+      )
+    : db.dogs;
+  return dogs
+    .sort((a, b) => {
+      const aName = lowerMatch(a.dogName);
+      const bName = lowerMatch(b.dogName);
+      if (q && aName.startsWith(q) !== bName.startsWith(q)) return aName.startsWith(q) ? -1 : 1;
+      return cleanString(a.dogName).localeCompare(cleanString(b.dogName), "it");
+    })
+    .slice(0, Math.max(1, Math.min(25, cleanNumber(limit, 8))));
+}
+
+function resolveAlexaDog(db, body) {
+  const dogId = cleanString(body.dogId);
+  if (dogId) {
+    const dog = db.dogs.find((item) => item.id === dogId);
+    return dog ? { dog } : { error: "Cane non trovato", status: 404 };
+  }
+  const dogName = cleanString(body.dogName || body.dog);
+  if (!dogName) return { error: "Nome cane obbligatorio", status: 400 };
+  const matches = searchAlexaDogs(db, dogName, 10);
+  const exact = matches.filter((dog) => lowerMatch(dog.dogName) === lowerMatch(dogName));
+  if (exact.length === 1) return { dog: exact[0] };
+  if (matches.length === 1) return { dog: matches[0] };
+  if (matches.length > 1) {
+    return {
+      error: "Ho trovato piu cani con questo nome",
+      status: 409,
+      matches: matches.map(publicAlexaDog)
+    };
+  }
+  return { error: "Cane non trovato in Groomly", status: 404 };
+}
+
+function addMinutesToTime(time, minutes) {
+  const match = cleanString(time).match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return "";
+  const start = Math.max(0, Math.min(23 * 60 + 59, Number(match[1]) * 60 + Number(match[2])));
+  const next = Math.max(0, Math.min(23 * 60 + 59, start + cleanNumber(minutes, 0)));
+  return `${String(Math.floor(next / 60)).padStart(2, "0")}:${String(next % 60).padStart(2, "0")}`;
+}
+
+function validateAlexaAppointmentPayload(body) {
+  const date = cleanString(body.date);
+  const startTime = cleanString(body.startTime || body.time);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "Data obbligatoria nel formato YYYY-MM-DD";
+  if (!/^\d{1,2}:\d{2}$/.test(startTime)) return "Ora obbligatoria nel formato HH:mm";
+  return "";
+}
+
 function validateDogForSave(dog, options = {}) {
   const requireColor = options.requireColor !== false;
   if (!dog.dogName) return "Inserisci il nome del cane";
@@ -1281,6 +1435,91 @@ async function handleApi(req, res, url) {
       return sendJson(res, 200, { user: publicUser(user) });
     }
 
+    if (parts[1] === "alexa") {
+      const access = requireAlexaAccess(req, url, db);
+      if (access.error) return sendError(res, access.status, access.error);
+      const resource = parts[2] || "health";
+
+      if (resource === "health" && method === "GET") {
+        const branding = basePublicBrandingSettings(db);
+        return sendJson(res, 200, {
+          ok: true,
+          app: APP_ID,
+          version: APP_VERSION,
+          businessName: branding.businessName,
+          invocationName: publicAlexaSettings(db, req).invocationName
+        });
+      }
+
+      if (resource === "dogs" && method === "GET") {
+        const dogs = searchAlexaDogs(db, url.searchParams.get("search") || url.searchParams.get("q"), url.searchParams.get("limit"));
+        return sendJson(res, 200, { dogs: dogs.map(publicAlexaDog) });
+      }
+
+      if (resource === "services" && method === "GET") {
+        return sendJson(res, 200, { services: publicAnimalSettings(db).services });
+      }
+
+      if (resource === "appointments" && method === "GET") {
+        const date = cleanString(url.searchParams.get("date"));
+        const from = cleanString(url.searchParams.get("from"));
+        const to = cleanString(url.searchParams.get("to"));
+        const appointments = sortAppointments(db.appointments).filter((appointment) => {
+          if (date) return appointment.date === date;
+          if (from && appointment.date < from) return false;
+          if (to && appointment.date > to) return false;
+          return true;
+        });
+        return sendJson(res, 200, { appointments: appointments.map((appointment) => publicAlexaAppointment(appointment, db)) });
+      }
+
+      if (resource === "appointments" && method === "POST") {
+        const body = await readBody(req);
+        const validationError = validateAlexaAppointmentPayload(body);
+        if (validationError) return sendError(res, 400, validationError);
+        if (!verifyAlexaPin(access.alexa, body.pin || body.confirmationPin)) {
+          return sendError(res, 403, "PIN Alexa non valido");
+        }
+        const resolved = resolveAlexaDog(db, body);
+        if (resolved.error) {
+          return sendJson(res, resolved.status, {
+            error: resolved.error,
+            matches: resolved.matches || []
+          });
+        }
+        const dog = resolved.dog;
+        const startTime = cleanString(body.startTime || body.time);
+        const services = selectedServices(body, dog.services?.length ? dog.services : ["Toelettatura"]);
+        const estimatedMinutes = cleanNumber(body.estimatedMinutes || body.durationMinutes, dog.estimatedMinutes || 0);
+        const appointment = normalizeAppointment(
+          {
+            dogId: dog.id,
+            dogName: dog.dogName,
+            ownerName: dog.ownerName,
+            contact: dog.contact,
+            breed: dog.breed,
+            date: body.date,
+            startTime,
+            endTime: cleanString(body.endTime) || (estimatedMinutes ? addMinutesToTime(startTime, estimatedMinutes) : ""),
+            services,
+            service: services.join(", "),
+            status: cleanString(body.status) || "programmato",
+            notes: cleanString(body.notes) ? `${cleanString(body.notes)}\nCreato da Alexa.` : "Creato da Alexa."
+          },
+          db
+        );
+        updateAnimalOptionsFromAppointment(db, appointment);
+        db.appointments.push(appointment);
+        db.settings.alexa.lastUpdateAt = new Date().toISOString();
+        db.settings.alexa.lastResult = `Appuntamento creato per ${appointment.dogName}`;
+        writeDb(db);
+        broadcastDataChange("appointments", { action: "create", id: appointment.id, source: "alexa" });
+        return sendJson(res, 201, { appointment: publicAlexaAppointment(appointment, db) });
+      }
+
+      return sendError(res, 404, "Risorsa Alexa non trovata");
+    }
+
     if (!user) return sendError(res, 401, "Accesso richiesto");
 
     if (url.pathname === "/api/events" && method === "GET") {
@@ -1419,6 +1658,52 @@ async function handleApi(req, res, url) {
         writeDb(db);
         broadcastDataChange("settings", { section: "whatsapp" });
         return sendJson(res, 200, { whatsapp: publicWhatsappSettings(db) });
+      }
+    }
+
+    if (parts[1] === "settings" && parts[2] === "alexa") {
+      if (user.role !== "admin") return sendError(res, 403, "Solo amministratore");
+      if (method === "GET") {
+        return sendJson(res, 200, { alexa: publicAlexaSettings(db, req) });
+      }
+      if (method === "PUT") {
+        const body = await readBody(req);
+        const current = db.settings.alexa || {};
+        const next = {
+          ...current,
+          enabled: body.enabled === true,
+          invocationName: cleanString(body.invocationName) || "groomly",
+          requirePin: body.requirePin === true,
+          updatedAt: new Date().toISOString()
+        };
+        const apiToken = cleanString(body.apiToken);
+        let generatedToken = "";
+        if (apiToken) next.apiToken = apiToken;
+        if (body.generateApiToken === true) {
+          generatedToken = generateAccessToken("groomly_alexa");
+          next.apiToken = generatedToken;
+        }
+        if (body.clearApiToken === true) next.apiToken = "";
+        const pin = cleanString(body.pin).replace(/\s+/g, "");
+        if (pin) {
+          if (!/^\d{4,8}$/.test(pin)) return sendError(res, 400, "Il PIN Alexa deve avere da 4 a 8 cifre");
+          const pinInfo = makePassword(pin);
+          next.pinHash = pinInfo.hash;
+          next.pinSalt = pinInfo.salt;
+        }
+        if (body.clearPin === true) {
+          next.pinHash = "";
+          next.pinSalt = "";
+        }
+        db.settings.alexa = next;
+        writeDb(db);
+        broadcastDataChange("settings", { section: "alexa" });
+        return sendJson(res, 200, {
+          alexa: {
+            ...publicAlexaSettings(db, req),
+            generatedToken
+          }
+        });
       }
     }
 
