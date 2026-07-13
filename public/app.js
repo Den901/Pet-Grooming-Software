@@ -1659,14 +1659,16 @@ function renderServiceHistory() {
       </div>
     </div>
     <section class="panel service-history-filter">
-      <label>Animale
-        <input id="serviceHistoryDogSearch" type="search" list="serviceHistoryDogOptions" value="${escapeAttr(searchValue)}" placeholder="Cerca animale" autocomplete="off" />
-        <datalist id="serviceHistoryDogOptions">
-          ${state.dogs
-            .map((dog) => `<option value="${escapeAttr(serviceHistoryDogLabel(dog))}"></option>`)
-            .join("")}
-        </datalist>
-      </label>
+      <div class="service-history-field">
+        <label for="serviceHistoryDogSearch">Animale</label>
+        <div class="service-history-picker" data-service-history-picker>
+          <input id="serviceHistoryDogSearch" type="search" value="${escapeAttr(searchValue)}" placeholder="Cerca animale" autocomplete="off" aria-controls="serviceHistoryDogOptions" aria-expanded="false" />
+          <button class="service-history-toggle" type="button" data-service-history-toggle aria-label="Apri lista animali" aria-controls="serviceHistoryDogOptions" aria-expanded="false">v</button>
+          <div class="service-history-options" id="serviceHistoryDogOptions" role="listbox" hidden>
+            ${renderServiceHistoryDogOptions(searchValue)}
+          </div>
+        </div>
+      </div>
       <button class="btn secondary" type="button" data-service-history-open-dog="${escapeAttr(selectedDog?.id || "")}" ${selectedDog ? "" : "disabled"}>Apri scheda</button>
     </section>
     <section class="service-history-layout">
@@ -1727,8 +1729,36 @@ function renderServiceHistoryCard(appointment) {
   `;
 }
 
+function renderServiceHistoryDogOptions(value = "") {
+  const dogs = serviceHistoryDogOptions(value);
+  if (!dogs.length) return `<div class="service-history-option-empty">Nessun animale trovato</div>`;
+  return dogs
+    .map((dog) => {
+      const details = [dog.breed, dog.ownerName, dog.contact].filter(Boolean).join(" - ");
+      return `
+        <button class="service-history-option" type="button" role="option" data-service-history-select-dog="${escapeAttr(dog.id)}">
+          <strong>${escapeHtml(dog.dogName || "Senza nome")}</strong>
+          ${details ? `<span>${escapeHtml(details)}</span>` : ""}
+        </button>
+      `;
+    })
+    .join("");
+}
+
 function bindServiceHistory() {
   const searchInput = document.getElementById("serviceHistoryDogSearch");
+  const picker = document.querySelector("[data-service-history-picker]");
+  const dropdown = document.getElementById("serviceHistoryDogOptions");
+  const toggle = document.querySelector("[data-service-history-toggle]");
+  const setDropdownOpen = (open) => {
+    if (!dropdown || !searchInput || !toggle) return;
+    dropdown.hidden = !open;
+    searchInput.setAttribute("aria-expanded", String(open));
+    toggle.setAttribute("aria-expanded", String(open));
+  };
+  const refreshDropdown = () => {
+    if (dropdown && searchInput) dropdown.innerHTML = renderServiceHistoryDogOptions(searchInput.value);
+  };
   const applySearch = () => {
     const dog = serviceHistoryDogFromSearch(searchInput.value);
     if (!dog) {
@@ -1740,20 +1770,41 @@ function bindServiceHistory() {
     renderView();
   };
   searchInput?.addEventListener("focus", () => {
-    const selectedDog = selectedServiceHistoryDog();
-    if (selectedDog && searchInput.value === serviceHistoryDogLabel(selectedDog)) {
-      searchInput.value = "";
-      state.serviceHistoryDogQuery = "";
-    }
+    refreshDropdown();
+    setDropdownOpen(true);
   });
   searchInput?.addEventListener("input", () => {
     state.serviceHistoryDogQuery = searchInput.value;
+    refreshDropdown();
+    setDropdownOpen(true);
     const dog = serviceHistoryDogFromSearch(searchInput.value, true);
     if (dog) {
       state.serviceHistoryDogId = dog.id;
       state.serviceHistoryDogQuery = "";
       renderView();
     }
+  });
+  searchInput?.addEventListener("blur", () => {
+    window.setTimeout(() => {
+      if (picker?.contains(document.activeElement)) return;
+      setDropdownOpen(false);
+    }, 120);
+  });
+  toggle?.addEventListener("mousedown", (event) => event.preventDefault());
+  toggle?.addEventListener("click", () => {
+    refreshDropdown();
+    setDropdownOpen(dropdown?.hidden !== false);
+    searchInput?.focus();
+  });
+  dropdown?.addEventListener("mousedown", (event) => event.preventDefault());
+  dropdown?.addEventListener("click", (event) => {
+    const option = event.target.closest("[data-service-history-select-dog]");
+    if (!option) return;
+    const dog = state.dogs.find((item) => item.id === option.dataset.serviceHistorySelectDog);
+    if (!dog) return;
+    state.serviceHistoryDogId = dog.id;
+    state.serviceHistoryDogQuery = "";
+    renderView();
   });
   searchInput?.addEventListener("change", applySearch);
   searchInput?.addEventListener("keydown", (event) => {
@@ -2806,9 +2857,9 @@ function openDogDetailsDialog(dog = {}) {
             </div>
           </div>
           <div class="modal-inline-actions">
-            <button class="btn" type="button" data-detail-done-appointment="${dog.id}">Concludi prestazione</button>
+            <button class="btn success" type="button" data-detail-done-appointment="${dog.id}">Concludi prestazione</button>
             <button class="btn secondary" type="button" data-detail-appointment="${dog.id}">Nuovo appuntamento</button>
-            <button class="btn secondary" type="button" data-detail-delete="${dog.id}">Elimina</button>
+            <button class="btn danger" type="button" data-detail-delete="${dog.id}">Elimina</button>
           </div>
           <details class="dog-history" data-history-dropdown>
             <summary class="history-summary">
@@ -3291,9 +3342,10 @@ function openAppointmentDialog(appointment = {}, options = {}) {
     title: completionMode ? "Concludi prestazione" : isEdit ? "Modifica appuntamento" : "Nuovo appuntamento",
     submitLabel: completionMode ? "Salva prestazione" : isEdit ? "Salva appuntamento" : "Crea appuntamento",
     dangerLabel: isEdit ? "Elimina" : "",
+    dangerConfirmMessage: "Sei sicuro di voler eliminare l'appuntamento?",
     extraActions:
       isEdit && currentStatus !== "completato"
-        ? `<button class="btn secondary" type="button" data-complete-form>Concludi prestazione</button>`
+        ? `<button class="btn success" type="button" data-complete-form>Concludi prestazione</button>`
         : "",
     content: `
       <div class="form-grid">
@@ -3579,6 +3631,7 @@ function openModal({
   content,
   submitLabel = "Salva",
   dangerLabel = "",
+  dangerConfirmMessage = "",
   headerAction = "",
   extraActions = "",
   hideActions = false,
@@ -3603,7 +3656,24 @@ function openModal({
           hideActions
             ? ""
             : `<div class="modal-actions">
-                ${dangerLabel ? `<button class="btn danger" type="button" data-danger>${escapeHtml(dangerLabel)}</button>` : ""}
+                ${
+                  dangerLabel
+                    ? `<div class="modal-danger-group">
+                        <button class="btn danger" type="button" data-danger>${escapeHtml(dangerLabel)}</button>
+                        ${
+                          dangerConfirmMessage
+                            ? `<div class="mini-confirm" data-danger-confirm-popover hidden>
+                                <p>${escapeHtml(dangerConfirmMessage)}</p>
+                                <div>
+                                  <button class="btn danger slim" type="button" data-danger-confirm-yes>Elimina</button>
+                                  <button class="btn secondary slim" type="button" data-danger-confirm-no>Annulla</button>
+                                </div>
+                              </div>`
+                            : ""
+                        }
+                      </div>`
+                    : ""
+                }
                 ${extraActions}
                 <button class="btn" type="submit">${escapeHtml(submitLabel)}</button>
               </div>`
@@ -3627,16 +3697,32 @@ function openModal({
     }
   });
   const dangerButton = modalRoot.querySelector("[data-danger]");
+  const dangerConfirm = modalRoot.querySelector("[data-danger-confirm-popover]");
+  const dangerConfirmYes = modalRoot.querySelector("[data-danger-confirm-yes]");
+  const dangerConfirmNo = modalRoot.querySelector("[data-danger-confirm-no]");
+  const runDanger = async (button) => {
+    button.disabled = true;
+    try {
+      await onDanger();
+      closeModal();
+    } catch (err) {
+      notify(err.message);
+      button.disabled = false;
+    }
+  };
   if (dangerButton && onDanger) {
     dangerButton.addEventListener("click", async () => {
-      dangerButton.disabled = true;
-      try {
-        await onDanger();
-        closeModal();
-      } catch (err) {
-        notify(err.message);
-        dangerButton.disabled = false;
+      if (dangerConfirm) {
+        dangerConfirm.hidden = false;
+        dangerConfirmYes?.focus();
+        return;
       }
+      await runDanger(dangerButton);
+    });
+    dangerConfirmYes?.addEventListener("click", () => runDanger(dangerConfirmYes));
+    dangerConfirmNo?.addEventListener("click", () => {
+      dangerConfirm.hidden = true;
+      dangerButton.focus();
     });
   }
   const headerActionButton = modalRoot.querySelector("[data-header-action]");
@@ -3811,6 +3897,16 @@ function serviceHistoryDogFromSearch(value, exactOnly = false) {
     [dog.dogName, dog.ownerName, dog.contact, dog.breed, serviceHistoryDogLabel(dog)].some((field) => lowerText(field).includes(query))
   );
   return contains.length === 1 ? contains[0] : null;
+}
+
+function serviceHistoryDogOptions(value = "") {
+  const query = lowerText(value);
+  const dogs = query
+    ? state.dogs.filter((dog) =>
+        [dog.dogName, dog.ownerName, dog.contact, dog.breed, serviceHistoryDogLabel(dog)].some((field) => lowerText(field).includes(query))
+      )
+    : state.dogs;
+  return [...dogs].sort((a, b) => String(a.dogName || "").localeCompare(String(b.dogName || ""), "it", { sensitivity: "base" }));
 }
 
 function appointmentPhotoCount(appointment) {

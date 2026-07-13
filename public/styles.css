@@ -624,6 +624,15 @@ label {
   background: #e1e6e0;
 }
 
+.btn.success {
+  background: var(--green);
+  color: #fff;
+}
+
+.btn.success:hover {
+  background: #256b58;
+}
+
 .btn.ghost {
   background: transparent;
   color: inherit;
@@ -632,6 +641,11 @@ label {
 
 .btn.danger {
   background: var(--danger);
+  color: #fff;
+}
+
+.btn.danger:hover {
+  background: #963232;
 }
 
 .btn.slim {
@@ -2042,6 +2056,102 @@ label {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: 12px;
+  overflow: visible;
+}
+
+.service-history-field {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.service-history-field > label {
+  display: block;
+}
+
+.service-history-picker {
+  position: relative;
+  min-width: 0;
+}
+
+.service-history-picker input {
+  padding-right: 52px;
+}
+
+.service-history-toggle {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius);
+  background: var(--panel-soft);
+  color: var(--brand);
+  border: 1px solid var(--line);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.service-history-options {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  max-height: min(320px, 44svh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.service-history-options[hidden] {
+  display: none;
+}
+
+.service-history-option {
+  width: 100%;
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.service-history-option:hover,
+.service-history-option:focus-visible {
+  background: var(--panel-soft);
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+
+.service-history-option strong,
+.service-history-option span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.service-history-option span,
+.service-history-option-empty {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.service-history-option-empty {
+  padding: 10px 12px;
 }
 
 .service-history-layout {
@@ -3353,8 +3463,42 @@ label {
   flex-wrap: wrap;
 }
 
-.modal-actions .danger {
+.modal-danger-group {
+  position: relative;
   margin-right: auto;
+}
+
+.mini-confirm {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  width: min(310px, 78vw);
+  z-index: 12;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.mini-confirm[hidden] {
+  display: none;
+}
+
+.mini-confirm p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.mini-confirm div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .muted {
@@ -3892,6 +4036,10 @@ label {
     grid-template-columns: 1fr;
   }
 
+  .service-history-options {
+    max-height: min(300px, 38svh);
+  }
+
   .color-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3956,8 +4104,14 @@ label {
     grid-template-columns: 1fr;
   }
 
-  .modal-actions .danger {
+  .modal-danger-group {
     margin-right: 0;
+  }
+
+  .mini-confirm {
+    position: static;
+    width: 100%;
+    margin-bottom: 8px;
   }
 
   .settings-actions .btn {

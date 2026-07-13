@@ -1,6 +1,6 @@
 # Groomly
 
-Release corrente: `0.0.1 beta 32` (`0.0.1-beta.32`).
+Release corrente: `1.0.1` stabile.
 
 Portale web PWA in Node.js per gestire:
 
@@ -94,9 +94,9 @@ npm.cmd run release:packages
 
 Il comando genera nella cartella `dist/`:
 
-- `Pet-Grooming-Software-0.0.1-beta.32-windows.zip`;
-- `Pet-Grooming-Software-0.0.1-beta.32-linux.tar.gz`;
-- `Pet-Grooming-Software-0.0.1-beta.32.pgs-update`;
+- `Pet-Grooming-Software-1.0.1-windows.zip`;
+- `Pet-Grooming-Software-1.0.1-linux.tar.gz`;
+- `Pet-Grooming-Software-1.0.1.pgs-update`;
 - `pet-grooming-update.json`.
 
 Se `npm` non e bloccato dalla policy PowerShell puoi usare anche `npm run release:packages`.
@@ -105,7 +105,7 @@ Se `npm` non e bloccato dalla policy PowerShell puoi usare anche `npm run releas
 
 Prerequisito: Node.js 18 o superiore installato sul PC.
 
-1. Estrai `Pet-Grooming-Software-0.0.1-beta.32-windows.zip`.
+1. Estrai `Pet-Grooming-Software-1.0.1-windows.zip`.
 2. Apri PowerShell nella cartella estratta. Per installare in `ProgramData` e creare l'avvio automatico e consigliato aprirlo come amministratore.
 3. Per installare in `C:\ProgramData\Pet Grooming Software` e creare l'avvio automatico all'accesso:
 
@@ -131,12 +131,12 @@ Per riavviare dopo un update, chiudi la finestra dove gira Node.js e rilancia lo
 
 Prerequisito: Node.js 18 o superiore installato sul server.
 
-1. Copia `Pet-Grooming-Software-0.0.1-beta.32-linux.tar.gz` sul server.
+1. Copia `Pet-Grooming-Software-1.0.1-linux.tar.gz` sul server.
 2. Estrai il pacchetto e entra nella cartella:
 
 ```bash
-tar -xzf Pet-Grooming-Software-0.0.1-beta.32-linux.tar.gz
-cd Pet-Grooming-Software-0.0.1-beta.32
+tar -xzf Pet-Grooming-Software-1.0.1-linux.tar.gz
+cd Pet-Grooming-Software-1.0.1
 ```
 
 3. Installazione consigliata in `/opt` con servizio systemd:
@@ -241,10 +241,9 @@ La skill puo cercare cani e servizi/prodotti e creare appuntamenti nel calendari
 
 ## Release e aggiornamenti
 
-La release corrente e `0.0.1 beta 32`. A ogni modifica di release fai avanzare la beta di 1:
+La release corrente e `1.0.1` stabile. Per preparare i pacchetti della versione impostata in `package.json`:
 
 ```powershell
-npm.cmd run release:bump
 npm.cmd run release:packages
 ```
 
@@ -254,61 +253,6 @@ Per l'update web carica nella stessa release GitHub anche `pet-grooming-update.j
 
 L'aggiornamento non modifica database, foto, backup o `node_modules`. Dopo l'installazione dell'update bisogna riavviare il servizio Node.js. Nel pannello `Impostazioni > Aggiornamento portale` l'amministratore puo usare il pulsante `Riavvia servizio`: su Linux funziona quando il portale e installato come servizio systemd con `Restart=always`, come nello script `scripts/install-linux.sh`.
 
-La `0.0.1 beta 32` pulisce l'orologio del Monitor mostrando `ora HH:mm:ss`, mantiene l'ultimo appuntamento visibile fino a mezzanotte quando non ci sono appuntamenti successivi e ordina alfabeticamente le schede animali.
-
-La `0.0.1 beta 31` aggiunge il menu `Monitor` con vista fullscreen per gli appuntamenti della giornata, foto cane, nome, razza, tempo lavoro, servizi/prodotti e indicazione `tra quanto`; introduce il promemoria interno globale in impostazioni, aggiorna live la scaletta e usa una foto predefinita quando manca la foto del cane.
-
-La `0.0.1 beta 30` introduce la base integrazione Alexa: pannello impostazioni dedicato, token API, PIN opzionale, endpoint protetti per cani/servizi/appuntamenti e guida per collegare una Custom Skill Alexa.
-
-La `0.0.1 beta 29` rende piu leggibile la settimana su iPad con tre giorni larghi per volta, amplia il calendario mensile desktop, mostra il tempo previsto anche nelle viste settimana/mese e rinomina la chiusura in `Servizi e prodotti forniti` con prezzi dedicati.
-
-La `0.0.1 beta 28` stabilizza la barra mobile/PWA su iPhone durante lo scroll di calendario settimana e mese, usando il viewport visibile reale e rimuovendo il layer trasformato che poteva farla staccare dalla parte bassa dello schermo.
-
-La `0.0.1 beta 27` mostra negli appuntamenti `nome cane - razza`, allarga la vista settimana su tablet a quattro giorni leggibili alla volta, corregge lo scroll verticale della PWA Android e aggiunge in scheda cane la frequenza media di passaggio in toelettatura accanto al badge cliente top.
-
-La `0.0.1 beta 26` rende sempre leggibile il toast in basso a destra, incluso il messaggio `Portale aggiornato`, anche con tema scuro o colori personalizzati.
-
-La `0.0.1 beta 25` pulisce le metriche dashboard eliminando il badge sovrapposto dalle foto di cliente piu presente e cane piu redditizio, e mostra date complete nell'andamento incassi.
-
-La `0.0.1 beta 24` rende razza e colore non obbligatori nella scheda rapida cane, impedisce la chiusura accidentale dei popup cliccando fuori e salva tema, colori, sfondo e dimensione interfaccia come preferenze personali dell'utente.
-
-La `0.0.1 beta 23` migliora il planning giorno mostrando sempre nome cane, servizi e tempo previsto, corregge le sovrapposizioni nel popup mobile/PWA, allinea il `+` al colore principale del tema e sostituisce il simbolo `>` dei giorni cliccabili con un'icona calendario.
-
-La `0.0.1 beta 22` compatta ulteriormente il calendario desktop, rende piu leggibili gli appuntamenti nel mese, lascia la griglia oraria solo come riferimento visivo e mantiene un solo `+` rosa nella scheda giorno e nella vista giorno mobile/PWA.
-
-La `0.0.1 beta 21` rende il menu mobile piu leggibile mostrando quattro voci comode prima dello scroll laterale, riporta la X di chiusura nell'angolo destro del popup con testata persistente allo scroll, compatta il mese in una schermata e apre il planning orario del giorno cliccando sulla data in mese/settimana.
-
-La `0.0.1 beta 20` aggiunge la vista `Giorno` al calendario, inserisce la razza nella scheda rapida cane, rende la X dei popup esterna e sempre visibile durante lo scroll e introduce la dimensione interfaccia desktop/tablet nelle impostazioni.
-
-La `0.0.1 beta 19` rende il pulsante `Nuova scheda` robusto su tablet/PWA usando un listener globale su click/tap e una protezione CSS dedicata al pulsante.
-
-La `0.0.1 beta 18` compatta la vista tablet: menu alto con icone e label piccole in stile app/PWA, scroll orizzontale delle voci e contenuti leggermente ridotti per vedere piu informazioni a schermo.
-
-La `0.0.1 beta 17` corregge il tap su `Nuova scheda` nella vista tablet, trasforma razza e colore cane in campi digitabili con suggerimenti e sostituisce il tempo stimato Android con selettori semplici ore/minuti.
-
-La `0.0.1 beta 16` corregge definitivamente il menu PWA su iPhone: la barra inferiore resta su una sola riga orizzontale scorrevole e non manda piu `Impostazioni`/`Esci` su una seconda riga.
-
-La `0.0.1 beta 15` rende il menu PWA mobile una barra unica orizzontale con icone scorrevoli e corregge il centraggio/larghezza delle schede aperte su iPhone, evitando zoom manuali.
-
-La `0.0.1 beta 14` trasforma la selezione animale nello `Storico servizi` in ricerca con suggerimenti dopo le prime lettere e aggiunge un badge vicino a `Impostazioni` quando il controllo web trova un update disponibile.
-
-La `0.0.1 beta 13` aggiunge la sezione `Storico servizi` nel menu laterale, permette di selezionare un animale e vedere tutti i servizi conclusi con riepilogo incasso/foto, e rende zoomabili le foto prima/dopo sia nello storico della scheda cane sia nella nuova sezione dedicata.
-
-La `0.0.1 beta 12` rinomina la PWA in Groomly, rende visibile `Esci` anche nel menu PWA mobile, mantiene grigia l'icona impostazioni, introduce prezzi separati per ogni servizio nella chiusura prestazione, riordina la dashboard mostrando subito servizi e incassi, aggiunge il filtro `Giorno` all'andamento incassi e rende cliccabili i punti del grafico per vedere l'incasso del periodo.
-
-La `0.0.1 beta 11` permette di segnare manualmente una scheda cane come cliente top anche senza soglia interventi, posiziona la zampa cliente top in basso a destra sulla foto, aggiunge in dashboard il cane piu redditizio calcolato dagli importi pagati, mette i servizi prima delle razze, aggiunge il grafico a colonne dell'incasso per servizio e il grafico a linea dell'andamento incassi con selettore settimana/mese/anno.
-
-La `0.0.1 beta 10` aggiunge lo stato online nella lista utenti con scritta `Online` e pallino blu a lampeggio lento, mostra il cliente piu presente in dashboard con nome e mini foto, e corregge le modali mobile/PWA per non lasciare il tasto salva sotto al menu inferiore.
-
-La `0.0.1 beta 9` introduce il popup di aggiornamento PWA/portale quando una nuova versione dell'app e pronta, passa i file principali a cache no-cache/network-first per ridurre i refresh manuali, corregge i colori della vista settimana del calendario in tema scuro, trasforma il colore cane in menu a tendina con colori classici e aggiunta rapida, e mostra le classifiche dashboard come grafici a barre.
-
-La `0.0.1 beta 8` mostra il changelog nel controllo update web, aggiunge il campo `changelog` nel manifest release, pubblica icone Apple dedicate alla radice del portale per migliorare il riconoscimento dell'icona PWA su iPhone, sostituisce le sigle del menu con icone per calendario, dashboard, schede e utenti, ancora il menu PWA in basso durante lo scroll iPhone, arricchisce il tema scuro e rende la chiusura prestazione basata sul selettore servizi modificabile.
-
-La `0.0.1 beta 7` introduce il login rapido con selezione utente da menu a tendina, logo login piu grande e centrato, menu mobile persistente in basso con icone tonde, icona PWA PNG trasparente e badge cliente top con la zampa personalizzata.
-
-La `0.0.1 beta 6` riordina il pannello `Aggiornamento portale`: mostra chiaramente la versione installata, mantiene il controllo automatico update web con installazione diretta quando disponibile, elimina il campo URL manuale e lascia separato l'update da file locale. La stessa beta rende coerente la gestione razze/prestazioni: aggiunta rapida da schede e appuntamenti, salvataggio automatico nella lista master `Scheda animale`, primo contatto vincolante con opzione `numero non presente`, e ordine della sidebar configurabile dalle impostazioni con `Impostazioni` fisso in basso.
-
-La `0.0.1 beta 5` introduce aggiornamento live multiutente, avatar utenti, schede animali estese, servizi cumulabili, cliente top, galleria foto prima/dopo, dashboard statistiche, agenda iPhone e impostazioni scheda animale.
 
 Riavvio manuale su Linux:
 
