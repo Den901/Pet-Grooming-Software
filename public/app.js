@@ -1790,11 +1790,13 @@ function bindServiceHistory() {
       setDropdownOpen(false);
     }, 120);
   });
+  toggle?.addEventListener("pointerdown", (event) => event.preventDefault());
   toggle?.addEventListener("mousedown", (event) => event.preventDefault());
-  toggle?.addEventListener("click", () => {
+  toggle?.addEventListener("click", (event) => {
+    event.preventDefault();
     refreshDropdown();
     setDropdownOpen(dropdown?.hidden !== false);
-    searchInput?.focus();
+    searchInput?.blur();
   });
   dropdown?.addEventListener("mousedown", (event) => event.preventDefault());
   dropdown?.addEventListener("click", (event) => {

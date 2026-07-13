@@ -2075,6 +2075,7 @@ label {
 .service-history-picker {
   position: relative;
   min-width: 0;
+  isolation: isolate;
 }
 
 .service-history-picker input {
@@ -2107,11 +2108,14 @@ label {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  transform: translateZ(0);
   padding: 6px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel);
   box-shadow: var(--shadow);
+  will-change: scroll-position;
 }
 
 .service-history-options[hidden] {
@@ -4037,7 +4041,8 @@ label {
   }
 
   .service-history-options {
-    max-height: min(300px, 38svh);
+    max-height: min(280px, 34svh);
+    contain: layout paint;
   }
 
   .color-grid {
