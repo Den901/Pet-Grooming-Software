@@ -1650,7 +1650,7 @@ function renderServiceHistory() {
   const photoCount = history.reduce((sum, appointment) => sum + appointmentPhotoCount(appointment), 0);
   const totalRevenue = history.reduce((sum, appointment) => sum + appointmentRevenue(appointment), 0);
   const photo = dogPhotoMarkup(selectedDog || {});
-  const searchValue = state.serviceHistoryDogQuery || serviceHistoryDogLabel(selectedDog);
+  const searchValue = state.serviceHistoryDogQuery || "";
   return `
     <div class="topbar">
       <div class="page-title">
@@ -1667,7 +1667,7 @@ function renderServiceHistory() {
             .join("")}
         </datalist>
       </label>
-      <button class="btn secondary" type="button" data-service-history-open-dog="${escapeAttr(selectedDog?.id || "")}">Apri scheda</button>
+      <button class="btn secondary" type="button" data-service-history-open-dog="${escapeAttr(selectedDog?.id || "")}" ${selectedDog ? "" : "disabled"}>Apri scheda</button>
     </section>
     <section class="service-history-layout">
       <aside class="panel service-history-profile">
@@ -1675,8 +1675,8 @@ function renderServiceHistory() {
           ${photo}${selectedDog && isTopDog(selectedDog) ? `<img class="top-paw" src="/icons/top-client-paw.png" alt="Cliente top" />` : ""}
         </div>
         <div>
-          <h2>${escapeHtml(selectedDog?.dogName || "Animale")}</h2>
-          <p>${escapeHtml([selectedDog?.breed, selectedDog?.ownerName].filter(Boolean).join(" - ") || "Scheda animale")}</p>
+          <h2>${escapeHtml(selectedDog?.dogName || "Seleziona un animale")}</h2>
+          <p>${escapeHtml(selectedDog ? [selectedDog.breed, selectedDog.ownerName].filter(Boolean).join(" - ") || "Scheda animale" : "Cerca o apri l'elenco per scegliere")}</p>
         </div>
         <div class="service-history-metrics">
           <div><span>Servizi conclusi</span><strong>${history.length}</strong></div>
@@ -1688,7 +1688,7 @@ function renderServiceHistory() {
         ${
           history.length
             ? history.map(renderServiceHistoryCard).join("")
-            : `<section class="empty-history">Nessun servizio concluso per questo animale.</section>`
+            : `<section class="empty-history">${selectedDog ? "Nessun servizio concluso per questo animale." : "Seleziona un animale per vedere lo storico servizi."}</section>`
         }
       </div>
     </section>
@@ -1736,15 +1736,22 @@ function bindServiceHistory() {
       return;
     }
     state.serviceHistoryDogId = dog.id;
-    state.serviceHistoryDogQuery = serviceHistoryDogLabel(dog);
+    state.serviceHistoryDogQuery = "";
     renderView();
   };
+  searchInput?.addEventListener("focus", () => {
+    const selectedDog = selectedServiceHistoryDog();
+    if (selectedDog && searchInput.value === serviceHistoryDogLabel(selectedDog)) {
+      searchInput.value = "";
+      state.serviceHistoryDogQuery = "";
+    }
+  });
   searchInput?.addEventListener("input", () => {
     state.serviceHistoryDogQuery = searchInput.value;
     const dog = serviceHistoryDogFromSearch(searchInput.value, true);
-    if (dog && dog.id !== state.serviceHistoryDogId) {
+    if (dog) {
       state.serviceHistoryDogId = dog.id;
-      state.serviceHistoryDogQuery = serviceHistoryDogLabel(dog);
+      state.serviceHistoryDogQuery = "";
       renderView();
     }
   });
@@ -3782,9 +3789,9 @@ function dogAppointmentHistory(dog) {
 
 function selectedServiceHistoryDog() {
   if (!state.dogs.length) return null;
-  const selected = state.dogs.find((dog) => dog.id === state.serviceHistoryDogId) || state.dogs[0];
-  state.serviceHistoryDogId = selected.id;
-  return selected;
+  const selected = state.dogs.find((dog) => dog.id === state.serviceHistoryDogId);
+  if (!selected) state.serviceHistoryDogId = "";
+  return selected || null;
 }
 
 function serviceHistoryDogLabel(dog = {}) {
