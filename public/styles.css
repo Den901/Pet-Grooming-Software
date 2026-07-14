@@ -10,6 +10,7 @@
   --accent: #cf6155;
   --gold: #e1a63d;
   --green: #2f7a65;
+  --success: #00a84f;
   --blue: #366a8a;
   --danger: #b83e3e;
   --shadow: 0 18px 40px rgba(22, 38, 37, 0.1);
@@ -625,12 +626,13 @@ label {
 }
 
 .btn.success {
-  background: var(--green);
+  background: var(--success);
   color: #fff;
+  box-shadow: 0 10px 22px rgba(0, 168, 79, 0.24);
 }
 
 .btn.success:hover {
-  background: #256b58;
+  background: #008f43;
 }
 
 .btn.ghost {
@@ -1235,11 +1237,12 @@ label {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: #fff;
-  color: var(--green);
+  background: var(--success);
+  color: #fff;
   font-weight: 900;
   font-size: 0.78rem;
-  border: 1px solid rgba(47, 122, 101, 0.22);
+  border: 1px solid rgba(0, 168, 79, 0.38);
+  box-shadow: 0 6px 14px rgba(0, 168, 79, 0.28);
 }
 
 .appt-complete.done {
@@ -3554,6 +3557,49 @@ label {
 .mini-confirm div {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.action-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 240;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(13, 22, 21, 0.34);
+}
+
+.action-confirm-card {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.action-confirm-card h2,
+.action-confirm-card p {
+  margin: 0;
+}
+
+.action-confirm-card h2 {
+  font-size: 1.05rem;
+}
+
+.action-confirm-card p {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.action-confirm-card div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
   flex-wrap: wrap;
 }
 

@@ -1445,9 +1445,10 @@ function bindCalendar() {
   });
   bindCalendarDayActions(document);
   document.querySelectorAll("[data-complete-appointment-id]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       const appointment = state.appointments.find((item) => item.id === button.dataset.completeAppointmentId);
       if (!appointment) return;
+      if (!(await confirmAppointmentCompletion())) return;
       openAppointmentDialog(appointment, { completionMode: true });
     });
   });
@@ -2908,12 +2909,15 @@ function openDogDetailsDialog(dog = {}) {
         closeModal();
         openAppointmentDialog({ date: todayISO(), dogId: freshDog.id, dogName: freshDog.dogName });
       });
-      doneAppointmentButton?.addEventListener("click", () => {
+      doneAppointmentButton?.addEventListener("click", async () => {
         const freshDog = state.dogs.find((item) => item.id === dog.id) || dog;
+        if (!(await confirmAppointmentCompletion())) return;
+        const completedAt = currentTimeInput();
         closeModal();
         openAppointmentDialog({
           date: todayISO(),
-          startTime: currentTimeInput(),
+          startTime: completedAt,
+          endTime: completedAt,
           dogId: freshDog.id,
           dogName: freshDog.dogName,
           ownerName: freshDog.ownerName,
@@ -3347,6 +3351,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
   const isEdit = Boolean(appointment.id);
   const completionMode = Boolean(options.completionMode) || (!isEdit && appointment.status === "completato");
   const currentStatus = completionMode ? "completato" : appointment.status || "programmato";
+  const endTimeValue = completionMode ? currentTimeInput() : appointment.endTime || "";
   const selectedDog = appointment.dogId ? state.dogs.find((dog) => dog.id === appointment.dogId) : null;
   const animal = getAnimalSettings();
   const plannedServices = normalizeServiceList(
@@ -3380,7 +3385,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
           <input name="startTime" type="time" value="${escapeAttr(appointment.startTime || "09:00")}" required />
         </label>
         <label>Fine
-          <input name="endTime" type="time" value="${escapeAttr(appointment.endTime || "")}" />
+          <input name="endTime" type="time" value="${escapeAttr(endTimeValue)}" />
         </label>
         <label class="full">Scheda cane
           <select name="dogId" id="appointmentDog">
@@ -3499,14 +3504,22 @@ function openAppointmentDialog(appointment = {}, options = {}) {
           if (missing) form.elements.contact.value = "";
         }
       };
-      modalRoot.querySelector("[data-complete-form]")?.addEventListener("click", () => {
+      const startCompletion = () => {
         form.elements.status.value = "completato";
+        form.elements.endTime.value = currentTimeInput();
         syncCompletionFields();
         syncAmounts();
         form.querySelector("[data-service-select]")?.focus();
         notify("Completa servizi, prodotti e importi, poi salva la prestazione");
+      };
+      modalRoot.querySelector("[data-complete-form]")?.addEventListener("click", async () => {
+        if (!(await confirmAppointmentCompletion())) return;
+        startCompletion();
       });
-      form.elements.status.addEventListener("change", syncCompletionFields);
+      form.elements.status.addEventListener("change", () => {
+        if (form.elements.status.value === "completato" && !form.elements.endTime.value) form.elements.endTime.value = currentTimeInput();
+        syncCompletionFields();
+      });
       form.addEventListener("change", (event) => {
         if (event.target.matches("[data-service-select]")) setTimeout(syncAmounts, 0);
         if (event.target.matches("[data-service-amount-input]")) syncServiceAmountTotal(form);
@@ -3925,6 +3938,49 @@ function confirmAction(message, onConfirm) {
     submitLabel: "Conferma",
     content: `<p>${escapeHtml(message)}</p>`,
     onSubmit: onConfirm
+  });
+}
+
+function confirmAppointmentCompletion() {
+  return showActionConfirm({
+    title: "Concludi appuntamento",
+    message: "Concludere questo appuntamento e impostare l'orario di fine all'ora attuale?",
+    confirmLabel: "Concludi",
+    confirmClass: "success"
+  });
+}
+
+function showActionConfirm({ title = "Conferma", message = "", confirmLabel = "Conferma", confirmClass = "" } = {}) {
+  return new Promise((resolve) => {
+    const existing = document.getElementById("actionConfirmOverlay");
+    if (existing) existing.remove();
+    const overlay = document.createElement("div");
+    overlay.id = "actionConfirmOverlay";
+    overlay.className = "action-confirm-backdrop";
+    overlay.innerHTML = `
+      <div class="action-confirm-card" role="dialog" aria-modal="true">
+        <h2>${escapeHtml(title)}</h2>
+        <p>${escapeHtml(message)}</p>
+        <div>
+          <button class="btn secondary" type="button" data-action-confirm-no>Annulla</button>
+          <button class="btn ${escapeAttr(confirmClass)}" type="button" data-action-confirm-yes>${escapeHtml(confirmLabel)}</button>
+        </div>
+      </div>
+    `;
+    const close = (answer) => {
+      overlay.remove();
+      resolve(answer);
+    };
+    overlay.querySelector("[data-action-confirm-no]")?.addEventListener("click", () => close(false));
+    overlay.querySelector("[data-action-confirm-yes]")?.addEventListener("click", () => close(true));
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) close(false);
+    });
+    overlay.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") close(false);
+    });
+    document.body.appendChild(overlay);
+    overlay.querySelector("[data-action-confirm-yes]")?.focus();
   });
 }
 
