@@ -3768,24 +3768,19 @@ function bindDraggableModal(form) {
     form.style.transform = `translate3d(${Math.round(offsetX)}px, ${Math.round(offsetY)}px, 0)`;
   };
 
-  const clampDrag = (nextX, nextY, startRect, deltaX, deltaY) => {
-    const margin = 10;
+  const clampDrag = (nextX, nextY, dragState, deltaX, deltaY) => {
+    const margin = 38;
     let x = nextX;
     let y = nextY;
-    const width = startRect.width;
-    const height = startRect.height;
-    if (width < window.innerWidth - margin * 2) {
-      const left = startRect.left + deltaX;
-      const right = startRect.right + deltaX;
-      if (left < margin) x += margin - left;
-      if (right > window.innerWidth - margin) x -= right - (window.innerWidth - margin);
-    }
-    if (height < window.innerHeight - margin * 2) {
-      const top = startRect.top + deltaY;
-      const bottom = startRect.bottom + deltaY;
-      if (top < margin) y += margin - top;
-      if (bottom > window.innerHeight - margin) y -= bottom - (window.innerHeight - margin);
-    }
+    const guard = dragState.closeRect || dragState.headRect || dragState.rect;
+    const left = guard.left + deltaX;
+    const right = guard.right + deltaX;
+    const top = guard.top + deltaY;
+    const bottom = guard.bottom + deltaY;
+    if (left < margin) x += margin - left;
+    if (right > window.innerWidth - margin) x -= right - (window.innerWidth - margin);
+    if (top < margin) y += margin - top;
+    if (bottom > window.innerHeight - margin) y -= bottom - (window.innerHeight - margin);
     return { x, y };
   };
 
@@ -3799,7 +3794,9 @@ function bindDraggableModal(form) {
       startY: event.clientY,
       offsetX,
       offsetY,
-      rect: form.getBoundingClientRect()
+      rect: form.getBoundingClientRect(),
+      headRect: head.getBoundingClientRect(),
+      closeRect: form.querySelector(".modal-close")?.getBoundingClientRect()
     };
     form.classList.add("modal-dragging");
     head.setPointerCapture?.(event.pointerId);
@@ -3809,7 +3806,7 @@ function bindDraggableModal(form) {
     if (!drag || event.pointerId !== drag.pointerId) return;
     const deltaX = event.clientX - drag.startX;
     const deltaY = event.clientY - drag.startY;
-    const next = clampDrag(drag.offsetX + deltaX, drag.offsetY + deltaY, drag.rect, deltaX, deltaY);
+    const next = clampDrag(drag.offsetX + deltaX, drag.offsetY + deltaY, drag, deltaX, deltaY);
     offsetX = next.x;
     offsetY = next.y;
     applyOffset();
