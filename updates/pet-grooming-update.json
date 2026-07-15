@@ -2,12 +2,12 @@
   "format": "PET_GROOMING_SOFTWARE_UPDATE_MANIFEST",
   "formatVersion": 1,
   "app": "pet-grooming-software",
-  "version": "1.0.11",
-  "releaseLabel": "1.0.11",
-  "createdAt": "2026-07-15T17:16:51.685Z",
-  "packageName": "Pet-Grooming-Software-1.0.11.pgs-update",
-  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v1.0.11/Pet-Grooming-Software-1.0.11.pgs-update",
-  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v1.0.11",
-  "notes": "Release 1.0.11",
-  "changelog": "Introduce lo stato Annullato come stato agenda blu, selezionabile dall'appuntamento, visibile nello storico servizi e conteggiato nella scheda cliente con badge Interventi annullati."
+  "version": "1.0.12",
+  "releaseLabel": "1.0.12",
+  "createdAt": "2026-07-15T17:23:06.586Z",
+  "packageName": "Pet-Grooming-Software-1.0.12.pgs-update",
+  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v1.0.12/Pet-Grooming-Software-1.0.12.pgs-update",
+  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v1.0.12",
+  "notes": "Release 1.0.12",
+  "changelog": "Aggiunge il pulsante Annulla appuntamento dentro il popup appuntamento, vicino alle azioni finali, con conferma prima di segnare lo stato annullato."
 }

@@ -664,6 +664,16 @@ label {
   background: #008f43;
 }
 
+.btn.info {
+  background: var(--traffic-blue);
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(47, 116, 181, 0.2);
+}
+
+.btn.info:hover {
+  background: var(--traffic-blue-ink);
+}
+
 .btn.ghost {
   background: transparent;
   color: inherit;

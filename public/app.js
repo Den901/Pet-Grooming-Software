@@ -3729,6 +3729,13 @@ function openAppointmentDialog(appointment = {}, options = {}) {
   const performedServices = currentStatus === "completato" ? normalizeServiceList(appointment.treatmentDone) : [];
   const selectedServices = performedServices.length ? performedServices : plannedServices;
   const serviceOptions = uniqueValues([...(animal.services || []), ...selectedServices, "Toelettatura"]);
+  const canCompleteAppointment = isEdit && ["programmato", "confermato"].includes(currentStatus);
+  const canCancelAppointment = isEdit && ["programmato", "confermato"].includes(currentStatus);
+  const extraAppointmentActions = [
+    canCancelAppointment ? `<button class="btn info" type="button" data-cancel-appointment-form>Annulla appuntamento</button>` : "",
+    isEdit && currentStatus === "completato" ? `<button class="btn success" type="button" data-edit-completed-form>Modifica prestazione</button>` : "",
+    canCompleteAppointment ? `<button class="btn success" type="button" data-complete-form>Concludi prestazione</button>` : ""
+  ].join("");
   openModal({
     title: completionMode ? "Concludi prestazione" : isEdit ? "Modifica appuntamento" : "Nuovo appuntamento",
     modalClass: `appointment-modal status-${currentStatus}`,
@@ -3736,12 +3743,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
     dangerLabel: isEdit ? "Elimina" : "",
     dangerConfirmMessage:
       currentStatus === "completato" ? "Sei sicuro di voler eliminare questa prestazione chiusa?" : "Sei sicuro di voler eliminare l'appuntamento?",
-    extraActions:
-      isEdit && currentStatus === "completato"
-        ? `<button class="btn success" type="button" data-edit-completed-form>Modifica prestazione</button>`
-        : isEdit && currentStatus !== "completato"
-        ? `<button class="btn success" type="button" data-complete-form>Concludi prestazione</button>`
-        : "",
+    extraActions: extraAppointmentActions,
     content: `
       <div class="form-grid">
         <label>Data
@@ -3890,6 +3892,52 @@ function openAppointmentDialog(appointment = {}, options = {}) {
           ownerName: payload.ownerName || appointment.ownerName,
           contact: payload.contact || appointment.contact
         });
+      });
+      modalRoot.querySelector("[data-cancel-appointment-form]")?.addEventListener("click", async (event) => {
+        const confirmed = await showActionConfirm({
+          title: "Annulla appuntamento",
+          message: "Segnare questo appuntamento come annullato? Rimarra nel calendario, nello storico e nella scheda cliente.",
+          confirmLabel: "Segna annullato",
+          confirmClass: "info"
+        });
+        if (!confirmed) return;
+        const button = event.currentTarget;
+        button.disabled = true;
+        try {
+          const formData = new FormData(form);
+          const formPayload = Object.fromEntries(formData.entries());
+          const services = collectServicesFromForm(formData, form);
+          const payload = {
+            ...appointment,
+            ...formPayload,
+            date: formPayload.date || appointment.date,
+            startTime: formPayload.startTime || appointment.startTime,
+            endTime: formPayload.endTime || appointment.endTime,
+            dogId: formPayload.dogId || appointment.dogId,
+            dogName: formPayload.dogName || appointment.dogName,
+            ownerName: formPayload.ownerName || appointment.ownerName,
+            contact: formPayload.contact || appointment.contact,
+            services: services.length ? services : normalizeServiceList(appointment.services?.length ? appointment.services : appointment.service || "Toelettatura"),
+            status: "annullato",
+            treatmentDone: "",
+            paidAmount: "",
+            serviceAmounts: []
+          };
+          payload.service = payload.services.join(", ");
+          payload.createDogProfile = false;
+          await api(`/api/appointments/${appointment.id}`, {
+            method: "PUT",
+            body: JSON.stringify(payload)
+          });
+          await loadData();
+          state.calendarDate = parseISODate(payload.date);
+          renderView();
+          closeModal();
+          notify("Appuntamento annullato");
+        } catch (err) {
+          notify(err.message);
+          button.disabled = false;
+        }
       });
       modalRoot.querySelector("[data-edit-completed-form]")?.addEventListener("click", async () => {
         if (!(await confirmCompletedAppointmentEdit())) return;
