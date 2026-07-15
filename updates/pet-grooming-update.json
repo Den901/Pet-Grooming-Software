@@ -2,12 +2,12 @@
   "format": "PET_GROOMING_SOFTWARE_UPDATE_MANIFEST",
   "formatVersion": 1,
   "app": "pet-grooming-software",
-  "version": "1.0.16",
-  "releaseLabel": "1.0.16",
-  "createdAt": "2026-07-15T18:19:56.896Z",
-  "packageName": "Pet-Grooming-Software-1.0.16.pgs-update",
-  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v1.0.16/Pet-Grooming-Software-1.0.16.pgs-update",
-  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v1.0.16",
-  "notes": "Release 1.0.16",
-  "changelog": "Corregge il trascinamento appuntamenti: la copia dell'appuntamento ora resta agganciata al punto del mouse usato per prenderla, senza apparire piu bassa durante lo spostamento."
+  "version": "1.0.17",
+  "releaseLabel": "1.0.17",
+  "createdAt": "2026-07-15T18:32:06.528Z",
+  "packageName": "Pet-Grooming-Software-1.0.17.pgs-update",
+  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v1.0.17/Pet-Grooming-Software-1.0.17.pgs-update",
+  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v1.0.17",
+  "notes": "Release 1.0.17",
+  "changelog": "Corregge il drag and drop calendario: l'appuntamento flottante non eredita piu posizione e altezza del planning, resta centrato sotto il mouse e quando esci da una finestra giorno puoi chiuderla e far aprire un'altra giornata restando sul nuovo giorno."
 }

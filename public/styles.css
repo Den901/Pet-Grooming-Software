@@ -1272,14 +1272,19 @@ body.calendar-dragging {
 }
 
 .calendar-drag-ghost {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 10000;
+  position: fixed !important;
+  left: 0 !important;
+  top: 0 !important;
+  right: auto !important;
+  bottom: auto !important;
+  height: auto !important;
+  min-height: 42px;
+  max-width: calc(100vw - 24px);
+  z-index: 10000 !important;
   pointer-events: none;
   opacity: 0.92;
   box-shadow: 0 16px 34px rgba(22, 38, 37, 0.22);
-  transform-origin: top left;
+  transform-origin: center;
 }
 
 .appt-time {

@@ -1528,7 +1528,6 @@ function startCalendarAppointmentDrag(event, button) {
   if ((usesPointerEvents && !event.isPrimary) || event.button > 0 || calendarDrag) return;
   const appointment = state.appointments.find((item) => item.id === button.dataset.calendarDragId);
   if (!appointmentCanDrag(appointment)) return;
-  const rect = button.getBoundingClientRect();
   calendarDrag = {
     appointmentId: appointment.id,
     appointment,
@@ -1538,8 +1537,6 @@ function startCalendarAppointmentDrag(event, button) {
     sourceFrame: button.closest(".appt-row, .day-planner-appointment, .mobile-appt-row") || button,
     startX: event.clientX,
     startY: event.clientY,
-    grabOffsetX: clampNumber(event.clientX - rect.left, 0, rect.width),
-    grabOffsetY: clampNumber(event.clientY - rect.top, 0, rect.height),
     active: false,
     ghost: null,
     hoverEl: null,
@@ -1570,12 +1567,14 @@ function activateCalendarAppointmentDrag(event) {
   if (!calendarDrag || calendarDrag.active) return;
   calendarDrag.active = true;
   calendarDrag.sourceFrame.classList.add("calendar-drag-source");
+  const sourceRect = calendarDrag.sourceEl.getBoundingClientRect();
   calendarDrag.ghost = calendarDrag.sourceEl.cloneNode(true);
   calendarDrag.ghost.classList.add("calendar-drag-ghost");
   calendarDrag.ghost.removeAttribute("id");
   calendarDrag.ghost.removeAttribute("data-appointment-id");
   calendarDrag.ghost.removeAttribute("data-calendar-drag-id");
-  calendarDrag.ghost.style.width = `${Math.max(180, calendarDrag.sourceEl.getBoundingClientRect().width)}px`;
+  calendarDrag.ghost.removeAttribute("style");
+  calendarDrag.ghost.style.width = `${Math.min(360, Math.max(180, sourceRect.width))}px`;
   document.body.appendChild(calendarDrag.ghost);
   document.body.classList.add("calendar-dragging");
   updateCalendarDragGhost(event);
@@ -1583,7 +1582,7 @@ function activateCalendarAppointmentDrag(event) {
 
 function updateCalendarDragGhost(event) {
   if (!calendarDrag?.ghost) return;
-  calendarDrag.ghost.style.transform = `translate(${Math.round(event.clientX - calendarDrag.grabOffsetX)}px, ${Math.round(event.clientY - calendarDrag.grabOffsetY)}px)`;
+  calendarDrag.ghost.style.transform = `translate(${Math.round(event.clientX)}px, ${Math.round(event.clientY)}px) translate(-50%, -50%)`;
 }
 
 function updateCalendarDragTarget(event) {
@@ -1624,6 +1623,8 @@ function maybeCloseCalendarDragModal(clientX, clientY) {
   clearCalendarPlannerPreview();
   releaseCalendarDragPointerCapture();
   calendarDrag.modalClosedDuringDrag = true;
+  calendarDrag.openedIso = "";
+  calendarDrag.waitingForModalEntry = false;
   closeModal();
 }
 
@@ -1674,10 +1675,13 @@ function clearCalendarDragDayHover() {
 }
 
 function openCalendarDragDayPlanner(iso) {
-  if (!calendarDrag?.active || calendarDrag.openedIso === iso) return;
+  if (!calendarDrag?.active) return;
+  const openPlanner = modalRoot.querySelector(".modal-card.day-planner-modal");
+  if (calendarDrag.openedIso === iso && openPlanner) return;
   calendarDrag.openedIso = iso;
   clearCalendarDragDayHover();
   openDayPlannerDialog(iso, { dragAppointmentId: calendarDrag.appointmentId });
+  calendarDrag.modalClosedDuringDrag = false;
   calendarDrag.waitingForModalEntry = true;
 }
 
