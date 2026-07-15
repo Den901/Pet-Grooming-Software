@@ -1445,11 +1445,10 @@ function bindCalendar() {
   });
   bindCalendarDayActions(document);
   document.querySelectorAll("[data-complete-appointment-id]").forEach((button) => {
-    button.addEventListener("click", async () => {
+    button.addEventListener("click", () => {
       const appointment = state.appointments.find((item) => item.id === button.dataset.completeAppointmentId);
       if (!appointment) return;
-      if (!(await confirmAppointmentCompletion())) return;
-      openAppointmentDialog(appointment, { completionMode: true });
+      openCompleteServiceDialog(appointment);
     });
   });
 }
@@ -1464,7 +1463,8 @@ function bindCalendarDayActions(root) {
   root.querySelectorAll("[data-appointment-id]").forEach((button) => {
     button.addEventListener("click", () => {
       const appointment = state.appointments.find((item) => item.id === button.dataset.appointmentId);
-      openAppointmentDialog(appointment);
+      if (appointment?.status === "completato") openCompleteServiceDialog(appointment);
+      else openAppointmentDialog(appointment);
     });
   });
 }
@@ -1837,7 +1837,7 @@ function bindServiceHistory() {
   document.querySelectorAll("[data-service-history-edit]").forEach((button) => {
     button.addEventListener("click", () => {
       const appointment = state.appointments.find((item) => item.id === button.dataset.serviceHistoryEdit);
-      if (appointment) openAppointmentDialog(appointment);
+      if (appointment) openCompleteServiceDialog(appointment);
     });
   });
 }
@@ -2913,10 +2913,9 @@ function openDogDetailsDialog(dog = {}) {
       });
       doneAppointmentButton?.addEventListener("click", async () => {
         const freshDog = state.dogs.find((item) => item.id === dog.id) || dog;
-        if (!(await confirmAppointmentCompletion())) return;
         const completedAt = currentTimeInput();
         closeModal();
-        openAppointmentDialog({
+        openCompleteServiceDialog({
           date: todayISO(),
           startTime: completedAt,
           endTime: completedAt,
@@ -2927,7 +2926,7 @@ function openDogDetailsDialog(dog = {}) {
           services: freshDog.services?.length ? freshDog.services : ["Toelettatura"],
           service: freshDog.services?.length ? freshDog.services.join(", ") : "Toelettatura",
           status: "completato"
-        }, { completionMode: true });
+        });
       });
       deleteButton?.addEventListener("click", () => {
         const freshDog = state.dogs.find((item) => item.id === dog.id) || dog;
@@ -2943,7 +2942,8 @@ function openDogDetailsDialog(dog = {}) {
           const appointment = state.appointments.find((item) => item.id === button.dataset.historyAppointment);
           if (!appointment) return;
           closeModal();
-          openAppointmentDialog(appointment);
+          if (appointment.status === "completato") openCompleteServiceDialog(appointment);
+          else openAppointmentDialog(appointment);
         });
       });
     }
@@ -3435,6 +3435,221 @@ function openDogDialog(dog = {}) {
   });
 }
 
+function completionServicesForAppointment(appointment = {}, selectedDog = null) {
+  const pricedServices = Array.isArray(appointment.serviceAmounts)
+    ? normalizeServiceList(appointment.serviceAmounts.map((item) => item?.service).filter(Boolean))
+    : [];
+  if (appointment.status === "completato" && pricedServices.length) return pricedServices;
+  const completed = normalizeServiceList(appointment.treatmentDone || "");
+  if (appointment.status === "completato" && completed.length) return completed;
+  const planned = normalizeServiceList(appointment.services?.length ? appointment.services : appointment.service || selectedDog?.services || "");
+  return planned.length ? planned : ["Toelettatura"];
+}
+
+function completionDurationFromForm(form, selectedDog = null) {
+  const start = timeToMinutes(form.elements.startTime?.value);
+  const end = timeToMinutes(form.elements.endTime?.value);
+  if (start !== null && end !== null && end >= start) return durationLabel(end - start);
+  const estimated = Number(selectedDog?.estimatedMinutes || 0);
+  return estimated > 0 ? `Previsto ${durationLabel(estimated)}` : "Da calcolare";
+}
+
+function syncCompletionInlineWarnings(form) {
+  const warning = form.querySelector("[data-completion-inline-warning]");
+  if (!warning) return;
+  const missing = Array.from(form.querySelectorAll("[data-service-amount-row]"))
+    .map((row) => {
+      const service = row.querySelector('input[name="serviceAmountService"]')?.value || "servizio";
+      const input = row.querySelector("[data-service-amount-input]");
+      const amount = Number(input?.value || 0);
+      return !Number.isFinite(amount) || amount <= 0 ? service : "";
+    })
+    .filter(Boolean);
+  if (!missing.length) {
+    warning.hidden = true;
+    warning.innerHTML = "";
+    return;
+  }
+  warning.hidden = false;
+  warning.innerHTML = `
+    <strong>Manca l'importo per ${escapeHtml(missing[0])}</strong>
+    <span>Inserisci il prezzo oppure rimuovi il servizio se non e stato fatto.</span>
+  `;
+}
+
+function openCompleteServiceDialog(appointment = {}) {
+  const isEdit = Boolean(appointment.id);
+  const isStoredCompleted = isEdit && appointment.status === "completato";
+  const selectedDog = (appointment.dogId ? state.dogs.find((dog) => dog.id === appointment.dogId) : null) || appointmentDog(appointment);
+  const animal = getAnimalSettings();
+  const dogName = selectedDog?.dogName || appointment.dogName || "Senza nome";
+  const dogBreed = selectedDog?.breed || appointment.breed || "";
+  const ownerName = selectedDog?.ownerName || appointment.ownerName || "";
+  const contact = selectedDog?.contact || appointment.contact || "";
+  const dateValue = appointment.date || todayISO();
+  const startTimeValue = appointment.startTime || currentTimeInput();
+  const endTimeValue = isStoredCompleted && appointment.endTime ? appointment.endTime : currentTimeInput();
+  const selectedServices = completionServicesForAppointment(appointment, selectedDog);
+  const serviceOptions = uniqueValues([...(animal.services || []), ...selectedServices, "Toelettatura"]);
+  const photoDog = selectedDog || { dogName, photoUrl: "" };
+  const summaryMeta = [ownerName ? `Cliente: ${ownerName}` : "", contact ? `Contatto: ${contact}` : ""].filter(Boolean).join(" - ");
+  const title = [dogName, dogBreed].filter(Boolean).join(" - ");
+
+  openModal({
+    title: "Concludi prestazione",
+    modalClass: "appointment-modal completion-modal status-completato",
+    hideActions: true,
+    content: `
+      <section class="completion-checkout">
+        <input name="dogId" type="hidden" value="${escapeAttr(appointment.dogId || selectedDog?.id || "")}" />
+        <input name="dogName" type="hidden" value="${escapeAttr(dogName)}" />
+        <input name="ownerName" type="hidden" value="${escapeAttr(ownerName)}" />
+        <input name="contact" type="hidden" value="${escapeAttr(contact)}" />
+        <input name="breed" type="hidden" value="${escapeAttr(dogBreed)}" />
+
+        <div class="completion-summary">
+          <div class="completion-dog-photo">${dogPhotoMarkup(photoDog, dogName)}</div>
+          <div class="completion-dog-copy">
+            <h3>${escapeHtml(title || dogName)}</h3>
+            <p>${escapeHtml(summaryMeta || "Cliente non collegato")}</p>
+            <div class="completion-chip-row">
+              ${selectedServices.slice(0, 3).map((service) => `<span>${escapeHtml(service)} programmato</span>`).join("")}
+              ${selectedDog?.manualTopClient ? `<span>Cliente top</span>` : ""}
+            </div>
+          </div>
+          <div class="completion-time-card">
+            <label>Data
+              <input name="date" type="date" value="${escapeAttr(dateValue)}" required />
+            </label>
+            <div class="completion-time-grid">
+              ${renderClockTimeField("startTime", "Ora inizio", startTimeValue, { required: true })}
+              ${renderClockTimeField("endTime", "Ora fine", endTimeValue, { required: true })}
+            </div>
+            <div class="completion-duration">
+              <span>Tempo totale</span>
+              <strong data-completion-duration>Da calcolare</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="completion-layout">
+          <section class="completion-panel completion-main-panel">
+            <div class="completion-panel-head">
+              <div>
+                <h3>Cosa e stato fatto?</h3>
+                <p>Parti dai servizi programmati, poi aggiungi o togli quello che serve.</p>
+              </div>
+            </div>
+            ${renderServicePicker(selectedServices, serviceOptions)}
+            <div class="completion-inline-warning" data-completion-inline-warning hidden></div>
+            <div class="service-amount-list completion-service-amount-list" data-service-amount-list>
+              ${renderServiceAmountRows(selectedServices, appointment)}
+            </div>
+          </section>
+
+          <section class="completion-panel completion-side-panel">
+            <div class="completion-panel-head">
+              <div>
+                <h3>Foto e note</h3>
+                <p>Le foto restano opzionali e consultabili dallo storico servizi.</p>
+              </div>
+            </div>
+            <div class="completion-gallery-grid">
+              <div class="gallery-upload">
+                <label>Foto prima
+                  <input name="beforePhotos" type="file" accept="image/*" multiple />
+                </label>
+                ${appointment.beforePhotos?.length ? `<div class="gallery-preview">${appointment.beforePhotos.map((src) => `<img src="${escapeAttr(src)}" alt="Prima del lavoro" />`).join("")}</div>` : ""}
+                ${appointment.beforePhotos?.length ? `<label class="checkbox-line"><input name="clearBeforePhotos" type="checkbox" /> Rimuovi foto prima salvate</label>` : ""}
+              </div>
+              <div class="gallery-upload">
+                <label>Foto dopo
+                  <input name="afterPhotos" type="file" accept="image/*" multiple />
+                </label>
+                ${appointment.afterPhotos?.length ? `<div class="gallery-preview">${appointment.afterPhotos.map((src) => `<img src="${escapeAttr(src)}" alt="Dopo il lavoro" />`).join("")}</div>` : ""}
+                ${appointment.afterPhotos?.length ? `<label class="checkbox-line"><input name="clearAfterPhotos" type="checkbox" /> Rimuovi foto dopo salvate</label>` : ""}
+              </div>
+            </div>
+            <details class="completion-notes" ${appointment.notes ? "open" : ""}>
+              <summary>Note finali</summary>
+              <textarea name="notes" placeholder="Note sul lavoro svolto">${escapeHtml(appointment.notes || "")}</textarea>
+            </details>
+          </section>
+        </div>
+
+        <footer class="completion-footer">
+          <div>
+            <strong>Pronto per chiudere?</strong>
+            <span>Il totale si aggiorna mentre modifichi servizi e prodotti.</span>
+          </div>
+          <div class="completion-total">
+            <span>Totale prestazione</span>
+            <strong data-service-amount-total>${escapeHtml(moneyLabel(appointment.paidAmount))}</strong>
+          </div>
+          <button class="btn success completion-submit" type="submit">${isStoredCompleted ? "Salva prestazione" : "Concludi prestazione"}</button>
+        </footer>
+      </section>
+    `,
+    onOpen: (form) => {
+      bindServicePickers(form);
+      bindClockTimeFields(form);
+      const syncDuration = () => {
+        const target = form.querySelector("[data-completion-duration]");
+        if (target) target.textContent = completionDurationFromForm(form, selectedDog);
+      };
+      const syncAmounts = () => {
+        syncServiceAmountRows(form, appointment);
+        syncCompletionInlineWarnings(form);
+      };
+      form.addEventListener("change", (event) => {
+        if (event.target.closest("[data-clock-time-field]") || event.target.name === "date") syncDuration();
+        if (event.target.matches("[data-service-select]")) setTimeout(syncAmounts, 0);
+        if (event.target.matches("[data-service-amount-input]")) {
+          syncServiceAmountTotal(form);
+          syncCompletionInlineWarnings(form);
+        }
+      });
+      form.addEventListener("click", (event) => {
+        if (event.target.closest("[data-service-remove], [data-service-custom-add]")) setTimeout(syncAmounts, 0);
+      });
+      syncDuration();
+      syncServiceAmountTotal(form);
+      syncCompletionInlineWarnings(form);
+    },
+    onSubmit: async (formData, form) => {
+      const payload = {
+        ...appointment,
+        ...Object.fromEntries(formData.entries()),
+        status: "completato"
+      };
+      const services = collectServicesFromForm(formData, form);
+      payload.services = services;
+      payload.service = services.join(", ");
+      payload.treatmentDone = payload.service;
+      validateAppointmentBeforeSave(form, payload, services);
+      if (!(await confirmAppointmentCompletion())) {
+        const error = new Error("");
+        error.alreadyNotified = true;
+        throw error;
+      }
+      payload.serviceAmounts = collectServiceAmounts(form);
+      payload.paidAmount = Number(serviceAmountsTotal(payload.serviceAmounts).toFixed(2));
+      payload.beforePhotoData = await filesToDataUrls(form.elements.beforePhotos?.files, 5);
+      payload.afterPhotoData = await filesToDataUrls(form.elements.afterPhotos?.files, 5);
+      payload.clearBeforePhotos = formData.get("clearBeforePhotos") === "on";
+      payload.clearAfterPhotos = formData.get("clearAfterPhotos") === "on";
+      await api(isEdit ? `/api/appointments/${appointment.id}` : "/api/appointments", {
+        method: isEdit ? "PUT" : "POST",
+        body: JSON.stringify(payload)
+      });
+      await loadData();
+      state.calendarDate = parseISODate(payload.date);
+      renderView();
+      notify(isStoredCompleted ? "Prestazione aggiornata" : "Prestazione conclusa");
+    }
+  });
+}
+
 function openAppointmentDialog(appointment = {}, options = {}) {
   const isEdit = Boolean(appointment.id);
   const completionMode = Boolean(options.completionMode) || (!isEdit && appointment.status === "completato");
@@ -3592,17 +3807,20 @@ function openAppointmentDialog(appointment = {}, options = {}) {
           if (missing) form.elements.contact.value = "";
         }
       };
-      const startCompletion = () => {
-        form.elements.status.value = "completato";
-        setClockTimeFieldValue(form, "endTime", currentTimeInput());
-        syncCompletionFields();
-        syncAmounts();
-        form.querySelector("[data-service-select]")?.focus();
-        notify("Completa servizi, prodotti e importi, poi salva la prestazione");
-      };
-      modalRoot.querySelector("[data-complete-form]")?.addEventListener("click", async () => {
-        if (!(await confirmAppointmentCompletion())) return;
-        startCompletion();
+      modalRoot.querySelector("[data-complete-form]")?.addEventListener("click", () => {
+        const payload = Object.fromEntries(new FormData(form).entries());
+        const services = collectServicesFromForm(new FormData(form), form);
+        closeModal();
+        openCompleteServiceDialog({
+          ...appointment,
+          ...payload,
+          services,
+          service: services.join(", "),
+          dogId: payload.dogId || appointment.dogId,
+          dogName: payload.dogName || appointment.dogName,
+          ownerName: payload.ownerName || appointment.ownerName,
+          contact: payload.contact || appointment.contact
+        });
       });
       form.elements.status.addEventListener("change", () => {
         if (form.elements.status.value === "completato" && !form.elements.endTime.value) setClockTimeFieldValue(form, "endTime", currentTimeInput());
@@ -4010,6 +4228,11 @@ function validateAppointmentBeforeSave(form, payload, services) {
     if (!payload.endTime) {
       errors.push({ label: "ora fine", element: form.querySelector('[data-clock-time-name="endTime"]') || form.elements.endTime });
     }
+    const startMinutes = timeToMinutes(payload.startTime);
+    const endMinutes = timeToMinutes(payload.endTime);
+    if (startMinutes !== null && endMinutes !== null && endMinutes < startMinutes) {
+      errors.push({ label: "ora fine successiva all'inizio", element: form.querySelector('[data-clock-time-name="endTime"]') || form.elements.endTime });
+    }
     if (!services.length) {
       errors.push({ label: "almeno un servizio o prodotto", element: form.querySelector("[data-service-select]") });
     }
@@ -4157,7 +4380,7 @@ function confirmAction(message, onConfirm) {
 function confirmAppointmentCompletion() {
   return showActionConfirm({
     title: "Concludi appuntamento",
-    message: "Concludere questo appuntamento e impostare l'orario di fine all'ora attuale?",
+    message: "Salvare la prestazione come completata e aggiornare calendario, storico e statistiche?",
     confirmLabel: "Concludi",
     confirmClass: "success"
   });

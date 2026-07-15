@@ -1,6 +1,6 @@
 # Groomly
 
-Release corrente: `1.0.7` stabile.
+Release corrente: `1.0.8` stabile.
 
 Portale web PWA in Node.js per gestire:
 
@@ -19,7 +19,7 @@ Portale web PWA in Node.js per gestire:
 - impostazioni scheda animale per razze, colori cane, prestazioni cumulabili e soglia cliente top;
 - storico appuntamenti a menu nella scheda cane con servizio eseguito, importo pagato, galleria foto prima/dopo e foto ingrandibili;
 - sezione `Storico servizi` con ricerca animale a suggerimenti, riepilogo incasso e foto zoomabili;
-- chiusura prestazione da scheda cane o calendario con servizi precompilati, modificabili, prezzo separato per ogni servizio e avvisi chiari sui campi mancanti;
+- chiusura prestazione da scheda cane o calendario con schermata cassa rapida, servizi precompilati, orari modificabili, prezzo separato per ogni servizio e avvisi chiari sui campi mancanti;
 - ricerca schede;
 - backup cifrato con password e import backup;
 - impostazioni WhatsApp per promemoria appuntamenti cliente e impostazioni globali per il promemoria interno operatori;
@@ -50,6 +50,7 @@ Le immagini del portale sono salvate in `docs/screenshots/` e vanno aggiornate a
 | Calendario semaforo | ![Calendario semaforo appuntamenti](docs/screenshots/release-1.0.6-day-semaforo.png) |
 | Avvisi compilazione | ![Avviso campi mancanti appuntamento](docs/screenshots/release-1.0.6-validation-warning.png) |
 | Orari senza quadrante Android | ![Selettori ore e minuti appuntamento](docs/screenshots/release-1.0.6-time-selects.png) |
+| Cassa rapida prestazione | ![Cassa rapida per concludere una prestazione](docs/screenshots/release-1.0.8-completion-checkout.png) |
 
 ## Accesso iniziale
 
@@ -98,9 +99,9 @@ npm.cmd run release:packages
 
 Il comando genera nella cartella `dist/`:
 
-- `Pet-Grooming-Software-1.0.7-windows.zip`;
-- `Pet-Grooming-Software-1.0.7-linux.tar.gz`;
-- `Pet-Grooming-Software-1.0.7.pgs-update`;
+- `Pet-Grooming-Software-1.0.8-windows.zip`;
+- `Pet-Grooming-Software-1.0.8-linux.tar.gz`;
+- `Pet-Grooming-Software-1.0.8.pgs-update`;
 - `pet-grooming-update.json`.
 
 Se `npm` non e bloccato dalla policy PowerShell puoi usare anche `npm run release:packages`.
@@ -109,7 +110,7 @@ Se `npm` non e bloccato dalla policy PowerShell puoi usare anche `npm run releas
 
 Prerequisito: Node.js 18 o superiore installato sul PC.
 
-1. Estrai `Pet-Grooming-Software-1.0.7-windows.zip`.
+1. Estrai `Pet-Grooming-Software-1.0.8-windows.zip`.
 2. Apri PowerShell nella cartella estratta. Per installare in `ProgramData` e creare l'avvio automatico e consigliato aprirlo come amministratore.
 3. Per installare in `C:\ProgramData\Pet Grooming Software` e creare l'avvio automatico all'accesso:
 
@@ -135,12 +136,12 @@ Per riavviare dopo un update, chiudi la finestra dove gira Node.js e rilancia lo
 
 Prerequisito: Node.js 18 o superiore installato sul server.
 
-1. Copia `Pet-Grooming-Software-1.0.7-linux.tar.gz` sul server.
+1. Copia `Pet-Grooming-Software-1.0.8-linux.tar.gz` sul server.
 2. Estrai il pacchetto e entra nella cartella:
 
 ```bash
-tar -xzf Pet-Grooming-Software-1.0.7-linux.tar.gz
-cd Pet-Grooming-Software-1.0.7
+tar -xzf Pet-Grooming-Software-1.0.8-linux.tar.gz
+cd Pet-Grooming-Software-1.0.8
 ```
 
 3. Installazione consigliata in `/opt` con servizio systemd:
@@ -245,7 +246,7 @@ La skill puo cercare cani e servizi/prodotti e creare appuntamenti nel calendari
 
 ## Release e aggiornamenti
 
-La release corrente e `1.0.7` stabile. Per preparare i pacchetti della versione impostata in `package.json`:
+La release corrente e `1.0.8` stabile. Per preparare i pacchetti della versione impostata in `package.json`:
 
 ```powershell
 npm.cmd run release:packages

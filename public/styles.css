@@ -32,6 +32,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html {
   min-height: 100%;
   width: 100%;
@@ -3517,6 +3521,321 @@ label {
   --appointment-status-color: var(--danger);
 }
 
+.modal-card.completion-modal {
+  width: min(980px, 100%);
+}
+
+.completion-modal .modal-body {
+  padding: 0;
+}
+
+.completion-checkout {
+  display: grid;
+  gap: 0;
+  background: var(--panel);
+}
+
+.completion-summary,
+.completion-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-soft);
+}
+
+.completion-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(260px, 0.6fr);
+  gap: 14px;
+  align-items: center;
+  margin: 18px;
+  padding: 14px;
+}
+
+.completion-dog-photo {
+  width: 78px;
+  height: 78px;
+  overflow: hidden;
+  border: 3px solid var(--gold);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.completion-dog-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.completion-dog-copy {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.completion-dog-copy h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.32rem;
+  line-height: 1.12;
+}
+
+.completion-dog-copy p,
+.completion-panel-head p,
+.completion-footer span,
+.completion-duration span {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.completion-chip-row {
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.completion-chip-row span {
+  max-width: 100%;
+  padding: 7px 10px;
+  border: 1px solid rgba(0, 168, 79, 0.52);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 850;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.completion-time-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.completion-time-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.completion-duration {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.completion-duration strong {
+  color: var(--gold);
+}
+
+.completion-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(290px, 0.72fr);
+  gap: 16px;
+  padding: 0 18px 18px;
+}
+
+.completion-panel {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 14px;
+}
+
+.completion-panel-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.completion-panel-head h3 {
+  margin: 0 0 4px;
+  color: var(--ink);
+  font-size: 1.05rem;
+}
+
+.completion-service-amount-list .service-amount-row {
+  grid-template-columns: minmax(0, 1fr) minmax(130px, 0.34fr);
+  background: var(--panel);
+}
+
+.completion-inline-warning {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid rgba(229, 75, 75, 0.72);
+  border-left: 5px solid var(--traffic-red);
+  border-radius: var(--radius);
+  background: rgba(229, 75, 75, 0.12);
+  color: var(--ink);
+}
+
+.completion-inline-warning[hidden] {
+  display: none;
+}
+
+.completion-inline-warning strong {
+  color: var(--traffic-red);
+}
+
+.completion-inline-warning span {
+  color: var(--muted);
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.completion-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.completion-gallery-grid .gallery-upload {
+  min-width: 0;
+  background: var(--panel);
+}
+
+.completion-notes {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.completion-notes summary {
+  padding: 12px;
+  color: var(--ink);
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.completion-notes textarea {
+  min-height: 110px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+}
+
+.completion-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 18px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.completion-footer > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.completion-footer strong {
+  color: var(--ink);
+}
+
+.completion-total {
+  min-width: 140px;
+  text-align: right;
+}
+
+.completion-total span {
+  display: block;
+  font-size: 0.78rem;
+}
+
+.completion-total strong {
+  display: block;
+  color: var(--success);
+  font-size: 1.45rem;
+  line-height: 1.05;
+}
+
+.completion-submit {
+  min-height: 48px;
+}
+
+@media (max-width: 1024px) {
+  .modal-card.completion-modal {
+    width: min(100%, calc(100vw - 20px));
+  }
+
+  .completion-summary {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .completion-time-card {
+    grid-column: 1 / -1;
+  }
+
+  .completion-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .completion-summary {
+    grid-template-columns: 1fr;
+    margin: 10px;
+    padding: 12px;
+  }
+
+  .completion-dog-photo {
+    width: 72px;
+    height: 72px;
+  }
+
+  .completion-time-grid,
+  .completion-gallery-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .completion-layout {
+    gap: 10px;
+    padding: 0 10px 10px;
+  }
+
+  .completion-panel {
+    padding: 12px;
+  }
+
+  .completion-panel-head {
+    display: grid;
+  }
+
+  .completion-service-amount-list .service-amount-row {
+    grid-template-columns: 1fr;
+  }
+
+  .completion-footer {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .completion-total {
+    text-align: left;
+  }
+
+  .completion-submit {
+    width: 100%;
+  }
+}
+
 @media (min-width: 1025px) {
   .modal-card {
     width: min(calc(780px * var(--ui-scale, 1)), 100%);
@@ -4656,7 +4975,43 @@ label {
   }
 
   .revenue-line-card {
-    padding-inline: 4px;
+    min-height: 410px;
+    padding: 8px 4px 116px;
+  }
+
+  .revenue-point-detail {
+    left: 12px;
+    right: 12px;
+    bottom: 64px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 6px;
+  }
+
+  .revenue-point-detail span {
+    min-width: 0;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .revenue-point-detail strong {
+    font-size: 1rem;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+
+  .revenue-total {
+    left: 12px;
+    right: 12px;
+    bottom: 14px;
+    justify-content: space-between;
+  }
+
+  .revenue-total strong {
+    font-size: 1.28rem;
+    line-height: 1.05;
+    white-space: nowrap;
   }
 
   .service-amount-row {
