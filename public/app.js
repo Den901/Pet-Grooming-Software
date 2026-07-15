@@ -1394,7 +1394,7 @@ function renderMobileAppointmentCard(appointment) {
       </button>
       ${
         isCompleted
-          ? `<button class="appt-edit-service" type="button" data-edit-completed-appointment-id="${appointment.id}" title="Modifica prestazione" aria-label="Modifica prestazione">Modifica</button>`
+          ? `<span class="appt-complete done" title="Prestazione completata" aria-label="Prestazione completata">&#10003;</span>`
           : `<button class="appt-complete" type="button" data-complete-appointment-id="${appointment.id}" title="Concludi prestazione" aria-label="Concludi prestazione">&#10003;</button>`
       }
     </div>
@@ -1416,7 +1416,7 @@ function renderAppointmentPill(appointment) {
       </button>
       ${
         isCompleted
-          ? `<button class="appt-edit-service compact" type="button" data-edit-completed-appointment-id="${appointment.id}" title="Modifica prestazione" aria-label="Modifica prestazione">Modifica</button>`
+          ? `<span class="appt-complete done" title="Prestazione completata" aria-label="Prestazione completata">&#10003;</span>`
           : `<button class="appt-complete" type="button" data-complete-appointment-id="${appointment.id}" title="Concludi prestazione" aria-label="Concludi prestazione">&#10003;</button>`
       }
     </div>
@@ -1451,9 +1451,6 @@ function bindCalendar() {
       openCompleteServiceDialog(appointment);
     });
   });
-  document.querySelectorAll("[data-edit-completed-appointment-id]").forEach((button) => {
-    button.addEventListener("click", () => requestCompletedAppointmentEdit(button.dataset.editCompletedAppointmentId));
-  });
 }
 
 function bindCalendarDayActions(root) {
@@ -1471,16 +1468,13 @@ function bindCalendarDayActions(root) {
   });
 }
 
-async function requestCompletedAppointmentEdit(appointmentId) {
-  const appointment = state.appointments.find((item) => item.id === appointmentId);
-  if (!appointment) return;
-  const confirmed = await showActionConfirm({
+function confirmCompletedAppointmentEdit() {
+  return showActionConfirm({
     title: "Modifica prestazione chiusa",
     message: "Vuoi davvero modificare questa prestazione gia chiusa? Potrai aggiornare la cassa oppure eliminarla dallo storico.",
     confirmLabel: "Modifica",
     confirmClass: "success"
   });
-  if (confirmed) openCompleteServiceDialog(appointment);
 }
 
 function moveCalendarDate(direction) {
@@ -1738,8 +1732,8 @@ function renderServiceHistoryCard(appointment) {
       ${appointment.notes ? `<p class="service-history-note">${escapeHtml(appointment.notes)}</p>` : ""}
       ${renderAppointmentGallery(appointment)}
       <div class="service-history-actions">
-        <button class="btn secondary slim" type="button" data-service-history-edit="${appointment.id}">Modifica servizio</button>
-        <button class="btn danger slim" type="button" data-service-history-delete="${appointment.id}">Elimina prestazione</button>
+        <button class="btn secondary slim" type="button" data-service-history-edit="${appointment.id}" title="Modifica servizio" aria-label="Modifica servizio">Modifica</button>
+        <button class="btn danger slim" type="button" data-service-history-delete="${appointment.id}" title="Elimina prestazione" aria-label="Elimina prestazione">Elimina</button>
       </div>
     </article>
   `;
@@ -3661,8 +3655,9 @@ function openCompleteServiceDialog(appointment = {}) {
           await api(`/api/appointments/${appointment.id}`, { method: "DELETE", body: "{}" });
           await loadData();
           state.calendarDate = parseISODate(dateValue);
-          closeModal();
           renderView();
+          closeModal();
+          window.setTimeout(closeModal, 0);
           notify("Prestazione eliminata");
         } catch (err) {
           notify(err.message);
@@ -3725,9 +3720,12 @@ function openAppointmentDialog(appointment = {}, options = {}) {
     modalClass: `appointment-modal status-${currentStatus}`,
     submitLabel: completionMode ? "Salva prestazione" : isEdit ? "Salva appuntamento" : "Crea appuntamento",
     dangerLabel: isEdit ? "Elimina" : "",
-    dangerConfirmMessage: "Sei sicuro di voler eliminare l'appuntamento?",
+    dangerConfirmMessage:
+      currentStatus === "completato" ? "Sei sicuro di voler eliminare questa prestazione chiusa?" : "Sei sicuro di voler eliminare l'appuntamento?",
     extraActions:
-      isEdit && currentStatus !== "completato"
+      isEdit && currentStatus === "completato"
+        ? `<button class="btn success" type="button" data-edit-completed-form>Modifica prestazione</button>`
+        : isEdit && currentStatus !== "completato"
         ? `<button class="btn success" type="button" data-complete-form>Concludi prestazione</button>`
         : "",
     content: `
@@ -3879,6 +3877,24 @@ function openAppointmentDialog(appointment = {}, options = {}) {
           contact: payload.contact || appointment.contact
         });
       });
+      modalRoot.querySelector("[data-edit-completed-form]")?.addEventListener("click", async () => {
+        if (!(await confirmCompletedAppointmentEdit())) return;
+        const formData = new FormData(form);
+        const payload = Object.fromEntries(formData.entries());
+        const services = collectServicesFromForm(formData, form);
+        closeModal();
+        openCompleteServiceDialog({
+          ...appointment,
+          ...payload,
+          status: "completato",
+          services,
+          service: services.join(", "),
+          dogId: payload.dogId || appointment.dogId,
+          dogName: payload.dogName || appointment.dogName,
+          ownerName: payload.ownerName || appointment.ownerName,
+          contact: payload.contact || appointment.contact
+        });
+      });
       form.elements.status.addEventListener("change", () => {
         if (form.elements.status.value === "completato" && !form.elements.endTime.value) setClockTimeFieldValue(form, "endTime", currentTimeInput());
         syncCompletionFields();
@@ -3909,8 +3925,11 @@ function openAppointmentDialog(appointment = {}, options = {}) {
     onDanger: async () => {
       await api(`/api/appointments/${appointment.id}`, { method: "DELETE", body: "{}" });
       await loadData();
+      state.calendarDate = parseISODate(appointment.date || todayISO());
       renderView();
-      notify("Appuntamento eliminato");
+      closeModal();
+      window.setTimeout(closeModal, 0);
+      notify(appointment.status === "completato" ? "Prestazione eliminata" : "Appuntamento eliminato");
     },
     onSubmit: async (formData, form) => {
       const payload = Object.fromEntries(formData.entries());

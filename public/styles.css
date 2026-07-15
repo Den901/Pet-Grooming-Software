@@ -1284,36 +1284,6 @@ label {
   color: #fff;
 }
 
-.appt-edit-service {
-  min-width: 72px;
-  min-height: 30px;
-  align-self: center;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  padding: 6px 9px;
-  background: var(--brand);
-  color: #fff;
-  font-size: 0.74rem;
-  font-weight: 900;
-  line-height: 1;
-  white-space: nowrap;
-  box-shadow: 0 6px 14px rgba(35, 67, 68, 0.18);
-}
-
-.appt-edit-service:hover,
-.appt-edit-service:focus-visible {
-  background: var(--brand-strong);
-}
-
-.appt-edit-service.compact {
-  min-width: 60px;
-  min-height: 24px;
-  padding: 5px 7px;
-  font-size: 0.66rem;
-}
-
 .status-programmato {
   background: var(--traffic-red-soft);
   border-left-color: var(--traffic-red);
@@ -2423,8 +2393,16 @@ label {
 .service-history-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
+}
+
+.service-history-actions .btn {
+  min-height: 28px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  line-height: 1;
 }
 
 .photo-lightbox {
@@ -3765,6 +3743,44 @@ label {
   background: var(--panel);
 }
 
+.completion-modal .gallery-upload label {
+  min-width: 0;
+}
+
+.completion-modal .gallery-upload input[type="file"] {
+  max-width: 100%;
+  color: transparent;
+  font-size: 0;
+}
+
+.completion-modal .gallery-upload input[type="file"]::file-selector-button {
+  min-height: 34px;
+  margin-right: 0;
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 10px;
+  background: var(--brand);
+  color: #fff;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.completion-modal .gallery-upload input[type="file"]::-webkit-file-upload-button {
+  min-height: 34px;
+  margin-right: 0;
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 10px;
+  background: var(--brand);
+  color: #fff;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
 .completion-notes {
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -4724,10 +4740,13 @@ label {
     align-items: start;
   }
 
-  .service-history-card-head,
-  .service-history-actions {
+  .service-history-card-head {
     display: grid;
     justify-content: stretch;
+  }
+
+  .service-history-actions {
+    justify-content: flex-start;
   }
 
   .history-amount {
