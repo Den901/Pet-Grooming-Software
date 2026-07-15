@@ -3894,6 +3894,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
         });
       });
       modalRoot.querySelector("[data-cancel-appointment-form]")?.addEventListener("click", async (event) => {
+        const button = event.currentTarget;
         const confirmed = await showActionConfirm({
           title: "Annulla appuntamento",
           message: "Segnare questo appuntamento come annullato? Rimarra nel calendario, nello storico e nella scheda cliente.",
@@ -3901,9 +3902,10 @@ function openAppointmentDialog(appointment = {}, options = {}) {
           confirmClass: "info"
         });
         if (!confirmed) return;
-        const button = event.currentTarget;
         button.disabled = true;
         try {
+          form.elements.status.value = "annullato";
+          syncCompletionFields();
           const formData = new FormData(form);
           const formPayload = Object.fromEntries(formData.entries());
           const services = collectServicesFromForm(formData, form);
