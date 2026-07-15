@@ -1528,6 +1528,7 @@ function startCalendarAppointmentDrag(event, button) {
   if ((usesPointerEvents && !event.isPrimary) || event.button > 0 || calendarDrag) return;
   const appointment = state.appointments.find((item) => item.id === button.dataset.calendarDragId);
   if (!appointmentCanDrag(appointment)) return;
+  const rect = button.getBoundingClientRect();
   calendarDrag = {
     appointmentId: appointment.id,
     appointment,
@@ -1537,6 +1538,8 @@ function startCalendarAppointmentDrag(event, button) {
     sourceFrame: button.closest(".appt-row, .day-planner-appointment, .mobile-appt-row") || button,
     startX: event.clientX,
     startY: event.clientY,
+    grabOffsetX: clampNumber(event.clientX - rect.left, 0, rect.width),
+    grabOffsetY: clampNumber(event.clientY - rect.top, 0, rect.height),
     active: false,
     ghost: null,
     hoverEl: null,
@@ -1580,7 +1583,7 @@ function activateCalendarAppointmentDrag(event) {
 
 function updateCalendarDragGhost(event) {
   if (!calendarDrag?.ghost) return;
-  calendarDrag.ghost.style.transform = `translate(${Math.round(event.clientX + 14)}px, ${Math.round(event.clientY + 14)}px)`;
+  calendarDrag.ghost.style.transform = `translate(${Math.round(event.clientX - calendarDrag.grabOffsetX)}px, ${Math.round(event.clientY - calendarDrag.grabOffsetY)}px)`;
 }
 
 function updateCalendarDragTarget(event) {

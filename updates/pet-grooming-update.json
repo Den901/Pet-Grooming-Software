@@ -2,12 +2,12 @@
   "format": "PET_GROOMING_SOFTWARE_UPDATE_MANIFEST",
   "formatVersion": 1,
   "app": "pet-grooming-software",
-  "version": "1.0.15",
-  "releaseLabel": "1.0.15",
-  "createdAt": "2026-07-15T18:14:00.000Z",
-  "packageName": "Pet-Grooming-Software-1.0.15.pgs-update",
-  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v1.0.15/Pet-Grooming-Software-1.0.15.pgs-update",
-  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v1.0.15",
-  "notes": "Release 1.0.15",
-  "changelog": "Migliora il drag and drop calendario: se trascini un appuntamento fuori dalla finestra del giorno, la finestra si chiude e puoi passare a un'altra giornata; restando circa 2 secondi su un giorno del mese si apre il nuovo planning. Aggiunge inoltre l'opzione Impostazioni > Appuntamenti e monitor per abilitare o disabilitare il drag and drop, attiva di default."
+  "version": "1.0.16",
+  "releaseLabel": "1.0.16",
+  "createdAt": "2026-07-15T18:19:56.896Z",
+  "packageName": "Pet-Grooming-Software-1.0.16.pgs-update",
+  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v1.0.16/Pet-Grooming-Software-1.0.16.pgs-update",
+  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v1.0.16",
+  "notes": "Release 1.0.16",
+  "changelog": "Corregge il trascinamento appuntamenti: la copia dell'appuntamento ora resta agganciata al punto del mouse usato per prenderla, senza apparire piu bassa durante lo spostamento."
 }
