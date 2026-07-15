@@ -1394,7 +1394,7 @@ function renderMobileAppointmentCard(appointment) {
       </button>
       ${
         isCompleted
-          ? `<span class="appt-complete done" title="Prestazione completata" aria-label="Prestazione completata">&#10003;</span>`
+          ? `<button class="appt-edit-service" type="button" data-edit-completed-appointment-id="${appointment.id}" title="Modifica prestazione" aria-label="Modifica prestazione">Modifica</button>`
           : `<button class="appt-complete" type="button" data-complete-appointment-id="${appointment.id}" title="Concludi prestazione" aria-label="Concludi prestazione">&#10003;</button>`
       }
     </div>
@@ -1416,7 +1416,7 @@ function renderAppointmentPill(appointment) {
       </button>
       ${
         isCompleted
-          ? `<span class="appt-complete done" title="Prestazione completata" aria-label="Prestazione completata">&#10003;</span>`
+          ? `<button class="appt-edit-service compact" type="button" data-edit-completed-appointment-id="${appointment.id}" title="Modifica prestazione" aria-label="Modifica prestazione">Modifica</button>`
           : `<button class="appt-complete" type="button" data-complete-appointment-id="${appointment.id}" title="Concludi prestazione" aria-label="Concludi prestazione">&#10003;</button>`
       }
     </div>
@@ -1451,6 +1451,9 @@ function bindCalendar() {
       openCompleteServiceDialog(appointment);
     });
   });
+  document.querySelectorAll("[data-edit-completed-appointment-id]").forEach((button) => {
+    button.addEventListener("click", () => requestCompletedAppointmentEdit(button.dataset.editCompletedAppointmentId));
+  });
 }
 
 function bindCalendarDayActions(root) {
@@ -1463,10 +1466,21 @@ function bindCalendarDayActions(root) {
   root.querySelectorAll("[data-appointment-id]").forEach((button) => {
     button.addEventListener("click", () => {
       const appointment = state.appointments.find((item) => item.id === button.dataset.appointmentId);
-      if (appointment?.status === "completato") openCompleteServiceDialog(appointment);
-      else openAppointmentDialog(appointment);
+      openAppointmentDialog(appointment);
     });
   });
+}
+
+async function requestCompletedAppointmentEdit(appointmentId) {
+  const appointment = state.appointments.find((item) => item.id === appointmentId);
+  if (!appointment) return;
+  const confirmed = await showActionConfirm({
+    title: "Modifica prestazione chiusa",
+    message: "Vuoi davvero modificare questa prestazione gia chiusa? Potrai aggiornare la cassa oppure eliminarla dallo storico.",
+    confirmLabel: "Modifica",
+    confirmClass: "success"
+  });
+  if (confirmed) openCompleteServiceDialog(appointment);
 }
 
 function moveCalendarDate(direction) {
@@ -1725,6 +1739,7 @@ function renderServiceHistoryCard(appointment) {
       ${renderAppointmentGallery(appointment)}
       <div class="service-history-actions">
         <button class="btn secondary slim" type="button" data-service-history-edit="${appointment.id}">Modifica servizio</button>
+        <button class="btn danger slim" type="button" data-service-history-delete="${appointment.id}">Elimina prestazione</button>
       </div>
     </article>
   `;
@@ -1770,12 +1785,14 @@ function bindServiceHistory() {
     if (dropdown && searchInput) dropdown.innerHTML = renderServiceHistoryDogOptions(menuOnly ? "" : searchInput.value);
   };
   const applySearch = () => {
-    const dog = serviceHistoryDogFromSearch(searchInput.value);
-    if (!dog) {
-      notify("Seleziona un animale dall'elenco");
+    const matches = serviceHistoryDogOptions(searchInput.value);
+    if (matches.length !== 1) {
+      refreshDropdown();
+      setDropdownOpen(true);
+      notify("Scegli un animale dall'elenco");
       return;
     }
-    state.serviceHistoryDogId = dog.id;
+    state.serviceHistoryDogId = matches[0].id;
     state.serviceHistoryDogQuery = "";
     renderView();
   };
@@ -1793,12 +1810,6 @@ function bindServiceHistory() {
     state.serviceHistoryDogQuery = searchInput.value;
     refreshDropdown();
     setDropdownOpen(true);
-    const dog = serviceHistoryDogFromSearch(searchInput.value, true);
-    if (dog) {
-      state.serviceHistoryDogId = dog.id;
-      state.serviceHistoryDogQuery = "";
-      renderView();
-    }
   });
   searchInput?.addEventListener("blur", () => {
     window.setTimeout(() => {
@@ -1824,7 +1835,6 @@ function bindServiceHistory() {
     state.serviceHistoryDogQuery = "";
     renderView();
   });
-  searchInput?.addEventListener("change", applySearch);
   searchInput?.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") return;
     event.preventDefault();
@@ -1838,6 +1848,27 @@ function bindServiceHistory() {
     button.addEventListener("click", () => {
       const appointment = state.appointments.find((item) => item.id === button.dataset.serviceHistoryEdit);
       if (appointment) openCompleteServiceDialog(appointment);
+    });
+  });
+  document.querySelectorAll("[data-service-history-delete]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const appointment = state.appointments.find((item) => item.id === button.dataset.serviceHistoryDelete);
+      if (!appointment) return;
+      const label = [appointment.dogName || "questa prestazione", formatShortDate(appointment.date)].filter(Boolean).join(" - ");
+      if (
+        !(await showActionConfirm({
+          title: "Elimina prestazione",
+          message: `Eliminare definitivamente ${label} dallo storico servizi?`,
+          confirmLabel: "Elimina",
+          confirmClass: "danger"
+        }))
+      ) {
+        return;
+      }
+      await api(`/api/appointments/${appointment.id}`, { method: "DELETE", body: "{}" });
+      await loadData();
+      renderView();
+      notify("Prestazione eliminata");
     });
   });
 }
@@ -2942,8 +2973,7 @@ function openDogDetailsDialog(dog = {}) {
           const appointment = state.appointments.find((item) => item.id === button.dataset.historyAppointment);
           if (!appointment) return;
           closeModal();
-          if (appointment.status === "completato") openCompleteServiceDialog(appointment);
-          else openAppointmentDialog(appointment);
+          openAppointmentDialog(appointment);
         });
       });
     }
@@ -3494,9 +3524,10 @@ function openCompleteServiceDialog(appointment = {}) {
   const photoDog = selectedDog || { dogName, photoUrl: "" };
   const summaryMeta = [ownerName ? `Cliente: ${ownerName}` : "", contact ? `Contatto: ${contact}` : ""].filter(Boolean).join(" - ");
   const title = [dogName, dogBreed].filter(Boolean).join(" - ");
+  const completionTitle = isStoredCompleted ? "Modifica prestazione" : "Concludi prestazione";
 
   openModal({
-    title: "Concludi prestazione",
+    title: completionTitle,
     modalClass: "appointment-modal completion-modal status-completato",
     hideActions: true,
     content: `
@@ -3513,7 +3544,7 @@ function openCompleteServiceDialog(appointment = {}) {
             <h3>${escapeHtml(title || dogName)}</h3>
             <p>${escapeHtml(summaryMeta || "Cliente non collegato")}</p>
             <div class="completion-chip-row">
-              ${selectedServices.slice(0, 3).map((service) => `<span>${escapeHtml(service)} programmato</span>`).join("")}
+              ${selectedServices.slice(0, 3).map((service) => `<span>${escapeHtml(isStoredCompleted ? service : `${service} programmato`)}</span>`).join("")}
               ${selectedDog?.manualTopClient ? `<span>Cliente top</span>` : ""}
             </div>
           </div>
@@ -3536,8 +3567,8 @@ function openCompleteServiceDialog(appointment = {}) {
           <section class="completion-panel completion-main-panel">
             <div class="completion-panel-head">
               <div>
-                <h3>Cosa e stato fatto?</h3>
-                <p>Parti dai servizi programmati, poi aggiungi o togli quello che serve.</p>
+                <h3>${isStoredCompleted ? "Prestazione registrata" : "Cosa e stato fatto?"}</h3>
+                <p>${isStoredCompleted ? "Aggiorna servizi, prodotti e importi salvati nello storico." : "Parti dai servizi programmati, poi aggiungi o togli quello che serve."}</p>
               </div>
             </div>
             ${renderServicePicker(selectedServices, serviceOptions)}
@@ -3579,14 +3610,17 @@ function openCompleteServiceDialog(appointment = {}) {
 
         <footer class="completion-footer">
           <div>
-            <strong>Pronto per chiudere?</strong>
-            <span>Il totale si aggiorna mentre modifichi servizi e prodotti.</span>
+            <strong>${isStoredCompleted ? "Prestazione chiusa" : "Pronto per chiudere?"}</strong>
+            <span>${isStoredCompleted ? "Puoi salvare le modifiche oppure eliminare questa prestazione." : "Il totale si aggiorna mentre modifichi servizi e prodotti."}</span>
           </div>
           <div class="completion-total">
             <span>Totale prestazione</span>
             <strong data-service-amount-total>${escapeHtml(moneyLabel(appointment.paidAmount))}</strong>
           </div>
-          <button class="btn success completion-submit" type="submit">${isStoredCompleted ? "Salva prestazione" : "Concludi prestazione"}</button>
+          <div class="completion-actions">
+            ${isStoredCompleted ? `<button class="btn danger completion-delete" type="button" data-delete-completed-service>Elimina prestazione</button>` : ""}
+            <button class="btn success completion-submit" type="submit">${isStoredCompleted ? "Salva prestazione" : "Concludi prestazione"}</button>
+          </div>
         </footer>
       </section>
     `,
@@ -3612,6 +3646,29 @@ function openCompleteServiceDialog(appointment = {}) {
       form.addEventListener("click", (event) => {
         if (event.target.closest("[data-service-remove], [data-service-custom-add]")) setTimeout(syncAmounts, 0);
       });
+      form.querySelector("[data-delete-completed-service]")?.addEventListener("click", async (event) => {
+        const label = [dogName || "questa prestazione", formatShortDate(dateValue)].filter(Boolean).join(" - ");
+        const confirmed = await showActionConfirm({
+          title: "Elimina prestazione",
+          message: `Eliminare definitivamente ${label} dallo storico servizi?`,
+          confirmLabel: "Elimina",
+          confirmClass: "danger"
+        });
+        if (!confirmed) return;
+        const button = event.currentTarget;
+        button.disabled = true;
+        try {
+          await api(`/api/appointments/${appointment.id}`, { method: "DELETE", body: "{}" });
+          await loadData();
+          state.calendarDate = parseISODate(dateValue);
+          closeModal();
+          renderView();
+          notify("Prestazione eliminata");
+        } catch (err) {
+          notify(err.message);
+          button.disabled = false;
+        }
+      });
       syncDuration();
       syncServiceAmountTotal(form);
       syncCompletionInlineWarnings(form);
@@ -3627,7 +3684,7 @@ function openCompleteServiceDialog(appointment = {}) {
       payload.service = services.join(", ");
       payload.treatmentDone = payload.service;
       validateAppointmentBeforeSave(form, payload, services);
-      if (!(await confirmAppointmentCompletion())) {
+      if (!isStoredCompleted && !(await confirmAppointmentCompletion())) {
         const error = new Error("");
         error.alreadyNotified = true;
         throw error;
@@ -4505,31 +4562,22 @@ function selectedServiceHistoryDog() {
 }
 
 function serviceHistoryDogLabel(dog = {}) {
-  return [dog.dogName || "Senza nome", dog.ownerName].filter(Boolean).join(" - ");
+  return [dog.dogName || "Senza nome", dog.breed, dog.ownerName].filter(Boolean).join(" - ");
 }
 
-function serviceHistoryDogFromSearch(value, exactOnly = false) {
-  const query = lowerText(value);
-  if (!query) return null;
-  const exact = state.dogs.find((dog) => lowerText(serviceHistoryDogLabel(dog)) === query);
-  if (exact || exactOnly) return exact || null;
-  const startsWith = state.dogs.filter((dog) =>
-    [dog.dogName, dog.ownerName, dog.contact, dog.breed, serviceHistoryDogLabel(dog)].some((field) => lowerText(field).startsWith(query))
-  );
-  if (startsWith.length === 1) return startsWith[0];
-  const contains = state.dogs.filter((dog) =>
-    [dog.dogName, dog.ownerName, dog.contact, dog.breed, serviceHistoryDogLabel(dog)].some((field) => lowerText(field).includes(query))
-  );
-  return contains.length === 1 ? contains[0] : null;
+function serviceHistoryDogSearchText(dog = {}) {
+  return [dog.dogName, dog.breed, dog.ownerName, dog.contact, dog.alternateContact, serviceHistoryDogLabel(dog)].filter(Boolean).join(" ");
+}
+
+function serviceHistoryDogMatchesQuery(dog = {}, value = "") {
+  const words = lowerText(value).split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const searchText = lowerText(serviceHistoryDogSearchText(dog));
+  return words.every((word) => searchText.includes(word));
 }
 
 function serviceHistoryDogOptions(value = "") {
-  const query = lowerText(value);
-  const dogs = query
-    ? state.dogs.filter((dog) =>
-        [dog.dogName, dog.ownerName, dog.contact, dog.breed, serviceHistoryDogLabel(dog)].some((field) => lowerText(field).includes(query))
-      )
-    : state.dogs;
+  const dogs = state.dogs.filter((dog) => serviceHistoryDogMatchesQuery(dog, value));
   return [...dogs].sort((a, b) => String(a.dogName || "").localeCompare(String(b.dogName || ""), "it", { sensitivity: "base" }));
 }
 

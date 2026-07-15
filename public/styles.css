@@ -1210,7 +1210,7 @@ label {
 .appt-row {
   width: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 24px;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 4px;
   align-items: stretch;
   border-radius: 6px;
@@ -1282,6 +1282,36 @@ label {
 .appt-complete.done {
   background: var(--green);
   color: #fff;
+}
+
+.appt-edit-service {
+  min-width: 72px;
+  min-height: 30px;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 6px 9px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 0.74rem;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 6px 14px rgba(35, 67, 68, 0.18);
+}
+
+.appt-edit-service:hover,
+.appt-edit-service:focus-visible {
+  background: var(--brand-strong);
+}
+
+.appt-edit-service.compact {
+  min-width: 60px;
+  min-height: 24px;
+  padding: 5px 7px;
+  font-size: 0.66rem;
 }
 
 .status-programmato {
@@ -1639,7 +1669,7 @@ label {
 
 .mobile-appt-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 32px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   padding: 8px;
@@ -2393,6 +2423,8 @@ label {
 .service-history-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .photo-lightbox {
@@ -2501,6 +2533,33 @@ label {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.clock-time-field {
+  min-width: 0;
+}
+
+.clock-time-field .time-parts {
+  grid-template-columns: repeat(2, minmax(92px, 1fr));
+}
+
+.clock-time-field .time-parts label {
+  min-width: 0;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.clock-time-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 10px 32px 10px 12px;
+  text-align: center;
+  text-align-last: center;
+  font-size: 1rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
 }
 
 .quick-profile {
@@ -3621,7 +3680,7 @@ label {
 
 .completion-time-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
@@ -3766,6 +3825,14 @@ label {
   line-height: 1.05;
 }
 
+.completion-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .completion-submit {
   min-height: 48px;
 }
@@ -3829,6 +3896,15 @@ label {
 
   .completion-total {
     text-align: left;
+  }
+
+  .completion-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .completion-actions .btn {
+    width: 100%;
   }
 
   .completion-submit {

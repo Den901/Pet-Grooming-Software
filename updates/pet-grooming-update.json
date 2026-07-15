@@ -2,12 +2,12 @@
   "format": "PET_GROOMING_SOFTWARE_UPDATE_MANIFEST",
   "formatVersion": 1,
   "app": "pet-grooming-software",
-  "version": "0.0.1-beta.32",
-  "releaseLabel": "0.0.1 beta 32",
-  "createdAt": "2026-07-13T12:09:43.037Z",
-  "packageName": "Pet-Grooming-Software-0.0.1-beta.32.pgs-update",
-  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v0.0.1-beta.32/Pet-Grooming-Software-0.0.1-beta.32.pgs-update",
-  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v0.0.1-beta.32",
-  "notes": "Groomly 0.0.1 beta 32",
-  "changelog": "Pulisce l'orologio del Monitor mostrando ora HH:mm:ss senza alle ore, mantiene l'ultimo appuntamento visibile fino a mezzanotte quando non ci sono appuntamenti successivi e ordina alfabeticamente le schede animali."
+  "version": "1.0.9",
+  "releaseLabel": "1.0.9",
+  "createdAt": "2026-07-15T14:31:10.190Z",
+  "packageName": "Pet-Grooming-Software-1.0.9.pgs-update",
+  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v1.0.9/Pet-Grooming-Software-1.0.9.pgs-update",
+  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v1.0.9",
+  "notes": "Release 1.0.9",
+  "changelog": "Corregge la lettura di ora inizio/fine, aggiunge eliminazione prestazione dallo storico servizi, mantiene il click sull'appuntamento chiuso sulla scheda appuntamento e aggiunge Modifica prestazione con conferma per riaprire la cassa."
 }
