@@ -114,7 +114,8 @@ function defaultSettings() {
       loyaltyTopVisitsPerYear: 8
     },
     appointments: {
-      internalReminderMinutes: 15
+      internalReminderMinutes: 15,
+      calendarDragDropEnabled: true
     },
     navigation: {
       sidebarOrder: SIDEBAR_ITEM_IDS
@@ -148,7 +149,8 @@ function ensureSettingsShape(settings = {}) {
   const appointments = {
     ...defaults.appointments,
     ...(settings.appointments || {}),
-    internalReminderMinutes: cleanNumber(settings.appointments?.internalReminderMinutes, defaults.appointments.internalReminderMinutes)
+    internalReminderMinutes: cleanNumber(settings.appointments?.internalReminderMinutes, defaults.appointments.internalReminderMinutes),
+    calendarDragDropEnabled: settings.appointments?.calendarDragDropEnabled !== false
   };
   return {
     branding: {
@@ -605,7 +607,8 @@ function publicAnimalSettings(db) {
 function publicAppointmentSettings(db) {
   const appointments = ensureSettingsShape(db.settings).appointments;
   return {
-    internalReminderMinutes: Math.min(1440, cleanNumber(appointments.internalReminderMinutes, defaultSettings().appointments.internalReminderMinutes))
+    internalReminderMinutes: Math.min(1440, cleanNumber(appointments.internalReminderMinutes, defaultSettings().appointments.internalReminderMinutes)),
+    calendarDragDropEnabled: appointments.calendarDragDropEnabled !== false
   };
 }
 
@@ -1756,7 +1759,9 @@ async function handleApi(req, res, url) {
       if (method === "PUT") {
         const body = await readBody(req);
         db.settings.appointments = {
+          ...(db.settings.appointments || {}),
           internalReminderMinutes: Math.min(1440, cleanNumber(body.internalReminderMinutes, defaultSettings().appointments.internalReminderMinutes)),
+          calendarDragDropEnabled: body.calendarDragDropEnabled !== false,
           updatedAt: new Date().toISOString()
         };
         writeDb(db);

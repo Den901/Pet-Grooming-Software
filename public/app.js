@@ -40,7 +40,7 @@ const state = {
   serviceHistoryDogQuery: ""
 };
 
-const CALENDAR_DRAG_HOLD_MS = 900;
+const CALENDAR_DRAG_HOLD_MS = 2000;
 const CALENDAR_DRAG_MOVE_THRESHOLD = 8;
 const CALENDAR_DRAG_TIME_STEP = 5;
 let calendarDrag = null;
@@ -342,6 +342,7 @@ function getAnimalSettings() {
 function getAppointmentSettings() {
   return {
     internalReminderMinutes: 15,
+    calendarDragDropEnabled: true,
     ...(state.appointmentSettings || {})
   };
 }
@@ -1493,11 +1494,11 @@ function bindCalendarDayActions(root) {
 }
 
 function appointmentCanDrag(appointment = {}) {
-  return appointment.id && appointment.status !== "completato" && !isPhoneCalendarDragDisabled();
+  return appointment.id && appointment.status !== "completato" && getAppointmentSettings().calendarDragDropEnabled !== false && !isPhoneCalendarDragDisabled();
 }
 
 function bindCalendarDragAndDrop(root) {
-  if (isPhoneCalendarDragDisabled()) return;
+  if (getAppointmentSettings().calendarDragDropEnabled === false || isPhoneCalendarDragDisabled()) return;
   root.querySelectorAll("[data-calendar-drag-id]").forEach((button) => {
     if ("PointerEvent" in window) {
       button.addEventListener("pointerdown", (event) => startCalendarAppointmentDrag(event, button));
@@ -1584,6 +1585,7 @@ function updateCalendarDragGhost(event) {
 
 function updateCalendarDragTarget(event) {
   if (!calendarDrag?.active) return;
+  maybeCloseCalendarDragModal(event.clientX, event.clientY);
   const target = calendarDragTargetFromPoint(event.clientX, event.clientY);
   calendarDrag.target = target;
   clearCalendarPlannerPreview();
@@ -1602,6 +1604,24 @@ function updateCalendarDragTarget(event) {
     return;
   }
   clearCalendarDragDayHover();
+}
+
+function maybeCloseCalendarDragModal(clientX, clientY) {
+  if (!calendarDrag?.active || calendarDrag.modalClosedDuringDrag) return;
+  const card = modalRoot.querySelector(".modal-card.day-planner-modal");
+  if (!card) return;
+  const rect = card.getBoundingClientRect();
+  const outside = clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom;
+  if (calendarDrag.waitingForModalEntry) {
+    if (!outside) calendarDrag.waitingForModalEntry = false;
+    return;
+  }
+  if (!outside) return;
+  clearCalendarDragDayHover();
+  clearCalendarPlannerPreview();
+  releaseCalendarDragPointerCapture();
+  calendarDrag.modalClosedDuringDrag = true;
+  closeModal();
 }
 
 function calendarDragTargetFromPoint(clientX, clientY) {
@@ -1655,6 +1675,7 @@ function openCalendarDragDayPlanner(iso) {
   calendarDrag.openedIso = iso;
   clearCalendarDragDayHover();
   openDayPlannerDialog(iso, { dragAppointmentId: calendarDrag.appointmentId });
+  calendarDrag.waitingForModalEntry = true;
 }
 
 function clearCalendarPlannerPreview() {
@@ -1732,12 +1753,22 @@ function cleanupCalendarAppointmentDrag() {
   clearCalendarDragDayHover();
   clearCalendarPlannerPreview();
   calendarDrag.sourceFrame?.classList.remove("calendar-drag-source");
-  if (calendarDrag.usesPointerEvents && calendarDrag.sourceEl?.hasPointerCapture?.(calendarDrag.pointerId)) {
-    calendarDrag.sourceEl.releasePointerCapture(calendarDrag.pointerId);
-  }
+  releaseCalendarDragPointerCapture();
   calendarDrag.ghost?.remove();
   document.body.classList.remove("calendar-dragging");
   calendarDrag = null;
+}
+
+function releaseCalendarDragPointerCapture() {
+  if (!calendarDrag?.usesPointerEvents || !calendarDrag.sourceEl || calendarDrag.pointerCaptureReleased) return;
+  try {
+    if (calendarDrag.sourceEl.hasPointerCapture?.(calendarDrag.pointerId)) {
+      calendarDrag.sourceEl.releasePointerCapture(calendarDrag.pointerId);
+    }
+  } catch {
+    // The source can disappear when the day planner modal closes during drag.
+  }
+  calendarDrag.pointerCaptureReleased = true;
 }
 
 async function moveAppointmentByDrag(appointmentId, target) {
@@ -2435,6 +2466,10 @@ function renderSettings() {
                 .join("")}
             </select>
           </label>
+          <label class="checkbox-line full">
+            <input name="calendarDragDropEnabled" type="checkbox" ${appointmentSettings.calendarDragDropEnabled !== false ? "checked" : ""} />
+            Abilita drag and drop appuntamenti nel calendario
+          </label>
         </div>
         <div class="settings-actions">
           <button class="btn" type="submit">Salva appuntamenti</button>
@@ -2846,7 +2881,8 @@ function bindSettings() {
       const response = await api("/api/settings/appointments", {
         method: "PUT",
         body: JSON.stringify({
-          internalReminderMinutes: data.get("internalReminderMinutes")
+          internalReminderMinutes: data.get("internalReminderMinutes"),
+          calendarDragDropEnabled: data.get("calendarDragDropEnabled") === "on"
         })
       });
       state.appointmentSettings = response.appointments;
