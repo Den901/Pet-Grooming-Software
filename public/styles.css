@@ -20,6 +20,9 @@
   --traffic-yellow-soft: #fff7d6;
   --traffic-green: #00a84f;
   --traffic-green-soft: #edf9ef;
+  --traffic-blue: #2f74b5;
+  --traffic-blue-soft: #eaf4ff;
+  --traffic-blue-ink: #1c568c;
   --shadow: 0 18px 40px rgba(22, 38, 37, 0.1);
   --radius: 8px;
   --ui-scale: 1;
@@ -1284,6 +1287,13 @@ label {
   color: #fff;
 }
 
+.appt-complete.canceled {
+  background: var(--traffic-blue);
+  border-color: rgba(47, 116, 181, 0.42);
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(47, 116, 181, 0.24);
+}
+
 .status-programmato {
   background: var(--traffic-red-soft);
   border-left-color: var(--traffic-red);
@@ -1312,12 +1322,12 @@ label {
 }
 
 .status-annullato {
-  background: #fbefed;
-  border-left-color: var(--danger);
+  background: var(--traffic-blue-soft);
+  border-left-color: var(--traffic-blue);
 }
 
 .status-annullato .appt-time {
-  color: var(--danger);
+  color: var(--traffic-blue-ink);
 }
 
 .week-grid {
@@ -1470,9 +1480,9 @@ label {
 }
 
 .day-planner-appointment.status-annullato {
-  background: #fbefed;
-  border-color: rgba(184, 62, 62, 0.24);
-  border-left-color: var(--danger);
+  background: var(--traffic-blue-soft);
+  border-color: rgba(47, 116, 181, 0.28);
+  border-left-color: var(--traffic-blue);
 }
 
 .day-dialog-add,
@@ -1507,6 +1517,10 @@ label {
 
 .day-planner-appointment.status-completato .planner-time {
   color: var(--traffic-green);
+}
+
+.day-planner-appointment.status-annullato .planner-time {
+  color: var(--traffic-blue-ink);
 }
 
 .day-planner-appointment .planner-copy {
@@ -1931,6 +1945,19 @@ label {
   border: 1px solid rgba(225, 166, 61, 0.42);
 }
 
+.cancel-badge {
+  width: max-content;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: var(--traffic-blue-soft);
+  color: var(--traffic-blue-ink) !important;
+  border: 1px solid rgba(47, 116, 181, 0.34);
+}
+
 .top-badge img {
   width: 20px;
   height: 20px;
@@ -2351,6 +2378,37 @@ label {
 .service-history-card-head div:first-child {
   display: grid;
   gap: 3px;
+}
+
+.service-history-card-side {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+}
+
+.history-status-pill {
+  width: max-content;
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 0.74rem;
+  font-weight: 900;
+  line-height: 1;
+  border: 1px solid rgba(47, 122, 101, 0.2);
+}
+
+.history-status-pill.status-completato {
+  color: var(--green);
+  background: var(--traffic-green-soft);
+  border-color: rgba(0, 168, 79, 0.26);
+}
+
+.history-status-pill.status-annullato {
+  color: var(--traffic-blue-ink);
+  background: var(--traffic-blue-soft);
+  border-color: rgba(47, 116, 181, 0.3);
 }
 
 .service-history-card-head span,
@@ -3555,7 +3613,7 @@ label {
 }
 
 .modal-card.appointment-modal.status-annullato {
-  --appointment-status-color: var(--danger);
+  --appointment-status-color: var(--traffic-blue);
 }
 
 .modal-card.completion-modal {
@@ -4253,7 +4311,7 @@ label {
 }
 
 :root[data-theme="dark"] .status-annullato {
-  background: rgba(229, 138, 125, 0.14);
+  background: rgba(47, 116, 181, 0.18);
 }
 
 :root[data-theme="dark"] .day-planner-appointment.status-programmato {
@@ -4272,6 +4330,12 @@ label {
   background: rgba(0, 168, 79, 0.16);
   border-color: rgba(0, 168, 79, 0.3);
   border-left-color: var(--traffic-green);
+}
+
+:root[data-theme="dark"] .day-planner-appointment.status-annullato {
+  background: rgba(47, 116, 181, 0.2);
+  border-color: rgba(47, 116, 181, 0.36);
+  border-left-color: var(--traffic-blue);
 }
 
 :root[data-theme="dark"] .modal-card.appointment-modal,
@@ -4297,6 +4361,13 @@ label {
 :root[data-theme="dark"] .top-badge {
   background: rgba(225, 166, 61, 0.18);
   color: #ffd889 !important;
+}
+
+:root[data-theme="dark"] .cancel-badge,
+:root[data-theme="dark"] .history-status-pill.status-annullato {
+  background: rgba(47, 116, 181, 0.2);
+  color: #9ccaff !important;
+  border-color: rgba(156, 202, 255, 0.28);
 }
 
 :root[data-theme="dark"] .week-day.today {

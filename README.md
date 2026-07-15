@@ -1,6 +1,6 @@
 # Groomly
 
-Release corrente: `1.0.10` stabile.
+Release corrente: `1.0.11` stabile.
 
 Portale web PWA in Node.js per gestire:
 
@@ -10,15 +10,16 @@ Portale web PWA in Node.js per gestire:
 - personalizzazione logo, nome portale e dati azienda comuni, con colori, tema chiaro/scuro, sfondo login e dimensione interfaccia salvati come preferenze personali per utente;
 - aggiornamento live multiutente di schede, appuntamenti, utenti e impostazioni;
 - calendario appuntamenti con vista giorno planning orario, settimana tablet a blocchi leggibili, mese piu ampio su desktop e agenda compatta su iPhone;
-- stati appuntamento a semaforo: rosso da confermare, giallo confermato/da fare, verde completato, visibili su calendario e bordo popup;
+- stati appuntamento a semaforo: rosso da confermare, giallo confermato/da fare, verde completato e blu annullato, visibili su calendario, storico e bordo popup;
 - sezione `Monitor` per mostrare su schermo esterno gli appuntamenti della giornata con foto cane, nome, razza, tempi, servizi/prodotti e conto alla rovescia;
 - menu mobile persistente in basso con icone tonde su una riga, quattro voci visibili e scorrimento verso utenti, impostazioni ed esci;
 - icone menu per calendario, monitor, dashboard, schede, storico servizi e utenti;
 - dashboard statistiche con priorita a servizi e incassi, grafici piu leggibili, incasso separato per servizio, andamento incassi giorno/settimana/mese/anno, servizi fatti/da fare, razze, servizi piu usati, animale piu presente con mini foto, cane piu redditizio e tempi medi;
 - schede animali con foto o immagine predefinita, cornice cliente top manuale o automatica, razza, eta, colore, sesso, contatti, patologie, tempi stimati, reminder WhatsApp e consenso immagini;
+- badge nella scheda cliente con conteggio degli interventi annullati;
 - impostazioni scheda animale per razze, colori cane, prestazioni cumulabili e soglia cliente top;
 - storico appuntamenti a menu nella scheda cane con servizio eseguito, importo pagato, galleria foto prima/dopo e foto ingrandibili;
-- sezione `Storico servizi` con ricerca animale a suggerimenti, riepilogo incasso, modifica/eliminazione prestazioni e foto zoomabili;
+- sezione `Storico servizi` con ricerca animale a suggerimenti, riepilogo incasso, appuntamenti annullati, modifica/eliminazione prestazioni e foto zoomabili;
 - chiusura prestazione da scheda cane o calendario con schermata cassa rapida, servizi precompilati, orari modificabili e leggibili, prezzo separato per ogni servizio e avvisi chiari sui campi mancanti;
 - appuntamenti completati riapribili dal calendario come appuntamenti normali, con pulsante `Modifica prestazione` dentro il popup appuntamento e conferma prima di riaprire la cassa;
 - ricerca schede;
@@ -100,9 +101,9 @@ npm.cmd run release:packages
 
 Il comando genera nella cartella `dist/`:
 
-- `Pet-Grooming-Software-1.0.10-windows.zip`;
-- `Pet-Grooming-Software-1.0.10-linux.tar.gz`;
-- `Pet-Grooming-Software-1.0.10.pgs-update`;
+- `Pet-Grooming-Software-1.0.11-windows.zip`;
+- `Pet-Grooming-Software-1.0.11-linux.tar.gz`;
+- `Pet-Grooming-Software-1.0.11.pgs-update`;
 - `pet-grooming-update.json`.
 
 Se `npm` non e bloccato dalla policy PowerShell puoi usare anche `npm run release:packages`.
@@ -111,7 +112,7 @@ Se `npm` non e bloccato dalla policy PowerShell puoi usare anche `npm run releas
 
 Prerequisito: Node.js 18 o superiore installato sul PC.
 
-1. Estrai `Pet-Grooming-Software-1.0.10-windows.zip`.
+1. Estrai `Pet-Grooming-Software-1.0.11-windows.zip`.
 2. Apri PowerShell nella cartella estratta. Per installare in `ProgramData` e creare l'avvio automatico e consigliato aprirlo come amministratore.
 3. Per installare in `C:\ProgramData\Pet Grooming Software` e creare l'avvio automatico all'accesso:
 
@@ -137,12 +138,12 @@ Per riavviare dopo un update, chiudi la finestra dove gira Node.js e rilancia lo
 
 Prerequisito: Node.js 18 o superiore installato sul server.
 
-1. Copia `Pet-Grooming-Software-1.0.10-linux.tar.gz` sul server.
+1. Copia `Pet-Grooming-Software-1.0.11-linux.tar.gz` sul server.
 2. Estrai il pacchetto e entra nella cartella:
 
 ```bash
-tar -xzf Pet-Grooming-Software-1.0.10-linux.tar.gz
-cd Pet-Grooming-Software-1.0.10
+tar -xzf Pet-Grooming-Software-1.0.11-linux.tar.gz
+cd Pet-Grooming-Software-1.0.11
 ```
 
 3. Installazione consigliata in `/opt` con servizio systemd:
@@ -247,7 +248,7 @@ La skill puo cercare cani e servizi/prodotti e creare appuntamenti nel calendari
 
 ## Release e aggiornamenti
 
-La release corrente e `1.0.10` stabile. Per preparare i pacchetti della versione impostata in `package.json`:
+La release corrente e `1.0.11` stabile. Per preparare i pacchetti della versione impostata in `package.json`:
 
 ```powershell
 npm.cmd run release:packages

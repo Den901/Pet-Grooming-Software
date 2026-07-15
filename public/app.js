@@ -1382,6 +1382,7 @@ function renderMobileAgendaDay(day) {
 
 function renderMobileAppointmentCard(appointment) {
   const isCompleted = appointment.status === "completato";
+  const isCanceled = appointment.status === "annullato";
   const timeRange = [appointment.startTime, appointment.endTime].filter(Boolean).join(" - ") || "--";
   const subtitle = appointmentCalendarMeta(appointment, { includeStatus: true });
   const dogLabel = appointmentDogDisplayLabel(appointment);
@@ -1395,6 +1396,8 @@ function renderMobileAppointmentCard(appointment) {
       ${
         isCompleted
           ? `<span class="appt-complete done" title="Prestazione completata" aria-label="Prestazione completata">&#10003;</span>`
+          : isCanceled
+            ? `<span class="appt-complete canceled" title="Appuntamento annullato" aria-label="Appuntamento annullato">&times;</span>`
           : `<button class="appt-complete" type="button" data-complete-appointment-id="${appointment.id}" title="Concludi prestazione" aria-label="Concludi prestazione">&#10003;</button>`
       }
     </div>
@@ -1403,6 +1406,7 @@ function renderMobileAppointmentCard(appointment) {
 
 function renderAppointmentPill(appointment) {
   const isCompleted = appointment.status === "completato";
+  const isCanceled = appointment.status === "annullato";
   const dogLabel = appointmentDogDisplayLabel(appointment);
   const meta = appointmentCalendarMeta(appointment);
   return `
@@ -1417,6 +1421,8 @@ function renderAppointmentPill(appointment) {
       ${
         isCompleted
           ? `<span class="appt-complete done" title="Prestazione completata" aria-label="Prestazione completata">&#10003;</span>`
+          : isCanceled
+            ? `<span class="appt-complete canceled" title="Appuntamento annullato" aria-label="Appuntamento annullato">&times;</span>`
           : `<button class="appt-complete" type="button" data-complete-appointment-id="${appointment.id}" title="Concludi prestazione" aria-label="Concludi prestazione">&#10003;</button>`
       }
     </div>
@@ -1655,16 +1661,18 @@ function renderServiceHistory() {
       <section class="empty-state"><div><h2>Nessuna scheda animale</h2><p>Crea una scheda per iniziare a registrare lo storico servizi.</p></div></section>
     `;
   }
-  const history = selectedDog ? dogAppointmentHistory(selectedDog).filter((appointment) => appointment.status === "completato") : [];
+  const history = selectedDog ? serviceHistoryAppointments(selectedDog) : [];
+  const completedHistory = history.filter((appointment) => appointment.status === "completato");
+  const canceledHistory = history.filter((appointment) => appointment.status === "annullato");
   const photoCount = history.reduce((sum, appointment) => sum + appointmentPhotoCount(appointment), 0);
-  const totalRevenue = history.reduce((sum, appointment) => sum + appointmentRevenue(appointment), 0);
+  const totalRevenue = completedHistory.reduce((sum, appointment) => sum + appointmentRevenue(appointment), 0);
   const photo = dogPhotoMarkup(selectedDog || {});
   const searchValue = state.serviceHistoryDogQuery || "";
   return `
-    <div class="topbar">
+      <div class="topbar">
       <div class="page-title">
         <h1>Storico servizi</h1>
-        <p>Seleziona un animale e rivedi tutti i servizi conclusi con foto zoomabili.</p>
+        <p>Seleziona un animale e rivedi servizi conclusi, appuntamenti annullati e foto zoomabili.</p>
       </div>
     </div>
     <section class="panel service-history-filter">
@@ -1690,7 +1698,8 @@ function renderServiceHistory() {
           <p>${escapeHtml(selectedDog ? [selectedDog.breed, selectedDog.ownerName].filter(Boolean).join(" - ") || "Scheda animale" : "Cerca o apri l'elenco per scegliere")}</p>
         </div>
         <div class="service-history-metrics">
-          <div><span>Servizi conclusi</span><strong>${history.length}</strong></div>
+          <div><span>Servizi conclusi</span><strong>${completedHistory.length}</strong></div>
+          <div><span>Annullati</span><strong>${canceledHistory.length}</strong></div>
           <div><span>Incasso totale</span><strong>${escapeHtml(moneyLabel(totalRevenue))}</strong></div>
           <div><span>Foto lavoro</span><strong>${photoCount}</strong></div>
         </div>
@@ -1699,7 +1708,7 @@ function renderServiceHistory() {
         ${
           history.length
             ? history.map(renderServiceHistoryCard).join("")
-            : `<section class="empty-history">${selectedDog ? "Nessun servizio concluso per questo animale." : "Seleziona un animale per vedere lo storico servizi."}</section>`
+            : `<section class="empty-history">${selectedDog ? "Nessun servizio concluso o annullato per questo animale." : "Seleziona un animale per vedere lo storico servizi."}</section>`
         }
       </div>
     </section>
@@ -1715,7 +1724,10 @@ function renderServiceHistoryCard(appointment) {
           <strong>${escapeHtml(formatShortDate(appointment.date))}</strong>
           <span>${escapeHtml([appointment.startTime, appointment.endTime].filter(Boolean).join(" - ") || "--:--")}</span>
         </div>
-        <div class="history-amount">${escapeHtml(moneyLabel(appointment.paidAmount))}</div>
+        <div class="service-history-card-side">
+          <span class="history-status-pill status-${escapeAttr(appointment.status)}">${escapeHtml(statusLabel(appointment.status))}</span>
+          <div class="history-amount">${escapeHtml(moneyLabel(appointment.paidAmount))}</div>
+        </div>
       </div>
       <div class="service-lines">
         ${serviceRows
@@ -2824,6 +2836,7 @@ function bindUiScaleRange(form) {
 function openDogDetailsDialog(dog = {}) {
   const history = dogAppointmentHistory(dog);
   const scheduledCount = history.filter(isScheduledAppointment).length;
+  const canceledCount = canceledAppointmentCount(dog);
   const topDog = isTopDog(dog);
   const visitFrequency = dogVisitFrequencyLabel(dog);
   const photo = dogPhotoMarkup(dog);
@@ -2839,6 +2852,7 @@ function openDogDetailsDialog(dog = {}) {
             <strong>${escapeHtml(dog.dogName || "Scheda cane")}</strong>
             <div class="dog-detail-meta">
               ${topDog ? `<span class="top-badge"><img src="/icons/top-client-paw.png" alt="" /> Cliente top</span>` : ""}
+              ${canceledCount ? `<span class="cancel-badge">Interventi annullati: ${escapeHtml(canceledCount)}</span>` : ""}
               <span class="visit-frequency">${escapeHtml(visitFrequency)}</span>
             </div>
             ${scheduledCount ? `<span class="scheduled-count">${escapeHtml(scheduledAppointmentLabel(scheduledCount))}</span>` : ""}
@@ -4571,6 +4585,14 @@ function dogAppointmentHistory(dog) {
       return lowerText(appointment.dogName) === dogName && (!ownerName || lowerText(appointment.ownerName) === ownerName);
     })
     .sort((a, b) => `${b.date || ""} ${b.startTime || ""}`.localeCompare(`${a.date || ""} ${a.startTime || ""}`));
+}
+
+function serviceHistoryAppointments(dog) {
+  return dogAppointmentHistory(dog).filter((appointment) => ["completato", "annullato"].includes(appointment.status));
+}
+
+function canceledAppointmentCount(dog) {
+  return dogAppointmentHistory(dog).filter((appointment) => appointment.status === "annullato").length;
 }
 
 function selectedServiceHistoryDog() {
