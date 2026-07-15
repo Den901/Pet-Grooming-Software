@@ -40,6 +40,12 @@ const state = {
   serviceHistoryDogQuery: ""
 };
 
+const CALENDAR_DRAG_HOLD_MS = 900;
+const CALENDAR_DRAG_MOVE_THRESHOLD = 8;
+const CALENDAR_DRAG_TIME_STEP = 5;
+let calendarDrag = null;
+let calendarDragClickBlockUntil = 0;
+
 const weekdayShort = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 const formatter = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "2-digit", month: "short" });
 const monthFormatter = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" });
@@ -99,6 +105,7 @@ window.addEventListener("appinstalled", () => {
 
 document.addEventListener("click", handlePhotoZoomClick);
 document.addEventListener("click", handleNewDogAction);
+document.addEventListener("click", blockCalendarDragClick, true);
 document.addEventListener("pointerup", handleNewDogAction);
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closePhotoLightbox();
@@ -1176,7 +1183,7 @@ function renderMonthCalendar() {
     const outside = cursor.getMonth() !== state.calendarDate.getMonth();
     const dayAppointments = appointmentsForDate(iso);
     cells.push(`
-      <div class="day-cell ${outside ? "outside" : ""} ${iso === todayISO() ? "today" : ""}">
+      <div class="day-cell ${outside ? "outside" : ""} ${iso === todayISO() ? "today" : ""}" data-calendar-drop-date="${escapeAttr(iso)}">
         <div class="day-head">
           <button class="day-open-button" type="button" data-open-day="${iso}" title="Apri giornata ${escapeAttr(formatter.format(cursor))}">
             <span class="day-number">${cursor.getDate()}</span>
@@ -1209,7 +1216,7 @@ function renderWeekCalendar() {
           const iso = toISODate(day);
           const dayAppointments = appointmentsForDate(iso);
           return `
-            <div class="week-day ${iso === todayISO() ? "today" : ""}">
+            <div class="week-day ${iso === todayISO() ? "today" : ""}" data-calendar-drop-date="${escapeAttr(iso)}">
               <div class="day-head">
                 <button class="day-open-button week-day-open" type="button" data-open-day="${iso}" title="Apri giornata ${escapeAttr(formatter.format(day))}">
                   <span class="week-day-title">${capitalize(formatter.format(day))}</span>
@@ -1235,7 +1242,7 @@ function renderDayCalendar() {
   const planner = dayPlannerBounds(dayAppointments, iso);
   return `
     <section class="day-view calendar-desktop">
-      <div class="week-day day-view-card ${iso === todayISO() ? "today" : ""}">
+      <div class="week-day day-view-card ${iso === todayISO() ? "today" : ""}" data-calendar-drop-date="${escapeAttr(iso)}">
         <div class="day-head">
           <h3>${capitalize(formatter.format(day))}</h3>
           <button class="add-day" type="button" title="Aggiungi appuntamento" data-day-add="${iso}">+</button>
@@ -1260,7 +1267,8 @@ function renderDayPlanner(iso, appointments, planner) {
       <div class="day-planner-scale" aria-hidden="true">
         ${hours.map((minutes) => `<span style="top: ${escapeAttr(percentWithin(minutes, planner))}%">${escapeHtml(formatPlannerTime(minutes))}</span>`).join("")}
       </div>
-      <div class="day-planner-body">
+      <div class="day-planner-body" data-day-planner-drop="${escapeAttr(iso)}" data-planner-start="${escapeAttr(planner.start)}" data-planner-end="${escapeAttr(planner.end)}">
+        <div class="day-planner-drop-preview" data-planner-drop-preview hidden><span></span></div>
         ${hourSlots
           .map(
             (minutes) => `
@@ -1286,8 +1294,9 @@ function renderDayPlannerAppointment(appointment, planner) {
   const services = appointment.services?.length ? appointment.services.join(", ") : appointment.service || statusLabel(appointment.status);
   const expectedTime = appointmentPlannerDurationLabel(appointment, start, end, rawEnd !== null);
   const details = [services, `Tempo ${expectedTime}`].filter(Boolean).join(" · ");
+  const dragAttr = appointmentCanDrag(appointment) ? ` data-calendar-drag-id="${escapeAttr(appointment.id)}"` : "";
   return `
-    <button class="day-planner-appointment status-${escapeAttr(appointment.status)}" type="button" data-appointment-id="${escapeAttr(appointment.id)}" title="${escapeAttr(`${timeRange} ${dogLabel} ${details}`)}" style="top: ${escapeAttr(top)}%; height: ${escapeAttr(height)}%;">
+    <button class="day-planner-appointment status-${escapeAttr(appointment.status)}" type="button" data-appointment-id="${escapeAttr(appointment.id)}"${dragAttr} title="${escapeAttr(`${timeRange} ${dogLabel} ${details}`)}" style="top: ${escapeAttr(top)}%; height: ${escapeAttr(height)}%;">
       <span class="planner-time">${escapeHtml(timeRange)}</span>
       <span class="planner-copy">
         <strong>${escapeHtml(dogLabel)}</strong>
@@ -1320,19 +1329,20 @@ function dayPlannerBounds(appointments, iso) {
   return { start, end: Math.max(end, start + 8 * 60) };
 }
 
-function openDayPlannerDialog(iso) {
+function openDayPlannerDialog(iso, options = {}) {
   const day = parseISODate(iso);
   const appointments = appointmentsForDate(iso);
   const planner = dayPlannerBounds(appointments, iso);
   openModal({
     title: capitalize(formatter.format(day)),
+    modalClass: options.dragAppointmentId ? "day-planner-modal calendar-drag-target-modal" : "day-planner-modal",
     hideActions: true,
     headerAction: `<button class="add-day day-dialog-add" type="button" data-day-add="${escapeAttr(iso)}" title="Aggiungi appuntamento" aria-label="Aggiungi appuntamento">+</button>`,
     content: `
       <section class="day-dialog">
         <div class="day-dialog-summary">
           <strong>${escapeHtml(appointments.length ? `${appointments.length} appuntamenti` : "Giornata libera")}</strong>
-          <span>Usa il + per creare un appuntamento, poi scegli data e ora.</span>
+          <span>${options.dragAppointmentId ? "Rilascia l'appuntamento nel planning per scegliere l'orario preciso." : "Usa il + per creare un appuntamento, poi scegli data e ora."}</span>
         </div>
         ${renderDayPlanner(iso, appointments, planner)}
       </section>
@@ -1365,7 +1375,7 @@ function renderMobileAgendaDay(day) {
   const title = capitalize(formatter.format(day));
   const showDayAdd = state.calendarMode === "day";
   return `
-    <article class="mobile-agenda-day ${iso === todayISO() ? "today" : ""}">
+    <article class="mobile-agenda-day ${iso === todayISO() ? "today" : ""}" data-calendar-drop-date="${escapeAttr(iso)}">
       <div class="mobile-day-head">
         <button class="mobile-day-open" type="button" data-open-day="${escapeAttr(iso)}" title="Apri giornata ${escapeAttr(title)}">
           <strong>${escapeHtml(title)}</strong>
@@ -1386,9 +1396,10 @@ function renderMobileAppointmentCard(appointment) {
   const timeRange = [appointment.startTime, appointment.endTime].filter(Boolean).join(" - ") || "--";
   const subtitle = appointmentCalendarMeta(appointment, { includeStatus: true });
   const dogLabel = appointmentDogDisplayLabel(appointment);
+  const dragAttr = appointmentCanDrag(appointment) ? ` data-calendar-drag-id="${escapeAttr(appointment.id)}"` : "";
   return `
     <div class="mobile-appt-row status-${escapeAttr(appointment.status)}">
-      <button class="mobile-appt-card" type="button" data-appointment-id="${appointment.id}">
+      <button class="mobile-appt-card" type="button" data-appointment-id="${appointment.id}"${dragAttr}>
         <span>${escapeHtml(timeRange)}</span>
         <strong>${escapeHtml(dogLabel)}</strong>
         <small>${escapeHtml(subtitle || statusLabel(appointment.status))}</small>
@@ -1409,9 +1420,10 @@ function renderAppointmentPill(appointment) {
   const isCanceled = appointment.status === "annullato";
   const dogLabel = appointmentDogDisplayLabel(appointment);
   const meta = appointmentCalendarMeta(appointment);
+  const dragAttr = appointmentCanDrag(appointment) ? ` data-calendar-drag-id="${escapeAttr(appointment.id)}"` : "";
   return `
     <div class="appt-row status-${escapeHtml(appointment.status)}">
-      <button class="appt-pill" type="button" data-appointment-id="${appointment.id}" title="${escapeAttr([appointment.startTime || "--", dogLabel, meta].filter(Boolean).join(" "))}">
+      <button class="appt-pill" type="button" data-appointment-id="${appointment.id}"${dragAttr} title="${escapeAttr([appointment.startTime || "--", dogLabel, meta].filter(Boolean).join(" "))}">
         <span class="appt-time">${escapeHtml(appointment.startTime || "--")}</span>
         <span class="appt-copy">
           <small>${escapeHtml(dogLabel)}</small>
@@ -1467,11 +1479,321 @@ function bindCalendarDayActions(root) {
     button.addEventListener("click", () => openAppointmentDialog({ date: button.dataset.dayAdd, startTime: button.dataset.dayAddTime || undefined }));
   });
   root.querySelectorAll("[data-appointment-id]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", (event) => {
+      if (isCalendarDragClickBlocked()) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       const appointment = state.appointments.find((item) => item.id === button.dataset.appointmentId);
       openAppointmentDialog(appointment);
     });
   });
+  bindCalendarDragAndDrop(root);
+}
+
+function appointmentCanDrag(appointment = {}) {
+  return appointment.id && appointment.status !== "completato" && !isPhoneCalendarDragDisabled();
+}
+
+function bindCalendarDragAndDrop(root) {
+  if (isPhoneCalendarDragDisabled()) return;
+  root.querySelectorAll("[data-calendar-drag-id]").forEach((button) => {
+    if ("PointerEvent" in window) {
+      button.addEventListener("pointerdown", (event) => startCalendarAppointmentDrag(event, button));
+    } else {
+      button.addEventListener("mousedown", (event) => startCalendarAppointmentDrag(event, button));
+    }
+  });
+}
+
+function isPhoneCalendarDragDisabled() {
+  return window.matchMedia("(max-width: 767px)").matches;
+}
+
+function isCalendarDragClickBlocked() {
+  return Date.now() < calendarDragClickBlockUntil;
+}
+
+function blockCalendarDragClick(event) {
+  if (!isCalendarDragClickBlocked()) return;
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function startCalendarAppointmentDrag(event, button) {
+  if (isPhoneCalendarDragDisabled()) return;
+  const usesPointerEvents = event.type.startsWith("pointer");
+  if ((usesPointerEvents && !event.isPrimary) || event.button > 0 || calendarDrag) return;
+  const appointment = state.appointments.find((item) => item.id === button.dataset.calendarDragId);
+  if (!appointmentCanDrag(appointment)) return;
+  calendarDrag = {
+    appointmentId: appointment.id,
+    appointment,
+    pointerId: usesPointerEvents ? event.pointerId : "mouse",
+    usesPointerEvents,
+    sourceEl: button,
+    sourceFrame: button.closest(".appt-row, .day-planner-appointment, .mobile-appt-row") || button,
+    startX: event.clientX,
+    startY: event.clientY,
+    active: false,
+    ghost: null,
+    hoverEl: null,
+    hoverIso: "",
+    hoverTimer: null,
+    openedIso: "",
+    target: null
+  };
+  if (usesPointerEvents) button.setPointerCapture?.(event.pointerId);
+  document.addEventListener(usesPointerEvents ? "pointermove" : "mousemove", handleCalendarAppointmentDragMove, { passive: false });
+  document.addEventListener(usesPointerEvents ? "pointerup" : "mouseup", finishCalendarAppointmentDrag, { passive: false });
+  if (usesPointerEvents) document.addEventListener("pointercancel", cancelCalendarAppointmentDrag, { passive: false });
+}
+
+function handleCalendarAppointmentDragMove(event) {
+  if (!calendarDrag || (calendarDrag.usesPointerEvents && event.pointerId !== calendarDrag.pointerId)) return;
+  const distance = Math.hypot(event.clientX - calendarDrag.startX, event.clientY - calendarDrag.startY);
+  if (!calendarDrag.active) {
+    if (distance < CALENDAR_DRAG_MOVE_THRESHOLD) return;
+    activateCalendarAppointmentDrag(event);
+  }
+  event.preventDefault();
+  updateCalendarDragGhost(event);
+  updateCalendarDragTarget(event);
+}
+
+function activateCalendarAppointmentDrag(event) {
+  if (!calendarDrag || calendarDrag.active) return;
+  calendarDrag.active = true;
+  calendarDrag.sourceFrame.classList.add("calendar-drag-source");
+  calendarDrag.ghost = calendarDrag.sourceEl.cloneNode(true);
+  calendarDrag.ghost.classList.add("calendar-drag-ghost");
+  calendarDrag.ghost.removeAttribute("id");
+  calendarDrag.ghost.removeAttribute("data-appointment-id");
+  calendarDrag.ghost.removeAttribute("data-calendar-drag-id");
+  calendarDrag.ghost.style.width = `${Math.max(180, calendarDrag.sourceEl.getBoundingClientRect().width)}px`;
+  document.body.appendChild(calendarDrag.ghost);
+  document.body.classList.add("calendar-dragging");
+  updateCalendarDragGhost(event);
+}
+
+function updateCalendarDragGhost(event) {
+  if (!calendarDrag?.ghost) return;
+  calendarDrag.ghost.style.transform = `translate(${Math.round(event.clientX + 14)}px, ${Math.round(event.clientY + 14)}px)`;
+}
+
+function updateCalendarDragTarget(event) {
+  if (!calendarDrag?.active) return;
+  const target = calendarDragTargetFromPoint(event.clientX, event.clientY);
+  calendarDrag.target = target;
+  clearCalendarPlannerPreview();
+  if (target?.mode === "planner") {
+    clearCalendarDragDayHover();
+    target.element.classList.add("calendar-drag-hover");
+    updateCalendarPlannerPreview(target.element, target.minutes);
+    return;
+  }
+  if (target?.mode === "week-day") {
+    setCalendarDragDayHover(target.element, target.date, false);
+    return;
+  }
+  if (target?.mode === "month-day") {
+    setCalendarDragDayHover(target.element, target.date, true);
+    return;
+  }
+  clearCalendarDragDayHover();
+}
+
+function calendarDragTargetFromPoint(clientX, clientY) {
+  if (isPhoneCalendarDragDisabled()) return null;
+  const element = document.elementFromPoint(clientX, clientY);
+  const planner = element?.closest("[data-day-planner-drop]");
+  if (planner) {
+    return {
+      mode: "planner",
+      element: planner,
+      date: planner.dataset.dayPlannerDrop,
+      minutes: calendarPlannerMinutesFromPoint(planner, clientY)
+    };
+  }
+  const dayBlock = element?.closest("[data-calendar-drop-date]");
+  if (!dayBlock) return null;
+  if (state.calendarMode === "week" && dayBlock.closest(".week-grid")) {
+    return { mode: "week-day", element: dayBlock, date: dayBlock.dataset.calendarDropDate };
+  }
+  if (state.calendarMode === "month" && dayBlock.closest(".month-calendar")) {
+    return { mode: "month-day", element: dayBlock, date: dayBlock.dataset.calendarDropDate };
+  }
+  return null;
+}
+
+function setCalendarDragDayHover(element, iso, opensPlanner) {
+  if (!calendarDrag) return;
+  if (calendarDrag.hoverEl !== element) {
+    clearCalendarDragDayHover();
+    calendarDrag.hoverEl = element;
+    calendarDrag.hoverIso = iso;
+    element.classList.add("calendar-drag-hover");
+  }
+  if (!opensPlanner || calendarDrag.hoverTimer || calendarDrag.openedIso === iso) return;
+  calendarDrag.hoverTimer = window.setTimeout(() => openCalendarDragDayPlanner(iso), CALENDAR_DRAG_HOLD_MS);
+}
+
+function clearCalendarDragDayHover() {
+  if (!calendarDrag) return;
+  if (calendarDrag.hoverTimer) {
+    window.clearTimeout(calendarDrag.hoverTimer);
+    calendarDrag.hoverTimer = null;
+  }
+  calendarDrag.hoverEl?.classList.remove("calendar-drag-hover");
+  calendarDrag.hoverEl = null;
+  calendarDrag.hoverIso = "";
+}
+
+function openCalendarDragDayPlanner(iso) {
+  if (!calendarDrag?.active || calendarDrag.openedIso === iso) return;
+  calendarDrag.openedIso = iso;
+  clearCalendarDragDayHover();
+  openDayPlannerDialog(iso, { dragAppointmentId: calendarDrag.appointmentId });
+}
+
+function clearCalendarPlannerPreview() {
+  document.querySelectorAll("[data-day-planner-drop].calendar-drag-hover").forEach((item) => item.classList.remove("calendar-drag-hover"));
+  document.querySelectorAll("[data-planner-drop-preview]").forEach((preview) => {
+    preview.hidden = true;
+  });
+}
+
+function updateCalendarPlannerPreview(planner, minutes) {
+  const preview = planner.querySelector("[data-planner-drop-preview]");
+  if (!preview) return;
+  preview.style.top = `${percentWithin(minutes, plannerRangeFromElement(planner))}%`;
+  preview.querySelector("span").textContent = formatPlannerTime(minutes);
+  preview.hidden = false;
+}
+
+function plannerRangeFromElement(planner) {
+  return {
+    start: Number(planner.dataset.plannerStart || 7 * 60),
+    end: Number(planner.dataset.plannerEnd || 20 * 60)
+  };
+}
+
+function calendarPlannerMinutesFromPoint(planner, clientY) {
+  const range = plannerRangeFromElement(planner);
+  const rect = planner.getBoundingClientRect();
+  const ratio = clampNumber((clientY - rect.top) / Math.max(1, rect.height), 0, 1);
+  const rawMinutes = range.start + ratio * (range.end - range.start);
+  const duration = calendarAppointmentDurationMinutes(calendarDrag?.appointment);
+  const maxStart = duration ? Math.max(range.start, range.end - duration) : Math.max(range.start, range.end - CALENDAR_DRAG_TIME_STEP);
+  return clampNumber(roundMinutesToStep(rawMinutes, CALENDAR_DRAG_TIME_STEP), range.start, maxStart);
+}
+
+function roundMinutesToStep(minutes, step) {
+  return Math.round(Number(minutes || 0) / step) * step;
+}
+
+function cancelCalendarAppointmentDrag(event) {
+  if (event && calendarDrag?.usesPointerEvents && event.pointerId !== calendarDrag.pointerId) return;
+  cleanupCalendarAppointmentDrag();
+}
+
+async function finishCalendarAppointmentDrag(event) {
+  if (!calendarDrag || (calendarDrag.usesPointerEvents && event.pointerId !== calendarDrag.pointerId)) return;
+  const wasActive = calendarDrag.active;
+  if (!wasActive) {
+    cleanupCalendarAppointmentDrag();
+    return;
+  }
+  event.preventDefault();
+  calendarDragClickBlockUntil = Date.now() + 500;
+  updateCalendarDragTarget(event);
+  const drag = calendarDrag;
+  const target = drag.target;
+  cleanupCalendarAppointmentDrag();
+  if (target?.mode === "planner") {
+    await moveAppointmentByDrag(drag.appointmentId, { date: target.date, minutes: target.minutes });
+    return;
+  }
+  if (target?.mode === "week-day") {
+    await moveAppointmentByDrag(drag.appointmentId, { date: target.date });
+    return;
+  }
+  if (target?.mode === "month-day") {
+    await moveAppointmentByDrag(drag.appointmentId, { date: target.date, openPlannerAfterMove: true });
+  }
+}
+
+function cleanupCalendarAppointmentDrag() {
+  if (!calendarDrag) return;
+  document.removeEventListener(calendarDrag.usesPointerEvents ? "pointermove" : "mousemove", handleCalendarAppointmentDragMove);
+  document.removeEventListener(calendarDrag.usesPointerEvents ? "pointerup" : "mouseup", finishCalendarAppointmentDrag);
+  if (calendarDrag.usesPointerEvents) document.removeEventListener("pointercancel", cancelCalendarAppointmentDrag);
+  clearCalendarDragDayHover();
+  clearCalendarPlannerPreview();
+  calendarDrag.sourceFrame?.classList.remove("calendar-drag-source");
+  if (calendarDrag.usesPointerEvents && calendarDrag.sourceEl?.hasPointerCapture?.(calendarDrag.pointerId)) {
+    calendarDrag.sourceEl.releasePointerCapture(calendarDrag.pointerId);
+  }
+  calendarDrag.ghost?.remove();
+  document.body.classList.remove("calendar-dragging");
+  calendarDrag = null;
+}
+
+async function moveAppointmentByDrag(appointmentId, target) {
+  const appointment = state.appointments.find((item) => item.id === appointmentId);
+  if (!appointmentCanDrag(appointment)) return;
+  const targetDate = target.date || appointment.date || todayISO();
+  const currentStart = timeToMinutes(appointment.startTime);
+  const startMinutes = Number.isFinite(target.minutes) ? target.minutes : currentStart ?? 9 * 60;
+  const duration = Number.isFinite(target.minutes) ? calendarAppointmentDurationMinutes(appointment) : null;
+  const services = normalizeServiceList(appointment.services?.length ? appointment.services : appointment.service || "Toelettatura");
+  const payload = {
+    ...appointment,
+    date: targetDate,
+    startTime: formatTimeInputValue(startMinutes),
+    endTime: duration ? formatTimeInputValue(Math.min(startMinutes + duration, 23 * 60 + 59)) : appointment.endTime || "",
+    services,
+    service: services.join(", "),
+    createDogProfile: false
+  };
+  if (payload.status !== "completato") {
+    payload.treatmentDone = "";
+    payload.paidAmount = "";
+    payload.serviceAmounts = [];
+  }
+  try {
+    await api(`/api/appointments/${appointment.id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    });
+    await loadData();
+    state.calendarDate = parseISODate(targetDate);
+    renderView();
+    if (target.openPlannerAfterMove) {
+      openDayPlannerDialog(targetDate);
+      notify("Giorno aperto: trascina l'appuntamento nel planning per scegliere l'ora precisa.");
+    } else {
+      closeModal();
+      notify(`Appuntamento spostato: ${formatShortDate(targetDate)} alle ${payload.startTime}`);
+    }
+  } catch (err) {
+    notify(err.message);
+  }
+}
+
+function calendarAppointmentDurationMinutes(appointment = {}) {
+  const start = timeToMinutes(appointment.startTime);
+  const end = timeToMinutes(appointment.endTime);
+  if (start === null || end === null || end <= start) return null;
+  return end - start;
+}
+
+function formatTimeInputValue(minutes) {
+  const total = clampNumber(Math.round(Number(minutes || 0)), 0, 23 * 60 + 59);
+  const hours = Math.floor(total / 60);
+  const minutePart = total % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutePart).padStart(2, "0")}`;
 }
 
 function confirmCompletedAppointmentEdit() {

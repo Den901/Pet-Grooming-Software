@@ -1152,6 +1152,13 @@ label {
   box-shadow: inset 0 0 0 2px var(--gold);
 }
 
+.day-cell.calendar-drag-hover,
+.week-day.calendar-drag-hover {
+  outline: 3px solid rgba(47, 122, 101, 0.36);
+  outline-offset: -4px;
+  background: rgba(47, 122, 101, 0.08);
+}
+
 .day-head {
   display: flex;
   justify-content: space-between;
@@ -1243,6 +1250,36 @@ label {
   color: var(--ink);
   background: transparent;
   padding: 2px 0;
+}
+
+@media (min-width: 768px) {
+  [data-calendar-drag-id] {
+    cursor: grab;
+    touch-action: none;
+  }
+
+  [data-calendar-drag-id]:active {
+    cursor: grabbing;
+  }
+}
+
+body.calendar-dragging {
+  user-select: none;
+}
+
+.calendar-drag-source {
+  opacity: 0.45;
+}
+
+.calendar-drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 10000;
+  pointer-events: none;
+  opacity: 0.92;
+  box-shadow: 0 16px 34px rgba(22, 38, 37, 0.22);
+  transform-origin: top left;
 }
 
 .appt-time {
@@ -1448,6 +1485,33 @@ label {
 
 .day-planner-hour:first-child {
   border-top: 0;
+}
+
+.day-planner-body.calendar-drag-hover {
+  outline: 3px solid rgba(47, 122, 101, 0.32);
+  outline-offset: -4px;
+}
+
+.day-planner-drop-preview {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  border-top: 2px solid var(--brand);
+  pointer-events: none;
+}
+
+.day-planner-drop-preview span {
+  position: absolute;
+  left: 10px;
+  top: -15px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 900;
+  box-shadow: 0 8px 16px rgba(47, 122, 101, 0.2);
 }
 
 .day-planner-appointment {
@@ -4278,6 +4342,17 @@ label {
 :root[data-theme="dark"] .update-block,
 :root[data-theme="dark"] .metric {
   border-color: var(--line);
+}
+
+:root[data-theme="dark"] .day-cell.calendar-drag-hover,
+:root[data-theme="dark"] .week-day.calendar-drag-hover,
+:root[data-theme="dark"] .day-planner-body.calendar-drag-hover {
+  outline-color: rgba(104, 183, 173, 0.48);
+  background: rgba(104, 183, 173, 0.12);
+}
+
+:root[data-theme="dark"] .calendar-drag-ghost {
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.42);
 }
 
 :root[data-theme="dark"] .appt-row,
