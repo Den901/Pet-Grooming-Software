@@ -3479,11 +3479,26 @@ label {
 .modal-card.appointment-modal {
   --appointment-status-color: var(--line);
   border: 2px solid var(--appointment-status-color);
+  background: var(--panel);
   box-shadow: 0 0 0 1px rgba(22, 38, 37, 0.05), var(--shadow);
 }
 
 .modal-card.appointment-modal .modal-head {
   border-top: 5px solid var(--appointment-status-color);
+  background: var(--panel);
+}
+
+.modal-card.appointment-modal .modal-body,
+.modal-card.appointment-modal .modal-actions {
+  background: var(--panel);
+}
+
+.modal-card.appointment-modal .field-group,
+.modal-card.appointment-modal .gallery-upload,
+.modal-card.appointment-modal .service-selected,
+.modal-card.appointment-modal .service-amounts,
+.modal-card.appointment-modal .quick-profile {
+  background: var(--panel-soft);
 }
 
 .modal-card.appointment-modal.status-programmato {
@@ -3846,6 +3861,17 @@ label {
   background: rgba(0, 168, 79, 0.16);
   border-color: rgba(0, 168, 79, 0.3);
   border-left-color: var(--traffic-green);
+}
+
+:root[data-theme="dark"] .modal-card.appointment-modal,
+:root[data-theme="dark"] .modal-card.appointment-modal.status-programmato,
+:root[data-theme="dark"] .modal-card.appointment-modal.status-confermato,
+:root[data-theme="dark"] .modal-card.appointment-modal.status-completato,
+:root[data-theme="dark"] .modal-card.appointment-modal.status-annullato,
+:root[data-theme="dark"] .modal-card.appointment-modal .modal-head,
+:root[data-theme="dark"] .modal-card.appointment-modal .modal-body,
+:root[data-theme="dark"] .modal-card.appointment-modal .modal-actions {
+  background: var(--panel);
 }
 
 :root[data-theme="dark"] .appt-complete {
