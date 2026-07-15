@@ -37,7 +37,8 @@ const state = {
   calendarMode: "month",
   dogSearch: "",
   serviceHistoryDogId: "",
-  serviceHistoryDogQuery: ""
+  serviceHistoryDogQuery: "",
+  clientId: getClientId()
 };
 
 const CALENDAR_DRAG_HOLD_MS = 2000;
@@ -89,6 +90,19 @@ const THEME_PRESETS = {
     text: "#eef7f3"
   }
 };
+
+function getClientId() {
+  const fallback = () => `groomly-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  try {
+    const existing = sessionStorage.getItem("groomlyClientId");
+    if (existing) return existing;
+    const next = globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : fallback();
+    sessionStorage.setItem("groomlyClientId", next);
+    return next;
+  } catch {
+    return fallback();
+  }
+}
 
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();
@@ -266,6 +280,7 @@ async function api(path, options = {}) {
     credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
+      "X-Groomly-Client-Id": state.clientId,
       ...(options.headers || {})
     },
     ...options
@@ -496,6 +511,35 @@ function renderBrandMark(className) {
   return `<div class="${className}">${escapeHtml(initials(branding.businessName || branding.portalName))}</div>`;
 }
 
+function sortStateAppointments() {
+  state.appointments.sort((a, b) => `${a.date || ""} ${a.startTime || ""}`.localeCompare(`${b.date || ""} ${b.startTime || ""}`));
+}
+
+function upsertStateDog(dog) {
+  if (!dog?.id) return;
+  const index = state.dogs.findIndex((item) => item.id === dog.id);
+  if (index === -1) state.dogs.push(dog);
+  else state.dogs[index] = dog;
+}
+
+function upsertStateAppointment(appointment) {
+  if (!appointment?.id) return;
+  const index = state.appointments.findIndex((item) => item.id === appointment.id);
+  if (index === -1) state.appointments.push(appointment);
+  else state.appointments[index] = appointment;
+  sortStateAppointments();
+}
+
+function removeStateAppointment(id) {
+  if (!id) return;
+  state.appointments = state.appointments.filter((item) => item.id !== id);
+}
+
+function applyAppointmentApiResponse(response = {}) {
+  upsertStateDog(response.dog);
+  upsertStateAppointment(response.appointment);
+}
+
 async function loadData() {
   const [meResponse, dogsResponse, appointmentsResponse, animalResponse, appointmentSettingsResponse, navigationResponse, brandingResponse] = await Promise.all([
     api("/api/me"),
@@ -549,6 +593,7 @@ function connectLiveUpdates() {
       applyOnlineUsers(payload.detail?.onlineUserIds || []);
       return;
     }
+    if (payload.detail?.clientId && payload.detail.clientId === state.clientId) return;
     if (!payload.type) return;
     clearTimeout(state.liveRefreshTimer);
     state.liveRefreshTimer = setTimeout(async () => {
@@ -1542,6 +1587,11 @@ function startCalendarAppointmentDrag(event, button) {
     hoverEl: null,
     hoverIso: "",
     hoverTimer: null,
+    targetRaf: null,
+    lastClientX: event.clientX,
+    lastClientY: event.clientY,
+    plannerHoverEl: null,
+    plannerPreviewEl: null,
     openedIso: "",
     target: null
   };
@@ -1560,7 +1610,7 @@ function handleCalendarAppointmentDragMove(event) {
   }
   event.preventDefault();
   updateCalendarDragGhost(event);
-  updateCalendarDragTarget(event);
+  scheduleCalendarDragTargetUpdate(event);
 }
 
 function activateCalendarAppointmentDrag(event) {
@@ -1585,18 +1635,38 @@ function updateCalendarDragGhost(event) {
   calendarDrag.ghost.style.transform = `translate(${Math.round(event.clientX)}px, ${Math.round(event.clientY)}px) translate(-50%, -50%)`;
 }
 
+function scheduleCalendarDragTargetUpdate(event) {
+  if (!calendarDrag?.active) return;
+  calendarDrag.lastClientX = event.clientX;
+  calendarDrag.lastClientY = event.clientY;
+  if (calendarDrag.targetRaf) return;
+  calendarDrag.targetRaf = window.requestAnimationFrame(() => {
+    if (!calendarDrag?.active) return;
+    calendarDrag.targetRaf = null;
+    updateCalendarDragTarget({ clientX: calendarDrag.lastClientX, clientY: calendarDrag.lastClientY });
+  });
+}
+
+function cancelCalendarDragTargetFrame() {
+  if (!calendarDrag?.targetRaf) return;
+  window.cancelAnimationFrame(calendarDrag.targetRaf);
+  calendarDrag.targetRaf = null;
+}
+
 function updateCalendarDragTarget(event) {
   if (!calendarDrag?.active) return;
   maybeCloseCalendarDragModal(event.clientX, event.clientY);
   const target = calendarDragTargetFromPoint(event.clientX, event.clientY);
   calendarDrag.target = target;
-  clearCalendarPlannerPreview();
   if (target?.mode === "planner") {
     clearCalendarDragDayHover();
+    if (calendarDrag.plannerHoverEl && calendarDrag.plannerHoverEl !== target.element) clearCalendarPlannerPreview();
+    calendarDrag.plannerHoverEl = target.element;
     target.element.classList.add("calendar-drag-hover");
     updateCalendarPlannerPreview(target.element, target.minutes);
     return;
   }
+  clearCalendarPlannerPreview();
   if (target?.mode === "week-day") {
     setCalendarDragDayHover(target.element, target.date, false);
     return;
@@ -1686,15 +1756,36 @@ function openCalendarDragDayPlanner(iso) {
 }
 
 function clearCalendarPlannerPreview() {
-  document.querySelectorAll("[data-day-planner-drop].calendar-drag-hover").forEach((item) => item.classList.remove("calendar-drag-hover"));
-  document.querySelectorAll("[data-planner-drop-preview]").forEach((preview) => {
-    preview.hidden = true;
+  const planners = calendarDrag?.plannerHoverEl
+    ? [calendarDrag.plannerHoverEl]
+    : Array.from(document.querySelectorAll("[data-day-planner-drop].calendar-drag-hover"));
+  planners.forEach((item) => {
+    item.classList.remove("calendar-drag-hover");
+    item.querySelector("[data-planner-drop-preview]")?.setAttribute("hidden", "");
   });
+  if (!calendarDrag?.plannerPreviewEl) {
+    document.querySelectorAll("[data-planner-drop-preview]").forEach((preview) => {
+      preview.hidden = true;
+    });
+  } else {
+    calendarDrag.plannerPreviewEl.hidden = true;
+  }
+  if (calendarDrag) {
+    calendarDrag.plannerHoverEl = null;
+    calendarDrag.plannerPreviewEl = null;
+  }
 }
 
 function updateCalendarPlannerPreview(planner, minutes) {
-  const preview = planner.querySelector("[data-planner-drop-preview]");
+  const preview =
+    calendarDrag?.plannerHoverEl === planner && calendarDrag.plannerPreviewEl
+      ? calendarDrag.plannerPreviewEl
+      : planner.querySelector("[data-planner-drop-preview]");
   if (!preview) return;
+  if (calendarDrag) {
+    calendarDrag.plannerHoverEl = planner;
+    calendarDrag.plannerPreviewEl = preview;
+  }
   preview.style.top = `${percentWithin(minutes, plannerRangeFromElement(planner))}%`;
   preview.querySelector("span").textContent = formatPlannerTime(minutes);
   preview.hidden = false;
@@ -1735,6 +1826,7 @@ async function finishCalendarAppointmentDrag(event) {
   }
   event.preventDefault();
   calendarDragClickBlockUntil = Date.now() + 500;
+  cancelCalendarDragTargetFrame();
   updateCalendarDragTarget(event);
   const drag = calendarDrag;
   const target = drag.target;
@@ -1757,6 +1849,7 @@ function cleanupCalendarAppointmentDrag() {
   document.removeEventListener(calendarDrag.usesPointerEvents ? "pointermove" : "mousemove", handleCalendarAppointmentDragMove);
   document.removeEventListener(calendarDrag.usesPointerEvents ? "pointerup" : "mouseup", finishCalendarAppointmentDrag);
   if (calendarDrag.usesPointerEvents) document.removeEventListener("pointercancel", cancelCalendarAppointmentDrag);
+  cancelCalendarDragTargetFrame();
   clearCalendarDragDayHover();
   clearCalendarPlannerPreview();
   calendarDrag.sourceFrame?.classList.remove("calendar-drag-source");
@@ -1801,11 +1894,11 @@ async function moveAppointmentByDrag(appointmentId, target) {
     payload.serviceAmounts = [];
   }
   try {
-    await api(`/api/appointments/${appointment.id}`, {
+    const response = await api(`/api/appointments/${appointment.id}`, {
       method: "PUT",
       body: JSON.stringify(payload)
     });
-    await loadData();
+    applyAppointmentApiResponse(response);
     state.calendarDate = parseISODate(targetDate);
     renderView();
     if (target.openPlannerAfterMove) {
@@ -2232,7 +2325,7 @@ function bindServiceHistory() {
         return;
       }
       await api(`/api/appointments/${appointment.id}`, { method: "DELETE", body: "{}" });
-      await loadData();
+      removeStateAppointment(appointment.id);
       renderView();
       notify("Prestazione eliminata");
     });
@@ -4032,7 +4125,7 @@ function openCompleteServiceDialog(appointment = {}) {
         button.disabled = true;
         try {
           await api(`/api/appointments/${appointment.id}`, { method: "DELETE", body: "{}" });
-          await loadData();
+          removeStateAppointment(appointment.id);
           state.calendarDate = parseISODate(dateValue);
           renderView();
           closeModal();
@@ -4069,11 +4162,11 @@ function openCompleteServiceDialog(appointment = {}) {
       payload.afterPhotoData = await filesToDataUrls(form.elements.afterPhotos?.files, 5);
       payload.clearBeforePhotos = formData.get("clearBeforePhotos") === "on";
       payload.clearAfterPhotos = formData.get("clearAfterPhotos") === "on";
-      await api(isEdit ? `/api/appointments/${appointment.id}` : "/api/appointments", {
+      const response = await api(isEdit ? `/api/appointments/${appointment.id}` : "/api/appointments", {
         method: isEdit ? "PUT" : "POST",
         body: JSON.stringify(payload)
       });
-      await loadData();
+      applyAppointmentApiResponse(response);
       state.calendarDate = parseISODate(payload.date);
       renderView();
       notify(isStoredCompleted ? "Prestazione aggiornata" : "Prestazione conclusa");
@@ -4292,11 +4385,11 @@ function openAppointmentDialog(appointment = {}, options = {}) {
           };
           payload.service = payload.services.join(", ");
           payload.createDogProfile = false;
-          await api(`/api/appointments/${appointment.id}`, {
+          const response = await api(`/api/appointments/${appointment.id}`, {
             method: "PUT",
             body: JSON.stringify(payload)
           });
-          await loadData();
+          applyAppointmentApiResponse(response);
           state.calendarDate = parseISODate(payload.date);
           renderView();
           closeModal();
@@ -4353,7 +4446,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
     },
     onDanger: async () => {
       await api(`/api/appointments/${appointment.id}`, { method: "DELETE", body: "{}" });
-      await loadData();
+      removeStateAppointment(appointment.id);
       state.calendarDate = parseISODate(appointment.date || todayISO());
       renderView();
       closeModal();
@@ -4385,11 +4478,11 @@ function openAppointmentDialog(appointment = {}, options = {}) {
         payload.clearBeforePhotos = formData.get("clearBeforePhotos") === "on";
         payload.clearAfterPhotos = formData.get("clearAfterPhotos") === "on";
       }
-      await api(isEdit ? `/api/appointments/${appointment.id}` : "/api/appointments", {
+      const response = await api(isEdit ? `/api/appointments/${appointment.id}` : "/api/appointments", {
         method: isEdit ? "PUT" : "POST",
         body: JSON.stringify(payload)
       });
-      await loadData();
+      applyAppointmentApiResponse(response);
       state.calendarDate = parseISODate(payload.date);
       renderView();
       notify(payload.status === "completato" ? "Prestazione conclusa" : isEdit ? "Appuntamento aggiornato" : "Appuntamento creato");

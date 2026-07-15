@@ -319,6 +319,16 @@ function broadcastDataChange(type, detail = {}) {
   }
 }
 
+function clientIdFromRequest(req) {
+  const clientId = cleanString(req.headers["x-groomly-client-id"]);
+  return /^[a-z0-9-]{8,80}$/i.test(clientId) ? clientId : "";
+}
+
+function broadcastRequestDataChange(req, type, detail = {}) {
+  const clientId = clientIdFromRequest(req);
+  broadcastDataChange(type, clientId ? { ...detail, clientId } : detail);
+}
+
 function broadcastPresenceChange() {
   broadcastDataChange("presence", { onlineUserIds: Array.from(onlineUserIds()) });
 }
@@ -1537,7 +1547,7 @@ async function handleApi(req, res, url) {
         db.settings.alexa.lastUpdateAt = new Date().toISOString();
         db.settings.alexa.lastResult = `Appuntamento creato per ${appointment.dogName}`;
         writeDb(db);
-        broadcastDataChange("appointments", { action: "create", id: appointment.id, source: "alexa" });
+        broadcastRequestDataChange(req, "appointments", { action: "create", id: appointment.id, source: "alexa" });
         return sendJson(res, 201, { appointment: publicAlexaAppointment(appointment, db) });
       }
 
@@ -1652,7 +1662,7 @@ async function handleApi(req, res, url) {
           updatedAt: new Date().toISOString()
         };
         writeDb(db);
-        broadcastDataChange("settings", { section: "branding" });
+        broadcastRequestDataChange(req, "settings", { section: "branding" });
         return sendJson(res, 200, { branding: publicBrandingSettings(db, user) });
       }
     }
@@ -1680,7 +1690,7 @@ async function handleApi(req, res, url) {
         if (body.clearCloudAccessToken === true) next.cloudAccessToken = "";
         db.settings.whatsapp = next;
         writeDb(db);
-        broadcastDataChange("settings", { section: "whatsapp" });
+        broadcastRequestDataChange(req, "settings", { section: "whatsapp" });
         return sendJson(res, 200, { whatsapp: publicWhatsappSettings(db) });
       }
     }
@@ -1721,7 +1731,7 @@ async function handleApi(req, res, url) {
         }
         db.settings.alexa = next;
         writeDb(db);
-        broadcastDataChange("settings", { section: "alexa" });
+        broadcastRequestDataChange(req, "settings", { section: "alexa" });
         return sendJson(res, 200, {
           alexa: {
             ...publicAlexaSettings(db, req),
@@ -1746,7 +1756,7 @@ async function handleApi(req, res, url) {
           updatedAt: new Date().toISOString()
         };
         writeDb(db);
-        broadcastDataChange("settings", { section: "animal" });
+        broadcastRequestDataChange(req, "settings", { section: "animal" });
         return sendJson(res, 200, { animal: publicAnimalSettings(db) });
       }
     }
@@ -1765,7 +1775,7 @@ async function handleApi(req, res, url) {
           updatedAt: new Date().toISOString()
         };
         writeDb(db);
-        broadcastDataChange("settings", { section: "appointments" });
+        broadcastRequestDataChange(req, "settings", { section: "appointments" });
         return sendJson(res, 200, { appointments: publicAppointmentSettings(db) });
       }
     }
@@ -1782,7 +1792,7 @@ async function handleApi(req, res, url) {
           updatedAt: new Date().toISOString()
         };
         writeDb(db);
-        broadcastDataChange("settings", { section: "navigation" });
+        broadcastRequestDataChange(req, "settings", { section: "navigation" });
         return sendJson(res, 200, { navigation: publicNavigationSettings(db) });
       }
     }
@@ -1808,7 +1818,7 @@ async function handleApi(req, res, url) {
         const body = await readBody(req);
         const backupPayload = decryptBackup(body.backup, body.password);
         restoreBackup(backupPayload);
-        broadcastDataChange("backup", { action: "import" });
+        broadcastRequestDataChange(req, "backup", { action: "import" });
         return sendJson(res, 200, { ok: true });
       }
     }
@@ -1833,7 +1843,7 @@ async function handleApi(req, res, url) {
         if (body.clearToken === true) next.token = "";
         db.settings.duckdns = next;
         writeDb(db);
-        broadcastDataChange("settings", { section: "duckdns" });
+        broadcastRequestDataChange(req, "settings", { section: "duckdns" });
         return sendJson(res, 200, { duckdns: publicDuckDnsSettings(db, req) });
       }
     }
@@ -1845,13 +1855,13 @@ async function handleApi(req, res, url) {
         db.settings.duckdns.lastUpdateAt = new Date().toISOString();
         db.settings.duckdns.lastResult = result;
         writeDb(db);
-        broadcastDataChange("settings", { section: "duckdns" });
+        broadcastRequestDataChange(req, "settings", { section: "duckdns" });
         return sendJson(res, 200, { result, duckdns: publicDuckDnsSettings(db, req) });
       } catch (error) {
         db.settings.duckdns.lastUpdateAt = new Date().toISOString();
         db.settings.duckdns.lastResult = error.message || "Errore DuckDNS";
         writeDb(db);
-        broadcastDataChange("settings", { section: "duckdns" });
+        broadcastRequestDataChange(req, "settings", { section: "duckdns" });
         return sendError(res, 502, db.settings.duckdns.lastResult);
       }
     }
@@ -1869,7 +1879,7 @@ async function handleApi(req, res, url) {
         updateAnimalOptionsFromDog(db, dog);
         db.dogs.push(dog);
         writeDb(db);
-        broadcastDataChange("dogs", { action: "create", id: dog.id });
+        broadcastRequestDataChange(req, "dogs", { action: "create", id: dog.id });
         return sendJson(res, 201, { dog });
       }
       const index = db.dogs.findIndex((item) => item.id === id);
@@ -1887,13 +1897,13 @@ async function handleApi(req, res, url) {
             : appointment
         );
         writeDb(db);
-        broadcastDataChange("dogs", { action: "update", id: dog.id });
+        broadcastRequestDataChange(req, "dogs", { action: "update", id: dog.id });
         return sendJson(res, 200, { dog });
       }
       if (method === "DELETE") {
         db.dogs.splice(index, 1);
         writeDb(db);
-        broadcastDataChange("dogs", { action: "delete", id });
+        broadcastRequestDataChange(req, "dogs", { action: "delete", id });
         return sendJson(res, 200, { ok: true });
       }
     }
@@ -1914,7 +1924,7 @@ async function handleApi(req, res, url) {
         updateAnimalOptionsFromAppointment(db, appointment);
         db.appointments.push(appointment);
         writeDb(db);
-        broadcastDataChange("appointments", { action: "create", id: appointment.id });
+        broadcastRequestDataChange(req, "appointments", { action: "create", id: appointment.id });
         return sendJson(res, 201, { appointment, dog: prepared.dog });
       }
       const index = db.appointments.findIndex((item) => item.id === id);
@@ -1930,13 +1940,13 @@ async function handleApi(req, res, url) {
         updateAnimalOptionsFromAppointment(db, appointment);
         db.appointments[index] = appointment;
         writeDb(db);
-        broadcastDataChange("appointments", { action: "update", id: appointment.id });
+        broadcastRequestDataChange(req, "appointments", { action: "update", id: appointment.id });
         return sendJson(res, 200, { appointment, dog: prepared.dog });
       }
       if (method === "DELETE") {
         db.appointments.splice(index, 1);
         writeDb(db);
-        broadcastDataChange("appointments", { action: "delete", id });
+        broadcastRequestDataChange(req, "appointments", { action: "delete", id });
         return sendJson(res, 200, { ok: true });
       }
     }
@@ -1970,7 +1980,7 @@ async function handleApi(req, res, url) {
         };
         db.users.push(newUser);
         writeDb(db);
-        broadcastDataChange("users", { action: "create", id: newUser.id });
+        broadcastRequestDataChange(req, "users", { action: "create", id: newUser.id });
         return sendJson(res, 201, { user: publicUser(newUser) });
       }
       const index = db.users.findIndex((item) => item.id === id);
@@ -1999,7 +2009,7 @@ async function handleApi(req, res, url) {
         }
         db.users[index] = nextUser;
         writeDb(db);
-        broadcastDataChange("users", { action: "update", id });
+        broadcastRequestDataChange(req, "users", { action: "update", id });
         return sendJson(res, 200, { user: publicUser(nextUser) });
       }
       if (method === "DELETE") {
@@ -2011,7 +2021,7 @@ async function handleApi(req, res, url) {
         }
         db.users.splice(index, 1);
         writeDb(db);
-        broadcastDataChange("users", { action: "delete", id });
+        broadcastRequestDataChange(req, "users", { action: "delete", id });
         return sendJson(res, 200, { ok: true });
       }
     }
