@@ -13,6 +13,13 @@
   --success: #00a84f;
   --blue: #366a8a;
   --danger: #b83e3e;
+  --traffic-red: #e54b4b;
+  --traffic-red-soft: #fff0ef;
+  --traffic-yellow: #f1b928;
+  --traffic-yellow-ink: #7d5600;
+  --traffic-yellow-soft: #fff7d6;
+  --traffic-green: #00a84f;
+  --traffic-green-soft: #edf9ef;
   --shadow: 0 18px 40px rgba(22, 38, 37, 0.1);
   --radius: 8px;
   --ui-scale: 1;
@@ -94,6 +101,21 @@ select:focus,
 textarea:focus {
   border-color: var(--brand);
   box-shadow: 0 0 0 3px rgba(35, 67, 68, 0.14);
+}
+
+.field-error,
+input.field-error,
+select.field-error,
+textarea.field-error {
+  border-color: var(--traffic-red) !important;
+  box-shadow: 0 0 0 3px rgba(229, 75, 75, 0.16) !important;
+}
+
+.field-error input:not([type="hidden"]),
+.field-error select,
+.field-error textarea {
+  border-color: var(--traffic-red) !important;
+  box-shadow: 0 0 0 3px rgba(229, 75, 75, 0.16) !important;
 }
 
 input:disabled,
@@ -926,8 +948,16 @@ label {
   box-shadow: var(--shadow);
 }
 
+.monitor-card.status-programmato {
+  border-left-color: var(--traffic-red);
+}
+
 .monitor-card.status-confermato {
-  border-left-color: var(--blue);
+  border-left-color: var(--traffic-yellow);
+}
+
+.monitor-card.status-completato {
+  border-left-color: var(--traffic-green);
 }
 
 .monitor-photo {
@@ -1250,18 +1280,31 @@ label {
   color: #fff;
 }
 
+.status-programmato {
+  background: var(--traffic-red-soft);
+  border-left-color: var(--traffic-red);
+}
+
+.status-programmato .appt-time {
+  color: var(--traffic-red);
+}
+
 .status-confermato {
-  background: #eef5fb;
-  border-left-color: var(--blue);
+  background: var(--traffic-yellow-soft);
+  border-left-color: var(--traffic-yellow);
 }
 
 .status-confermato .appt-time {
-  color: var(--blue);
+  color: var(--traffic-yellow-ink);
 }
 
 .status-completato {
-  background: #eef7ef;
-  border-left-color: var(--green);
+  background: var(--traffic-green-soft);
+  border-left-color: var(--traffic-green);
+}
+
+.status-completato .appt-time {
+  color: var(--traffic-green);
 }
 
 .status-annullato {
@@ -1404,6 +1447,30 @@ label {
   box-shadow: 0 8px 18px rgba(22, 38, 37, 0.08);
 }
 
+.day-planner-appointment.status-programmato {
+  background: var(--traffic-red-soft);
+  border-color: rgba(229, 75, 75, 0.26);
+  border-left-color: var(--traffic-red);
+}
+
+.day-planner-appointment.status-confermato {
+  background: var(--traffic-yellow-soft);
+  border-color: rgba(241, 185, 40, 0.34);
+  border-left-color: var(--traffic-yellow);
+}
+
+.day-planner-appointment.status-completato {
+  background: var(--traffic-green-soft);
+  border-color: rgba(0, 168, 79, 0.24);
+  border-left-color: var(--traffic-green);
+}
+
+.day-planner-appointment.status-annullato {
+  background: #fbefed;
+  border-color: rgba(184, 62, 62, 0.24);
+  border-left-color: var(--danger);
+}
+
 .day-dialog-add,
 .day-view-card > .day-head .add-day,
 .mobile-day-add {
@@ -1424,6 +1491,18 @@ label {
   font-weight: 900;
   line-height: 1.1;
   white-space: nowrap;
+}
+
+.day-planner-appointment.status-programmato .planner-time {
+  color: var(--traffic-red);
+}
+
+.day-planner-appointment.status-confermato .planner-time {
+  color: var(--traffic-yellow-ink);
+}
+
+.day-planner-appointment.status-completato .planner-time {
+  color: var(--traffic-green);
 }
 
 .day-planner-appointment .planner-copy {
@@ -3263,10 +3342,11 @@ label {
 
 .toast {
   position: fixed;
-  right: 18px;
-  bottom: 18px;
+  left: 50%;
+  right: auto;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
   max-width: min(360px, calc(100vw - 36px));
-  transform: translateY(18px);
+  transform: translate(-50%, 18px);
   opacity: 0;
   pointer-events: none;
   background: #111918;
@@ -3277,12 +3357,13 @@ label {
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.26);
   font-weight: 800;
   line-height: 1.35;
+  text-align: center;
   transition: 180ms ease;
-  z-index: 50;
+  z-index: 320;
 }
 
 .toast.show {
-  transform: translateY(0);
+  transform: translate(-50%, 0);
   opacity: 1;
 }
 
@@ -3393,6 +3474,32 @@ label {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   border: 1px solid var(--line);
+}
+
+.modal-card.appointment-modal {
+  --appointment-status-color: var(--line);
+  border: 2px solid var(--appointment-status-color);
+  box-shadow: 0 0 0 1px rgba(22, 38, 37, 0.05), var(--shadow);
+}
+
+.modal-card.appointment-modal .modal-head {
+  border-top: 5px solid var(--appointment-status-color);
+}
+
+.modal-card.appointment-modal.status-programmato {
+  --appointment-status-color: var(--traffic-red);
+}
+
+.modal-card.appointment-modal.status-confermato {
+  --appointment-status-color: var(--traffic-yellow);
+}
+
+.modal-card.appointment-modal.status-completato {
+  --appointment-status-color: var(--traffic-green);
+}
+
+.modal-card.appointment-modal.status-annullato {
+  --appointment-status-color: var(--danger);
 }
 
 @media (min-width: 1025px) {
@@ -3707,16 +3814,38 @@ label {
   border-color: rgba(225, 166, 61, 0.62);
 }
 
+:root[data-theme="dark"] .status-programmato {
+  background: rgba(229, 75, 75, 0.15);
+}
+
 :root[data-theme="dark"] .status-confermato {
-  background: rgba(93, 143, 183, 0.16);
+  background: rgba(241, 185, 40, 0.16);
 }
 
 :root[data-theme="dark"] .status-completato {
-  background: rgba(104, 183, 173, 0.14);
+  background: rgba(0, 168, 79, 0.14);
 }
 
 :root[data-theme="dark"] .status-annullato {
   background: rgba(229, 138, 125, 0.14);
+}
+
+:root[data-theme="dark"] .day-planner-appointment.status-programmato {
+  background: rgba(229, 75, 75, 0.18);
+  border-color: rgba(229, 75, 75, 0.32);
+  border-left-color: var(--traffic-red);
+}
+
+:root[data-theme="dark"] .day-planner-appointment.status-confermato {
+  background: rgba(241, 185, 40, 0.18);
+  border-color: rgba(241, 185, 40, 0.36);
+  border-left-color: var(--traffic-yellow);
+}
+
+:root[data-theme="dark"] .day-planner-appointment.status-completato {
+  background: rgba(0, 168, 79, 0.16);
+  border-color: rgba(0, 168, 79, 0.3);
+  border-left-color: var(--traffic-green);
 }
 
 :root[data-theme="dark"] .appt-complete {

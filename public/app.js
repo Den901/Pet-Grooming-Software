@@ -2361,7 +2361,9 @@ function renderUpdateStatus(updateCheck) {
 }
 
 function renderUpdateChangelog(updateCheck) {
-  const notes = String(updateCheck?.changelog || updateCheck?.notes || "").trim();
+  const notes = String(updateCheck?.changelog || updateCheck?.notes || "")
+    .replace(/\\r\\n|\\n|\\r/g, "\n")
+    .trim();
   if (!notes) return "";
   return `
     <div class="update-changelog">
@@ -3020,6 +3022,92 @@ function renderEstimatedTimeField(value = {}) {
   `;
 }
 
+function renderClockTimeField(name, label, value = "", { required = false } = {}) {
+  const selected = splitClockTime(value);
+  const hourOptions = Array.from({ length: 24 }, (_, index) => index);
+  const minuteOptions = Array.from(new Set([...Array.from({ length: 12 }, (_, index) => index * 5), selected.minutes]))
+    .filter((item) => Number.isInteger(item))
+    .sort((a, b) => a - b);
+  const hiddenValue = selected.value || "";
+  const emptyOption = required ? "" : `<option value="" ${hiddenValue ? "" : "selected"}>--</option>`;
+  return `
+    <fieldset class="field-group compact clock-time-field" data-clock-time-field data-clock-time-name="${escapeAttr(name)}">
+      <legend>${escapeHtml(label)}</legend>
+      <input name="${escapeAttr(name)}" type="hidden" value="${escapeAttr(hiddenValue)}" data-clock-time-value />
+      <div class="time-parts">
+        <label>Ore
+          <select data-clock-hour aria-label="${escapeAttr(`${label} ore`)}">
+            ${emptyOption}
+            ${hourOptions.map((hour) => `<option value="${hour}" ${selected.hours === hour ? "selected" : ""}>${String(hour).padStart(2, "0")}</option>`).join("")}
+          </select>
+        </label>
+        <label>Minuti
+          <select data-clock-minute aria-label="${escapeAttr(`${label} minuti`)}">
+            ${emptyOption}
+            ${minuteOptions.map((minute) => `<option value="${minute}" ${selected.minutes === minute ? "selected" : ""}>${String(minute).padStart(2, "0")}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+    </fieldset>
+  `;
+}
+
+function splitClockTime(value) {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return { hours: null, minutes: null, value: "" };
+  const hours = clampNumber(Number(match[1]), 0, 23);
+  const minutes = clampNumber(Number(match[2]), 0, 59);
+  return {
+    hours,
+    minutes,
+    value: `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`
+  };
+}
+
+function bindClockTimeFields(form) {
+  form.querySelectorAll("[data-clock-time-field]").forEach((field) => {
+    const hidden = field.querySelector("[data-clock-time-value]");
+    const hourSelect = field.querySelector("[data-clock-hour]");
+    const minuteSelect = field.querySelector("[data-clock-minute]");
+    const sync = () => {
+      const hour = hourSelect.value;
+      const minute = minuteSelect.value;
+      hidden.value = hour === "" || minute === "" ? "" : `${String(Number(hour)).padStart(2, "0")}:${String(Number(minute)).padStart(2, "0")}`;
+    };
+    field._setClockTime = (value) => {
+      const selected = splitClockTime(value);
+      ensureSelectOption(hourSelect, selected.hours);
+      ensureSelectOption(minuteSelect, selected.minutes);
+      hourSelect.value = selected.hours === null ? "" : String(selected.hours);
+      minuteSelect.value = selected.minutes === null ? "" : String(selected.minutes);
+      sync();
+    };
+    hourSelect.addEventListener("change", sync);
+    minuteSelect.addEventListener("change", sync);
+    sync();
+  });
+}
+
+function ensureSelectOption(select, value) {
+  if (value === null || value === undefined || value === "") return;
+  const normalized = String(Number(value));
+  if (Array.from(select.options).some((option) => option.value === normalized)) return;
+  const option = document.createElement("option");
+  option.value = normalized;
+  option.textContent = String(Number(value)).padStart(2, "0");
+  select.appendChild(option);
+  Array.from(select.options)
+    .filter((item) => item.value !== "")
+    .sort((a, b) => Number(a.value) - Number(b.value))
+    .forEach((option) => select.appendChild(option));
+}
+
+function setClockTimeFieldValue(form, name, value) {
+  const field = Array.from(form.querySelectorAll("[data-clock-time-field]")).find((item) => item.dataset.clockTimeName === name);
+  if (field?._setClockTime) field._setClockTime(value);
+  else if (form.elements[name]) form.elements[name].value = splitClockTime(value).value;
+}
+
 function renderChoiceField({ name, label, placeholder, customPlaceholder, current = "", options = [], required = false, quickRequired = false }) {
   const values = uniqueValues([...(options || []), current].filter(Boolean));
   const selected = String(current || "").trim();
@@ -3362,6 +3450,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
   const serviceOptions = uniqueValues([...(animal.services || []), ...selectedServices, "Toelettatura"]);
   openModal({
     title: completionMode ? "Concludi prestazione" : isEdit ? "Modifica appuntamento" : "Nuovo appuntamento",
+    modalClass: `appointment-modal status-${currentStatus}`,
     submitLabel: completionMode ? "Salva prestazione" : isEdit ? "Salva appuntamento" : "Crea appuntamento",
     dangerLabel: isEdit ? "Elimina" : "",
     dangerConfirmMessage: "Sei sicuro di voler eliminare l'appuntamento?",
@@ -3381,12 +3470,8 @@ function openAppointmentDialog(appointment = {}, options = {}) {
               .join("")}
           </select>
         </label>
-        <label>Inizio
-          <input name="startTime" type="time" value="${escapeAttr(appointment.startTime || "09:00")}" required />
-        </label>
-        <label>Fine
-          <input name="endTime" type="time" value="${escapeAttr(endTimeValue)}" />
-        </label>
+        ${renderClockTimeField("startTime", "Inizio", appointment.startTime || "09:00", { required: true })}
+        ${renderClockTimeField("endTime", "Fine", endTimeValue)}
         <label class="full">Scheda cane
           <select name="dogId" id="appointmentDog">
             <option value="">Cane non presente in scheda</option>
@@ -3467,12 +3552,15 @@ function openAppointmentDialog(appointment = {}, options = {}) {
     onOpen: (form) => {
       bindChoiceSelects(form);
       bindServicePickers(form);
+      bindClockTimeFields(form);
       const createDogRows = form.querySelectorAll("[data-create-dog-row]");
       const completionFields = form.querySelectorAll("[data-completion-field]");
       const serviceLegend = form.querySelector("[data-service-legend]");
       const syncAmounts = () => syncServiceAmountRows(form, appointment);
+      const syncAppointmentFrame = () => syncAppointmentModalStatus(form);
       const syncCompletionFields = () => {
         const isCompleted = form.elements.status.value === "completato";
+        syncAppointmentFrame();
         if (serviceLegend) serviceLegend.textContent = isCompleted ? "Servizi e prodotti forniti" : "Prestazioni previste";
         completionFields.forEach((field) => {
           field.hidden = !isCompleted;
@@ -3506,7 +3594,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
       };
       const startCompletion = () => {
         form.elements.status.value = "completato";
-        form.elements.endTime.value = currentTimeInput();
+        setClockTimeFieldValue(form, "endTime", currentTimeInput());
         syncCompletionFields();
         syncAmounts();
         form.querySelector("[data-service-select]")?.focus();
@@ -3517,7 +3605,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
         startCompletion();
       });
       form.elements.status.addEventListener("change", () => {
-        if (form.elements.status.value === "completato" && !form.elements.endTime.value) form.elements.endTime.value = currentTimeInput();
+        if (form.elements.status.value === "completato" && !form.elements.endTime.value) setClockTimeFieldValue(form, "endTime", currentTimeInput());
         syncCompletionFields();
       });
       form.addEventListener("change", (event) => {
@@ -3552,13 +3640,15 @@ function openAppointmentDialog(appointment = {}, options = {}) {
     onSubmit: async (formData, form) => {
       const payload = Object.fromEntries(formData.entries());
       const services = collectServicesFromForm(formData, form);
-      if (!services.length) services.push("Toelettatura");
+      const isCompleting = completionMode || payload.status === "completato";
+      if (!services.length && !isCompleting) services.push("Toelettatura");
       payload.services = services;
       payload.service = services.join(", ");
       payload.breed = selectedChoiceValue(formData, "breed");
       payload.color = selectedChoiceValue(formData, "color");
       payload.createDogProfile = formData.get("createDogProfile") === "on";
       if (completionMode) payload.status = "completato";
+      validateAppointmentBeforeSave(form, payload, services);
       if (payload.status === "completato") payload.treatmentDone = payload.service || "Toelettatura";
       if (payload.status !== "completato") {
         payload.treatmentDone = "";
@@ -3659,6 +3749,7 @@ function openUserDialog(user = {}) {
 function openModal({
   title,
   content,
+  modalClass = "",
   submitLabel = "Salva",
   dangerLabel = "",
   dangerConfirmMessage = "",
@@ -3673,7 +3764,7 @@ function openModal({
 }) {
   modalRoot.innerHTML = `
     <div class="modal-backdrop" role="presentation">
-      <form class="modal-card" role="dialog" aria-modal="true">
+      <form class="modal-card ${escapeAttr(modalClass)}" role="dialog" aria-modal="true" novalidate>
         <div class="modal-head">
           <div class="modal-title-row">
             <h2>${escapeHtml(title)}</h2>
@@ -3715,16 +3806,31 @@ function openModal({
   const form = modalRoot.querySelector("form");
   bindDraggableModal(form);
   modalRoot.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", closeModal));
+  let invalidNotifyTimer = null;
+  form.addEventListener(
+    "invalid",
+    (event) => {
+      event.preventDefault();
+      markValidationElement(event.target);
+      clearTimeout(invalidNotifyTimer);
+      invalidNotifyTimer = setTimeout(() => showFormValidationErrors(form), 0);
+    },
+    true
+  );
+  form.addEventListener("input", (event) => clearValidationElement(event.target));
+  form.addEventListener("change", (event) => clearValidationElement(event.target));
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!onSubmit) return;
+    clearFormValidation(form);
+    if (!form.checkValidity()) return;
     const submitButton = form.querySelector('button[type="submit"]');
     submitButton.disabled = true;
     try {
       await onSubmit(new FormData(form), form);
       closeModal();
     } catch (err) {
-      notify(err.message);
+      if (!err.alreadyNotified) notify(err.message);
       submitButton.disabled = false;
     }
   });
@@ -3881,6 +3987,113 @@ function bindDraggableModal(form) {
 
 function closeModal() {
   modalRoot.innerHTML = "";
+}
+
+function syncAppointmentModalStatus(form) {
+  if (!form?.classList.contains("appointment-modal")) return;
+  ["programmato", "confermato", "completato", "annullato"].forEach((status) => form.classList.remove(`status-${status}`));
+  form.classList.add(`status-${form.elements.status?.value || "programmato"}`);
+}
+
+function validateAppointmentBeforeSave(form, payload, services) {
+  const errors = [];
+  if (!payload.date) {
+    errors.push({ label: "data", element: form.elements.date });
+  }
+  if (!payload.startTime) {
+    errors.push({ label: "ora inizio", element: form.querySelector('[data-clock-time-name="startTime"]') || form.elements.startTime });
+  }
+  if (!String(payload.dogName || "").trim()) {
+    errors.push({ label: "nome cane", element: form.elements.dogName });
+  }
+  if (payload.status === "completato") {
+    if (!payload.endTime) {
+      errors.push({ label: "ora fine", element: form.querySelector('[data-clock-time-name="endTime"]') || form.elements.endTime });
+    }
+    if (!services.length) {
+      errors.push({ label: "almeno un servizio o prodotto", element: form.querySelector("[data-service-select]") });
+    }
+    form.querySelectorAll("[data-service-amount-row]").forEach((row) => {
+      const service = row.querySelector('input[name="serviceAmountService"]')?.value || "servizio";
+      const input = row.querySelector("[data-service-amount-input]");
+      const amount = Number(input?.value || 0);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        errors.push({ label: `importo per ${service}`, element: input || row });
+      }
+    });
+  }
+  if (errors.length) {
+    const message = showFormValidationErrors(form, errors);
+    const error = new Error(message);
+    error.alreadyNotified = true;
+    throw error;
+  }
+}
+
+function showFormValidationErrors(form, explicitErrors = null) {
+  const errors = explicitErrors || formInvalidErrors(form);
+  if (!errors.length) return "";
+  clearFormValidation(form);
+  errors.forEach((error) => markValidationElement(error.element));
+  const labels = uniqueValues(errors.map((error) => error.label).filter(Boolean));
+  const message = `Mancano: ${labels.join(", ")}`;
+  const first = errors.find((error) => error.element && !error.element.disabled)?.element;
+  first?.focus?.({ preventScroll: false });
+  notify(message);
+  return message;
+}
+
+function formInvalidErrors(form) {
+  return Array.from(form.querySelectorAll("input, select, textarea"))
+    .filter((field) => !field.disabled && !field.checkValidity())
+    .map((field) => ({ label: fieldLabel(field), element: field }));
+}
+
+function fieldLabel(field) {
+  const names = {
+    date: "data",
+    status: "stato",
+    startTime: "ora inizio",
+    endTime: "ora fine",
+    dogName: "nome cane",
+    contact: "numero contatto",
+    sex: "sesso cane",
+    imageConsent: "consenso immagini",
+    displayName: "nome visualizzato",
+    username: "username",
+    password: "password"
+  };
+  if (field.name && names[field.name]) return names[field.name];
+  const label = field.closest("label");
+  if (label) {
+    const text = Array.from(label.childNodes)
+      .filter((node) => node.nodeType === Node.TEXT_NODE)
+      .map((node) => node.textContent.trim())
+      .filter(Boolean)
+      .join(" ");
+    if (text) return text.toLowerCase();
+  }
+  const legend = field.closest("fieldset")?.querySelector("legend")?.textContent?.trim();
+  return legend ? legend.toLowerCase() : field.name || "campo richiesto";
+}
+
+function markValidationElement(element) {
+  const target = validationTarget(element);
+  target?.classList.add("field-error");
+}
+
+function clearValidationElement(element) {
+  const target = validationTarget(element);
+  target?.classList.remove("field-error");
+}
+
+function clearFormValidation(form) {
+  form.querySelectorAll(".field-error").forEach((element) => element.classList.remove("field-error"));
+}
+
+function validationTarget(element) {
+  if (!element) return null;
+  return element.closest("[data-service-amount-row], .service-picker, fieldset") || element;
 }
 
 function handleNewDogAction(event) {
@@ -4272,11 +4485,11 @@ function formatMonthYear(value) {
 
 function statusLabel(status) {
   return {
-    programmato: "Programmato",
+    programmato: "Da confermare",
     confermato: "Confermato",
     completato: "Completato",
     annullato: "Annullato"
-  }[status] || "Programmato";
+  }[status] || "Da confermare";
 }
 
 function durationLabel(minutes) {
