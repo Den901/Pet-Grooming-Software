@@ -1,6 +1,6 @@
 # Groomly
 
-Release corrente: `1.0.18` stabile.
+Release corrente: `1.0.19` stabile.
 
 Portale web PWA in Node.js per gestire:
 
@@ -16,7 +16,7 @@ Portale web PWA in Node.js per gestire:
 - menu mobile persistente in basso con icone tonde su una riga, quattro voci visibili e scorrimento verso utenti, impostazioni ed esci;
 - icone menu per calendario, monitor, dashboard, schede, storico servizi e utenti;
 - dashboard statistiche con priorita a servizi e incassi, grafici piu leggibili, incasso separato per servizio, andamento incassi giorno/settimana/mese/anno, servizi fatti/da fare, razze, servizi piu usati, animale piu presente con mini foto, cane piu redditizio e tempi medi;
-- schede animali con foto o immagine predefinita, cornice cliente top manuale o automatica, razza, eta, colore, sesso, contatti, patologie, tempi stimati, reminder WhatsApp e consenso immagini;
+- schede animali con foto o immagine predefinita, centratura foto regolabile in modifica, foto ingrandibile in consultazione, cornice cliente top manuale o automatica, razza, eta, colore, sesso, contatti, patologie, tempi stimati, reminder WhatsApp e consenso immagini;
 - badge nella scheda cliente con conteggio degli interventi annullati;
 - impostazioni scheda animale per razze, colori cane, prestazioni cumulabili e soglia cliente top;
 - storico appuntamenti a menu nella scheda cane con servizio eseguito, importo pagato, galleria foto prima/dopo e foto ingrandibili;
@@ -25,6 +25,7 @@ Portale web PWA in Node.js per gestire:
 - appuntamenti completati riapribili dal calendario come appuntamenti normali, con pulsante `Modifica prestazione` dentro il popup appuntamento e conferma prima di riaprire la cassa;
 - salvataggio, conferma, annullamento, eliminazione e spostamento appuntamenti piu rapidi grazie ad aggiornamento locale mirato e senza doppio refresh live sulla stessa schermata;
 - pulsante `Annulla appuntamento` dentro il popup appuntamento, vicino alle azioni finali, con conferma prima di segnare e salvare lo stato annullato;
+- campi nome cane stabilizzati su Android durante creazione appuntamento e creazione scheda;
 - ricerca schede;
 - backup cifrato con password e import backup;
 - impostazioni WhatsApp per promemoria appuntamenti cliente e impostazioni globali per il promemoria interno operatori;
@@ -104,9 +105,9 @@ npm.cmd run release:packages
 
 Il comando genera nella cartella `dist/`:
 
-- `Pet-Grooming-Software-1.0.18-windows.zip`;
-- `Pet-Grooming-Software-1.0.18-linux.tar.gz`;
-- `Pet-Grooming-Software-1.0.18.pgs-update`;
+- `Pet-Grooming-Software-1.0.19-windows.zip`;
+- `Pet-Grooming-Software-1.0.19-linux.tar.gz`;
+- `Pet-Grooming-Software-1.0.19.pgs-update`;
 - `pet-grooming-update.json`.
 
 Se `npm` non e bloccato dalla policy PowerShell puoi usare anche `npm run release:packages`.
@@ -115,7 +116,7 @@ Se `npm` non e bloccato dalla policy PowerShell puoi usare anche `npm run releas
 
 Prerequisito: Node.js 18 o superiore installato sul PC.
 
-1. Estrai `Pet-Grooming-Software-1.0.18-windows.zip`.
+1. Estrai `Pet-Grooming-Software-1.0.19-windows.zip`.
 2. Apri PowerShell nella cartella estratta. Per installare in `ProgramData` e creare l'avvio automatico e consigliato aprirlo come amministratore.
 3. Per installare in `C:\ProgramData\Pet Grooming Software` e creare l'avvio automatico all'accesso:
 
@@ -141,12 +142,12 @@ Per riavviare dopo un update, chiudi la finestra dove gira Node.js e rilancia lo
 
 Prerequisito: Node.js 18 o superiore installato sul server.
 
-1. Copia `Pet-Grooming-Software-1.0.18-linux.tar.gz` sul server.
+1. Copia `Pet-Grooming-Software-1.0.19-linux.tar.gz` sul server.
 2. Estrai il pacchetto e entra nella cartella:
 
 ```bash
-tar -xzf Pet-Grooming-Software-1.0.18-linux.tar.gz
-cd Pet-Grooming-Software-1.0.18
+tar -xzf Pet-Grooming-Software-1.0.19-linux.tar.gz
+cd Pet-Grooming-Software-1.0.19
 ```
 
 3. Installazione consigliata in `/opt` con servizio systemd:
@@ -251,7 +252,7 @@ La skill puo cercare cani e servizi/prodotti e creare appuntamenti nel calendari
 
 ## Release e aggiornamenti
 
-La release corrente e `1.0.18` stabile. Per preparare i pacchetti della versione impostata in `package.json`:
+La release corrente e `1.0.19` stabile. Per preparare i pacchetti della versione impostata in `package.json`:
 
 ```powershell
 npm.cmd run release:packages

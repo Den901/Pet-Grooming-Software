@@ -2,12 +2,12 @@
   "format": "PET_GROOMING_SOFTWARE_UPDATE_MANIFEST",
   "formatVersion": 1,
   "app": "pet-grooming-software",
-  "version": "1.0.18",
-  "releaseLabel": "1.0.18",
-  "createdAt": "2026-07-15T18:54:44.108Z",
-  "packageName": "Pet-Grooming-Software-1.0.18.pgs-update",
-  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v1.0.18/Pet-Grooming-Software-1.0.18.pgs-update",
-  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v1.0.18",
-  "notes": "Release 1.0.18",
-  "changelog": "Ottimizza calendario e appuntamenti: durante il drag and drop l'anteprima non ripulisce piu tutto il calendario a ogni movimento, le modifiche agli appuntamenti aggiornano solo l'elemento interessato e la stessa schermata non ricarica piu due volte per il proprio evento live."
+  "version": "1.0.19",
+  "releaseLabel": "1.0.19",
+  "createdAt": "2026-07-21T08:11:04.973Z",
+  "packageName": "Pet-Grooming-Software-1.0.19.pgs-update",
+  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v1.0.19/Pet-Grooming-Software-1.0.19.pgs-update",
+  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v1.0.19",
+  "notes": "Release 1.0.19",
+  "changelog": "Aggiunge la regolazione dell'inquadratura foto nelle schede animali, permette di ingrandire la foto del cane dalla scheda in consultazione e stabilizza i campi Nome cane su Android durante creazione scheda e appuntamento."
 }

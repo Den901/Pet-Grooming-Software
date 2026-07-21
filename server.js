@@ -459,6 +459,22 @@ function cleanUiScale(value, fallback = 100) {
   return Math.min(105, Math.max(85, Math.round(number / 5) * 5));
 }
 
+function cleanPercent(value, fallback = 50) {
+  const normalized = typeof value === "string" ? value.trim().replace(",", ".") : value;
+  const number = Number(normalized);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(100, Math.max(0, Math.round(number)));
+}
+
+function cleanPhotoPosition(payload = {}, existing = {}) {
+  const source = payload.photoPosition && typeof payload.photoPosition === "object" ? payload.photoPosition : payload;
+  const current = existing.photoPosition && typeof existing.photoPosition === "object" ? existing.photoPosition : {};
+  return {
+    x: cleanPercent(source.photoPositionX ?? source.x, current.x ?? 50),
+    y: cleanPercent(source.photoPositionY ?? source.y, current.y ?? 50)
+  };
+}
+
 function hasField(payload, key) {
   return Object.prototype.hasOwnProperty.call(payload || {}, key);
 }
@@ -1412,6 +1428,7 @@ function normalizeDog(payload, existing = {}) {
     services,
     notes: stringField(payload, "notes", existing.notes),
     photoUrl,
+    photoPosition: cleanPhotoPosition(payload, existing),
     createdAt: existing.createdAt || now,
     updatedAt: now
   };

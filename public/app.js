@@ -362,14 +362,49 @@ function getAppointmentSettings() {
   };
 }
 
+function usesTouchKeyboard() {
+  return window.matchMedia("(pointer: coarse)").matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+}
+
 function dogPhotoSrc(dog = {}) {
   return dog?.photoUrl || DEFAULT_DOG_PHOTO;
+}
+
+function photoPositionValue(value, fallback = 50) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(100, Math.max(0, Math.round(number)));
+}
+
+function dogPhotoPosition(dog = {}) {
+  const position = dog?.photoPosition || {};
+  return {
+    x: photoPositionValue(position.x),
+    y: photoPositionValue(position.y)
+  };
+}
+
+function dogPhotoPositionStyle(dog = {}) {
+  const position = dogPhotoPosition(dog);
+  return `object-position: ${position.x}% ${position.y}%;`;
 }
 
 function dogPhotoMarkup(dog = {}, altName = "") {
   const name = altName || dog?.dogName || "cane";
   const alt = dog?.photoUrl ? `Foto di ${name}` : "Foto cane predefinita";
-  return `<img src="${escapeAttr(dogPhotoSrc(dog))}" alt="${escapeAttr(alt)}" />`;
+  return `<img src="${escapeAttr(dogPhotoSrc(dog))}" alt="${escapeAttr(alt)}" style="${escapeAttr(dogPhotoPositionStyle(dog))}" />`;
+}
+
+function renderDogDetailPhoto(dog = {}, topDog = false) {
+  const classes = `dog-detail-photo ${topDog ? "top-client" : ""} ${dog.photoUrl ? "dog-detail-photo-button" : ""}`.trim();
+  const content = `${dogPhotoMarkup(dog)}${topDog ? `<img class="top-paw detail" src="/icons/top-client-paw.png" alt="Cliente top" />` : ""}`;
+  if (!dog.photoUrl) return `<div class="${escapeAttr(classes)}">${content}</div>`;
+  const title = `Foto di ${dog.dogName || "cane"}`;
+  return `
+    <button class="${escapeAttr(classes)}" type="button" data-photo-zoom data-photo-src="${escapeAttr(dog.photoUrl)}" data-photo-title="${escapeAttr(title)}" aria-label="Ingrandisci ${escapeAttr(title.toLowerCase())}">
+      ${content}
+    </button>
+  `;
 }
 
 function sidebarOrder(order = state.navigation?.sidebarOrder) {
@@ -3297,14 +3332,14 @@ function openDogDetailsDialog(dog = {}) {
   const canceledCount = canceledAppointmentCount(dog);
   const topDog = isTopDog(dog);
   const visitFrequency = dogVisitFrequencyLabel(dog);
-  const photo = dogPhotoMarkup(dog);
+  const photo = renderDogDetailPhoto(dog, topDog);
   openModal({
     title: dog.dogName || "Scheda cane",
     hideActions: true,
     headerAction: `<button class="icon-btn" type="button" data-header-action aria-label="Modifica scheda" title="Modifica scheda">&#9998;</button>`,
     content: `
       <section class="dog-detail">
-        <div class="dog-detail-photo ${topDog ? "top-client" : ""}">${photo}${topDog ? `<img class="top-paw detail" src="/icons/top-client-paw.png" alt="Cliente top" />` : ""}</div>
+        ${photo}
         <div class="dog-detail-body">
           <div class="dog-detail-heading">
             <strong>${escapeHtml(dog.dogName || "Scheda cane")}</strong>
@@ -3806,18 +3841,69 @@ function selectedChoiceValue(formData, name) {
   return String(formData.get(`${name}Choice`) || "").trim();
 }
 
+function bindDogPhotoPositionEditor(form, dog = {}) {
+  const frame = form.querySelector("[data-dog-photo-position-frame]");
+  const preview = form.querySelector("[data-dog-photo-preview]");
+  const editor = form.querySelector("[data-dog-photo-position-editor]");
+  const xInput = form.elements.photoPositionX;
+  const yInput = form.elements.photoPositionY;
+  if (!frame || !preview || !editor || !xInput || !yInput) return;
+  const sync = () => {
+    preview.style.objectPosition = `${photoPositionValue(xInput.value)}% ${photoPositionValue(yInput.value)}%`;
+  };
+  const setPositionFromPoint = (event) => {
+    const rect = frame.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    xInput.value = String(photoPositionValue(((event.clientX - rect.left) / rect.width) * 100));
+    yInput.value = String(photoPositionValue(((event.clientY - rect.top) / rect.height) * 100));
+    sync();
+  };
+  xInput.addEventListener("input", sync);
+  yInput.addEventListener("input", sync);
+  form.querySelector("[data-dog-photo-center]")?.addEventListener("click", () => {
+    xInput.value = "50";
+    yInput.value = "50";
+    sync();
+  });
+  if ("PointerEvent" in window) {
+    let pointerId = null;
+    frame.addEventListener("pointerdown", (event) => {
+      if (event.button > 0) return;
+      pointerId = event.pointerId;
+      frame.setPointerCapture?.(pointerId);
+      frame.classList.add("is-positioning");
+      setPositionFromPoint(event);
+    });
+    frame.addEventListener("pointermove", (event) => {
+      if (pointerId !== event.pointerId) return;
+      setPositionFromPoint(event);
+    });
+    const stop = (event) => {
+      if (pointerId !== event.pointerId) return;
+      frame.releasePointerCapture?.(pointerId);
+      frame.classList.remove("is-positioning");
+      pointerId = null;
+    };
+    frame.addEventListener("pointerup", stop);
+    frame.addEventListener("pointercancel", stop);
+  }
+  editor.hidden = !dog.photoUrl;
+  sync();
+}
+
 function openDogDialog(dog = {}) {
   const isEdit = Boolean(dog.id);
   const animal = getAnimalSettings();
   const dogServices = dog.services || [];
   const estimatedTime = splitMinutes(dog.estimatedMinutes);
+  const photoPosition = dogPhotoPosition(dog);
   openModal({
     title: isEdit ? "Modifica scheda" : "Nuova scheda",
     submitLabel: isEdit ? "Salva scheda" : "Crea scheda",
     content: `
       <div class="form-grid">
         <label>Nome cane
-          <input name="dogName" value="${escapeAttr(dog.dogName || "")}" required />
+          <input name="dogName" value="${escapeAttr(dog.dogName || "")}" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" inputmode="text" dir="ltr" data-stable-text-input required />
         </label>
         ${renderEstimatedTimeField(estimatedTime)}
         ${renderBreedField(dog, animal)}
@@ -3870,16 +3956,30 @@ function openDogDialog(dog = {}) {
         <label class="full">Foto
           <input name="photo" type="file" accept="image/*" />
         </label>
-        <div class="full">
-          <img class="photo-preview" id="photoPreview" src="${escapeAttr(dog.photoUrl || "")}" alt="Anteprima foto" />
+        <div class="full dog-photo-position-editor" data-dog-photo-position-editor>
+          <div class="dog-photo-position-frame" data-dog-photo-position-frame>
+            <img class="photo-preview" id="photoPreview" data-dog-photo-preview src="${escapeAttr(dog.photoUrl || "")}" alt="Anteprima foto" style="${escapeAttr(dogPhotoPositionStyle(dog))}" />
+          </div>
+          <fieldset class="field-group photo-position-controls">
+            <legend>Inquadratura foto</legend>
+            <label>Orizzontale
+              <input name="photoPositionX" type="range" min="0" max="100" step="1" value="${escapeAttr(photoPosition.x)}" />
+            </label>
+            <label>Verticale
+              <input name="photoPositionY" type="range" min="0" max="100" step="1" value="${escapeAttr(photoPosition.y)}" />
+            </label>
+            <button class="btn secondary slim" type="button" data-dog-photo-center>Centra</button>
+          </fieldset>
         </div>
       </div>
     `,
     onOpen: (form) => {
       bindChoiceSelects(form);
       bindServicePickers(form);
+      bindDogPhotoPositionEditor(form, dog);
       const fileInput = form.elements.photo;
       const preview = document.getElementById("photoPreview");
+      const photoEditor = form.querySelector("[data-dog-photo-position-editor]");
       if (!dog.photoUrl) preview.style.display = "none";
       const syncContact = () => {
         const missing = form.elements.contactMissing.checked;
@@ -3894,6 +3994,10 @@ function openDogDialog(dog = {}) {
         if (!file) return;
         preview.src = await imageFileToDataUrl(file);
         preview.style.display = "block";
+        photoEditor.hidden = false;
+        form.elements.photoPositionX.value = "50";
+        form.elements.photoPositionY.value = "50";
+        preview.style.objectPosition = "50% 50%";
       });
     },
     onSubmit: async (formData, form) => {
@@ -3917,7 +4021,11 @@ function openDogDialog(dog = {}) {
         estimatedMinutes: timePartsToMinutes(formData.get("estimatedHours"), formData.get("estimatedMinutesPart")),
         reminderDaysBefore: formData.get("reminderDaysBefore"),
         services,
-        notes: formData.get("notes")
+        notes: formData.get("notes"),
+        photoPosition: {
+          x: formData.get("photoPositionX"),
+          y: formData.get("photoPositionY")
+        }
       };
       if (photo) payload.photoData = await imageFileToDataUrl(photo);
       await api(isEdit ? `/api/dogs/${dog.id}` : "/api/dogs", {
@@ -4252,7 +4360,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
               </fieldset>`
         }
         <label>Nome cane
-          <input name="dogName" value="${escapeAttr(selectedDog?.dogName || appointment.dogName || "")}" required />
+          <input name="dogName" value="${escapeAttr(selectedDog?.dogName || appointment.dogName || "")}" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" inputmode="text" dir="ltr" data-stable-text-input required />
         </label>
         <label>Proprietario
           <input name="ownerName" value="${escapeAttr(selectedDog?.ownerName || appointment.ownerName || "")}" />
@@ -4685,12 +4793,13 @@ function openModal({
   }
   onOpen?.(form);
   const firstInput = form.querySelector("input, select, textarea, button");
-  firstInput?.focus();
+  if (!usesTouchKeyboard()) firstInput?.focus();
 }
 
 function bindDraggableModal(form) {
   const head = form?.querySelector(".modal-head");
   const resizeHandle = form?.querySelector("[data-modal-resize]");
+  if (usesTouchKeyboard()) return;
   if (!form || !head || !window.matchMedia("(min-width: 768px) and (min-height: 600px)").matches) return;
   let offsetX = 0;
   let offsetY = 0;
