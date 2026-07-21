@@ -2,12 +2,12 @@
   "format": "PET_GROOMING_SOFTWARE_UPDATE_MANIFEST",
   "formatVersion": 1,
   "app": "pet-grooming-software",
-  "version": "1.0.19",
-  "releaseLabel": "1.0.19",
-  "createdAt": "2026-07-21T08:11:04.973Z",
-  "packageName": "Pet-Grooming-Software-1.0.19.pgs-update",
-  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v1.0.19/Pet-Grooming-Software-1.0.19.pgs-update",
-  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v1.0.19",
-  "notes": "Release 1.0.19",
-  "changelog": "Aggiunge la regolazione dell'inquadratura foto nelle schede animali, permette di ingrandire la foto del cane dalla scheda in consultazione e stabilizza i campi Nome cane su Android durante creazione scheda e appuntamento."
+  "version": "1.0.20",
+  "releaseLabel": "1.0.20",
+  "createdAt": "2026-07-21T17:08:56.121Z",
+  "packageName": "Pet-Grooming-Software-1.0.20.pgs-update",
+  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v1.0.20/Pet-Grooming-Software-1.0.20.pgs-update",
+  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v1.0.20",
+  "notes": "Release 1.0.20",
+  "changelog": "Corregge la ricerca nel menu Schede su Android: mentre digiti il campo non viene piu ricreato, quindi il cursore resta nella posizione corretta e i risultati si aggiornano sotto senza riscrivere al contrario."
 }

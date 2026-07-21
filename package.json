@@ -1,6 +1,6 @@
 {
   "name": "groomly",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "Groomly, portale PWA per gestione appuntamenti e schede di toelettatura.",
   "private": true,
   "type": "commonjs",

@@ -2090,18 +2090,22 @@ function renderDogs() {
       <button class="btn" type="button" id="newDogBtn" data-new-dog>Nuova scheda</button>
     </div>
     <div class="searchbar">
-      <input id="dogSearch" type="search" value="${escapeAttr(state.dogSearch)}" placeholder="Cerca per cane, proprietario, telefono o note" />
+      <input id="dogSearch" type="search" value="${escapeAttr(state.dogSearch)}" placeholder="Cerca per cane, proprietario, telefono o note" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" inputmode="search" dir="ltr" data-stable-text-input />
       <button class="btn secondary" type="button" id="clearDogSearch">Pulisci</button>
     </div>
     <div class="toolbar">
-      <div class="muted">${filteredDogs.length} risultati</div>
+      <div class="muted" data-dog-result-count>${filteredDogs.length} risultati</div>
     </div>
-    ${
-      filteredDogs.length
-        ? `<section class="dog-mini-grid">${filteredDogs.map(renderDogCard).join("")}</section>`
-        : `<section class="empty-state"><div><h2>Nessuna scheda trovata</h2><p>Crea una scheda o cambia la ricerca.</p></div></section>`
-    }
+    <div data-dog-results>
+      ${renderDogResults(filteredDogs)}
+    </div>
   `;
+}
+
+function renderDogResults(dogs = filteredDogList()) {
+  return dogs.length
+    ? `<section class="dog-mini-grid">${dogs.map(renderDogCard).join("")}</section>`
+    : `<section class="empty-state"><div><h2>Nessuna scheda trovata</h2><p>Crea una scheda o cambia la ricerca.</p></div></section>`;
 }
 
 function renderDogCard(dog) {
@@ -2117,23 +2121,38 @@ function renderDogCard(dog) {
   `;
 }
 
-function bindDogs() {
-  const searchInput = document.getElementById("dogSearch");
-  searchInput.addEventListener("input", () => {
-    state.dogSearch = searchInput.value;
-    renderView();
-    document.getElementById("dogSearch")?.focus();
-  });
-  document.getElementById("clearDogSearch").addEventListener("click", () => {
-    state.dogSearch = "";
-    renderView();
-  });
-  document.querySelectorAll("[data-dog-open]").forEach((button) => {
+function refreshDogSearchResults() {
+  const results = document.querySelector("[data-dog-results]");
+  const count = document.querySelector("[data-dog-result-count]");
+  if (!results || !count) return;
+  const filteredDogs = filteredDogList();
+  count.textContent = `${filteredDogs.length} risultati`;
+  results.innerHTML = renderDogResults(filteredDogs);
+  bindDogCards(results);
+}
+
+function bindDogCards(root = document) {
+  root.querySelectorAll("[data-dog-open]").forEach((button) => {
     button.addEventListener("click", () => {
       const dog = state.dogs.find((item) => item.id === button.dataset.dogOpen);
       if (dog) openDogDetailsDialog(dog);
     });
   });
+}
+
+function bindDogs() {
+  const searchInput = document.getElementById("dogSearch");
+  searchInput.addEventListener("input", () => {
+    state.dogSearch = searchInput.value;
+    refreshDogSearchResults();
+  });
+  document.getElementById("clearDogSearch").addEventListener("click", () => {
+    state.dogSearch = "";
+    searchInput.value = "";
+    refreshDogSearchResults();
+    if (!usesTouchKeyboard()) searchInput.focus();
+  });
+  bindDogCards(document);
 }
 
 function renderServiceHistory() {
