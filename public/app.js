@@ -6,6 +6,7 @@ const state = {
   me: null,
   dogs: [],
   appointments: [],
+  calendarNotes: [],
   users: [],
   onlineUserIds: [],
   duckdns: null,
@@ -571,16 +572,34 @@ function removeStateAppointment(id) {
   state.appointments = state.appointments.filter((item) => item.id !== id);
 }
 
+function sortStateCalendarNotes() {
+  state.calendarNotes.sort((a, b) => `${a.date || ""} ${a.createdAt || ""}`.localeCompare(`${b.date || ""} ${b.createdAt || ""}`));
+}
+
+function upsertStateCalendarNote(calendarNote) {
+  if (!calendarNote?.id) return;
+  const index = state.calendarNotes.findIndex((item) => item.id === calendarNote.id);
+  if (index === -1) state.calendarNotes.push(calendarNote);
+  else state.calendarNotes[index] = calendarNote;
+  sortStateCalendarNotes();
+}
+
+function removeStateCalendarNote(id) {
+  if (!id) return;
+  state.calendarNotes = state.calendarNotes.filter((item) => item.id !== id);
+}
+
 function applyAppointmentApiResponse(response = {}) {
   upsertStateDog(response.dog);
   upsertStateAppointment(response.appointment);
 }
 
 async function loadData() {
-  const [meResponse, dogsResponse, appointmentsResponse, animalResponse, appointmentSettingsResponse, navigationResponse, brandingResponse] = await Promise.all([
+  const [meResponse, dogsResponse, appointmentsResponse, calendarNotesResponse, animalResponse, appointmentSettingsResponse, navigationResponse, brandingResponse] = await Promise.all([
     api("/api/me"),
     api("/api/dogs"),
     api("/api/appointments"),
+    api("/api/calendar-notes"),
     api("/api/settings/animal"),
     api("/api/settings/appointments"),
     api("/api/settings/navigation"),
@@ -589,6 +608,7 @@ async function loadData() {
   state.me = meResponse.user || state.me;
   state.dogs = dogsResponse.dogs || [];
   state.appointments = appointmentsResponse.appointments || [];
+  state.calendarNotes = calendarNotesResponse.calendarNotes || [];
   state.animalSettings = animalResponse.animal || state.animalSettings;
   state.appointmentSettings = appointmentSettingsResponse.appointments || state.appointmentSettings;
   state.navigation = navigationResponse.navigation || state.navigation;
@@ -1213,6 +1233,7 @@ function monitorReminderLabel(minutes) {
 function renderCalendar() {
   const today = todayISO();
   const todayAppointments = appointmentsForDate(today);
+  const todayNotes = notesForDate(today);
   const future = state.appointments.filter((item) => item.date >= today && item.status !== "annullato");
   const completed = state.appointments.filter((item) => item.status === "completato");
   return `
@@ -1227,6 +1248,7 @@ function renderCalendar() {
       <section class="metric-grid" aria-label="Riepilogo agenda">
         <div class="metric"><span>Oggi</span><strong>${todayAppointments.length}</strong></div>
         <div class="metric"><span>Prossimi</span><strong>${future.length}</strong></div>
+        <div class="metric"><span>Note oggi</span><strong>${todayNotes.length}</strong></div>
         <div class="metric"><span>Completati</span><strong>${completed.length}</strong></div>
       </section>
       <div class="toolbar">
@@ -1266,6 +1288,7 @@ function renderMonthCalendar() {
     const iso = toISODate(cursor);
     const outside = cursor.getMonth() !== state.calendarDate.getMonth();
     const dayAppointments = appointmentsForDate(iso);
+    const dayNotes = notesForDate(iso);
     cells.push(`
       <div class="day-cell ${outside ? "outside" : ""} ${iso === todayISO() ? "today" : ""}" data-calendar-drop-date="${escapeAttr(iso)}">
         <div class="day-head">
@@ -1273,8 +1296,10 @@ function renderMonthCalendar() {
             <span class="day-number">${cursor.getDate()}</span>
             <span class="day-open-icon" aria-hidden="true">${NAV_ICONS.calendar}</span>
           </button>
+          ${dayNotes.length ? `<span class="day-note-count" title="${escapeAttr(dayNotes.length === 1 ? "1 nota" : `${dayNotes.length} note`)}">${escapeHtml(dayNotes.length)}</span>` : ""}
         </div>
         <div class="appointment-list">
+          ${dayNotes.map(renderCalendarNotePill).join("")}
           ${dayAppointments.map(renderAppointmentPill).join("")}
         </div>
       </div>
@@ -1299,6 +1324,7 @@ function renderWeekCalendar() {
         .map((day) => {
           const iso = toISODate(day);
           const dayAppointments = appointmentsForDate(iso);
+          const dayNotes = notesForDate(iso);
           return `
             <div class="week-day ${iso === todayISO() ? "today" : ""}" data-calendar-drop-date="${escapeAttr(iso)}">
               <div class="day-head">
@@ -1306,9 +1332,11 @@ function renderWeekCalendar() {
                   <span class="week-day-title">${capitalize(formatter.format(day))}</span>
                   <span class="day-open-icon" aria-hidden="true">${NAV_ICONS.calendar}</span>
                 </button>
+                ${dayNotes.length ? `<span class="day-note-count" title="${escapeAttr(dayNotes.length === 1 ? "1 nota" : `${dayNotes.length} note`)}">${escapeHtml(dayNotes.length)}</span>` : ""}
               </div>
               <div class="appointment-list">
-                ${dayAppointments.length ? dayAppointments.map(renderAppointmentPill).join("") : `<span class="muted">Nessun appuntamento</span>`}
+                ${dayNotes.map(renderCalendarNotePill).join("")}
+                ${dayAppointments.length ? dayAppointments.map(renderAppointmentPill).join("") : dayNotes.length ? "" : `<span class="muted">Nessun appuntamento</span>`}
               </div>
             </div>
           `;
@@ -1323,6 +1351,7 @@ function renderDayCalendar() {
   const day = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), state.calendarDate.getDate());
   const iso = toISODate(day);
   const dayAppointments = appointmentsForDate(iso);
+  const dayNotes = notesForDate(iso);
   const planner = dayPlannerBounds(dayAppointments, iso);
   return `
     <section class="day-view calendar-desktop">
@@ -1331,6 +1360,7 @@ function renderDayCalendar() {
           <h3>${capitalize(formatter.format(day))}</h3>
           <button class="add-day" type="button" title="Aggiungi appuntamento" data-day-add="${iso}">+</button>
         </div>
+        ${renderDayNotesSection(iso, dayNotes)}
         ${renderDayPlanner(iso, dayAppointments, planner)}
       </div>
     </section>
@@ -1416,6 +1446,7 @@ function dayPlannerBounds(appointments, iso) {
 function openDayPlannerDialog(iso, options = {}) {
   const day = parseISODate(iso);
   const appointments = appointmentsForDate(iso);
+  const dayNotes = notesForDate(iso);
   const planner = dayPlannerBounds(appointments, iso);
   openModal({
     title: capitalize(formatter.format(day)),
@@ -1425,9 +1456,10 @@ function openDayPlannerDialog(iso, options = {}) {
     content: `
       <section class="day-dialog">
         <div class="day-dialog-summary">
-          <strong>${escapeHtml(appointments.length ? `${appointments.length} appuntamenti` : "Giornata libera")}</strong>
-          <span>${options.dragAppointmentId ? "Rilascia l'appuntamento nel planning per scegliere l'orario preciso." : "Usa il + per creare un appuntamento, poi scegli data e ora."}</span>
+          <strong>${escapeHtml(daySummaryLabel(appointments.length, dayNotes.length))}</strong>
+          <span>${options.dragAppointmentId ? "Rilascia l'appuntamento nel planning per scegliere l'orario preciso." : "Usa il + per creare un appuntamento, oppure aggiungi una nota alla giornata."}</span>
         </div>
+        ${renderDayNotesSection(iso, dayNotes)}
         ${renderDayPlanner(iso, appointments, planner)}
       </section>
     `,
@@ -1456,6 +1488,7 @@ function renderMobileCalendarList() {
 function renderMobileAgendaDay(day) {
   const iso = toISODate(day);
   const dayAppointments = appointmentsForDate(iso);
+  const dayNotes = notesForDate(iso);
   const title = capitalize(formatter.format(day));
   const showDayAdd = state.calendarMode === "day";
   return `
@@ -1463,10 +1496,11 @@ function renderMobileAgendaDay(day) {
       <div class="mobile-day-head">
         <button class="mobile-day-open" type="button" data-open-day="${escapeAttr(iso)}" title="Apri giornata ${escapeAttr(title)}">
           <strong>${escapeHtml(title)}</strong>
-          <span>${dayAppointments.length ? `${dayAppointments.length} appuntamenti` : "Libero"}</span>
+          <span>${escapeHtml(daySummaryLabel(dayAppointments.length, dayNotes.length))}</span>
         </button>
         ${showDayAdd ? `<button class="add-day mobile-day-add" type="button" title="Nuovo appuntamento" data-day-add="${escapeAttr(iso)}">+</button>` : ""}
       </div>
+      ${dayNotes.length ? `<div class="mobile-note-list">${dayNotes.map(renderCalendarNotePill).join("")}</div>` : ""}
       <div class="mobile-appointment-list">
         ${dayAppointments.length ? dayAppointments.map(renderMobileAppointmentCard).join("") : `<span class="mobile-empty">Nessun appuntamento</span>`}
       </div>
@@ -1525,6 +1559,54 @@ function renderAppointmentPill(appointment) {
   `;
 }
 
+function renderCalendarNotePill(note) {
+  const preview = calendarNotePreviewText(note);
+  return `
+    <button class="calendar-note-pill" type="button" data-calendar-note-open="${escapeAttr(note.id)}" title="${escapeAttr(preview)}">
+      <span>Nota</span>
+      <small>${escapeHtml(preview)}</small>
+    </button>
+  `;
+}
+
+function renderDayNotesSection(iso, notes = notesForDate(iso)) {
+  return `
+    <section class="day-notes-panel" aria-label="Note del giorno">
+      <div class="day-notes-head">
+        <div>
+          <strong>Note del giorno</strong>
+          <span>${escapeHtml(notes.length ? (notes.length === 1 ? "1 nota" : `${notes.length} note`) : "Nessuna nota")}</span>
+        </div>
+        <button class="btn secondary slim" type="button" data-calendar-note-new="${escapeAttr(iso)}">Nuova nota</button>
+      </div>
+      ${
+        notes.length
+          ? `<div class="day-notes-list">${notes.map(renderDayNoteItem).join("")}</div>`
+          : `<p class="day-notes-empty">Nessuna nota per questa giornata</p>`
+      }
+    </section>
+  `;
+}
+
+function renderDayNoteItem(note) {
+  return `
+    <article class="day-note-item">
+      <p>${calendarNoteTextHtml(note.text)}</p>
+      <div class="day-note-actions">
+        <button class="icon-btn" type="button" data-calendar-note-edit="${escapeAttr(note.id)}" title="Modifica nota" aria-label="Modifica nota">&#9998;</button>
+        <button class="icon-btn danger" type="button" data-calendar-note-delete="${escapeAttr(note.id)}" title="Elimina nota" aria-label="Elimina nota">&times;</button>
+      </div>
+    </article>
+  `;
+}
+
+function daySummaryLabel(appointmentCount, noteCount) {
+  const parts = [];
+  parts.push(appointmentCount === 1 ? "1 appuntamento" : appointmentCount ? `${appointmentCount} appuntamenti` : "Giornata libera");
+  if (noteCount) parts.push(noteCount === 1 ? "1 nota" : `${noteCount} note`);
+  return parts.join(" - ");
+}
+
 function bindCalendar() {
   document.getElementById("newAppointmentBtn").addEventListener("click", () => openAppointmentDialog({ date: todayISO() }));
   document.getElementById("prevPeriod").addEventListener("click", () => {
@@ -1573,7 +1655,107 @@ function bindCalendarDayActions(root) {
       openAppointmentDialog(appointment);
     });
   });
+  bindCalendarNoteActions(root);
   bindCalendarDragAndDrop(root);
+}
+
+function bindCalendarNoteActions(root) {
+  root.querySelectorAll("[data-calendar-note-new]").forEach((button) => {
+    button.addEventListener("click", () => openCalendarNoteDialog({ date: button.dataset.calendarNoteNew }, { reopenDay: button.closest(".day-dialog") !== null }));
+  });
+  root.querySelectorAll("[data-calendar-note-open], [data-calendar-note-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const noteId = button.dataset.calendarNoteOpen || button.dataset.calendarNoteEdit;
+      const note = state.calendarNotes.find((item) => item.id === noteId);
+      if (!note) return notify("Nota non trovata");
+      openCalendarNoteDialog(note, { reopenDay: button.closest(".day-dialog") !== null });
+    });
+  });
+  root.querySelectorAll("[data-calendar-note-delete]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const note = state.calendarNotes.find((item) => item.id === button.dataset.calendarNoteDelete);
+      if (!note) return notify("Nota non trovata");
+      await deleteCalendarNoteWithConfirm(note, { reopenDay: button.closest(".day-dialog") !== null });
+    });
+  });
+}
+
+function openCalendarNoteDialog(note = {}, options = {}) {
+  const isEdit = Boolean(note.id);
+  const dateValue = note.date || todayISO();
+  openModal({
+    title: isEdit ? "Modifica nota" : "Nuova nota",
+    modalClass: "calendar-note-modal",
+    submitLabel: isEdit ? "Salva nota" : "Aggiungi nota",
+    dangerLabel: isEdit ? "Elimina nota" : "",
+    dangerConfirmMessage: "Vuoi eliminare questa nota dal calendario?",
+    content: `
+      <div class="form-grid">
+        <label>Data
+          <input name="date" type="date" value="${escapeAttr(dateValue)}" required />
+        </label>
+        <label class="full">Nota
+          <textarea name="text" placeholder="Es. chiamare cliente, fornitore, pagamento" required>${escapeHtml(note.text || "")}</textarea>
+        </label>
+      </div>
+    `,
+    onSubmit: async (formData) => {
+      const payload = {
+        date: formData.get("date"),
+        text: formData.get("text")
+      };
+      const saved = await saveCalendarNote(isEdit ? note.id : "", payload);
+      refreshCalendarAfterNoteChange(saved.date, { reopenDay: options.reopenDay, deferReopen: true });
+      notify(isEdit ? "Nota aggiornata" : "Nota aggiunta");
+    },
+    onDanger: isEdit
+      ? async () => {
+          await deleteCalendarNote(note.id);
+          refreshCalendarAfterNoteChange(note.date || dateValue, { reopenDay: options.reopenDay, deferReopen: true });
+          notify("Nota eliminata");
+        }
+      : null
+  });
+}
+
+async function saveCalendarNote(noteId, payload) {
+  const response = await api(noteId ? `/api/calendar-notes/${noteId}` : "/api/calendar-notes", {
+    method: noteId ? "PUT" : "POST",
+    body: JSON.stringify(payload)
+  });
+  upsertStateCalendarNote(response.calendarNote);
+  return response.calendarNote;
+}
+
+async function deleteCalendarNote(noteId) {
+  await api(`/api/calendar-notes/${noteId}`, { method: "DELETE" });
+  removeStateCalendarNote(noteId);
+}
+
+async function deleteCalendarNoteWithConfirm(note, options = {}) {
+  const confirmed = await showActionConfirm({
+    title: "Elimina nota",
+    message: "Vuoi eliminare questa nota dal calendario?",
+    confirmLabel: "Elimina",
+    confirmClass: "danger"
+  });
+  if (!confirmed) return;
+  try {
+    await deleteCalendarNote(note.id);
+    refreshCalendarAfterNoteChange(note.date, { reopenDay: options.reopenDay });
+    notify("Nota eliminata");
+  } catch (err) {
+    notify(err.message);
+  }
+}
+
+function refreshCalendarAfterNoteChange(date, options = {}) {
+  if (date) state.calendarDate = parseISODate(date);
+  renderView();
+  if (!options.reopenDay || !date) return;
+  const reopen = () => openDayPlannerDialog(date);
+  if (options.deferReopen) window.setTimeout(reopen, 0);
+  else reopen();
 }
 
 function appointmentCanDrag(appointment = {}) {
@@ -5199,6 +5381,22 @@ function appointmentsForDate(iso) {
   return state.appointments
     .filter((appointment) => appointment.date === iso)
     .sort((a, b) => `${a.startTime || ""}`.localeCompare(`${b.startTime || ""}`));
+}
+
+function notesForDate(iso) {
+  return state.calendarNotes
+    .filter((note) => note.date === iso)
+    .sort((a, b) => `${a.createdAt || ""}`.localeCompare(`${b.createdAt || ""}`));
+}
+
+function calendarNotePreviewText(note = {}) {
+  const text = String(note.text || "").replace(/\s+/g, " ").trim();
+  if (!text) return "Nota";
+  return text.length > 80 ? `${text.slice(0, 77)}...` : text;
+}
+
+function calendarNoteTextHtml(text = "") {
+  return escapeHtml(text || "").replace(/\r?\n/g, "<br />");
 }
 
 function appointmentDog(appointment = {}) {

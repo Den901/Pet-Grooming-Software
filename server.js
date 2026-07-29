@@ -214,6 +214,7 @@ function ensureStorage() {
       ],
       dogs: [],
       appointments: [],
+      calendarNotes: [],
       settings: defaultSettings()
     };
     writeDb(db);
@@ -226,6 +227,7 @@ function readDb() {
   db.users ||= [];
   db.dogs ||= [];
   db.appointments ||= [];
+  db.calendarNotes ||= [];
   db.settings = ensureSettingsShape(db.settings);
   if (ensureUserSecurityFlags(db)) writeDb(db);
   return db;
@@ -701,6 +703,10 @@ function sortAppointments(appointments) {
   return [...appointments].sort((a, b) => `${a.date || ""} ${a.startTime || ""}`.localeCompare(`${b.date || ""} ${b.startTime || ""}`));
 }
 
+function sortCalendarNotes(calendarNotes) {
+  return [...calendarNotes].sort((a, b) => `${a.date || ""} ${a.createdAt || ""}`.localeCompare(`${b.date || ""} ${b.createdAt || ""}`));
+}
+
 function normalizeDuckDnsDomain(value) {
   return cleanString(value)
     .replace(/^https?:\/\//i, "")
@@ -852,6 +858,7 @@ function restoreBackup(payload) {
     users: nextDb.users,
     dogs: nextDb.dogs,
     appointments: nextDb.appointments,
+    calendarNotes: Array.isArray(nextDb.calendarNotes) ? nextDb.calendarNotes : [],
     settings: nextDb.settings || {}
   });
 }
@@ -1413,6 +1420,23 @@ function normalizeAppointment(payload, db, existing = {}) {
   };
 }
 
+function normalizeCalendarNote(payload, existing = {}) {
+  const now = new Date().toISOString();
+  return {
+    id: existing.id || crypto.randomUUID(),
+    date: stringField(payload, "date", existing.date),
+    text: firstStringField(payload, ["text", "note", "notes"], existing.text),
+    createdAt: existing.createdAt || now,
+    updatedAt: now
+  };
+}
+
+function validateCalendarNoteForSave(note) {
+  if (!note.date || !/^\d{4}-\d{2}-\d{2}$/.test(note.date)) return "La data della nota e obbligatoria";
+  if (!note.text) return "Scrivi il testo della nota";
+  return "";
+}
+
 function normalizeDog(payload, existing = {}) {
   const now = new Date().toISOString();
   const id = existing.id || crypto.randomUUID();
@@ -1892,6 +1916,41 @@ async function handleApi(req, res, url) {
         writeDb(db);
         broadcastRequestDataChange(req, "settings", { section: "duckdns" });
         return sendError(res, 502, db.settings.duckdns.lastResult);
+      }
+    }
+
+    if (parts[1] === "calendar-notes") {
+      const id = parts[2];
+      if (method === "GET") {
+        return sendJson(res, 200, { calendarNotes: sortCalendarNotes(db.calendarNotes) });
+      }
+      if (method === "POST") {
+        const body = await readBody(req);
+        const calendarNote = normalizeCalendarNote(body);
+        const validationError = validateCalendarNoteForSave(calendarNote);
+        if (validationError) return sendError(res, 400, validationError);
+        db.calendarNotes.push(calendarNote);
+        writeDb(db);
+        broadcastRequestDataChange(req, "calendar-notes", { action: "create", id: calendarNote.id });
+        return sendJson(res, 201, { calendarNote });
+      }
+      const index = db.calendarNotes.findIndex((item) => item.id === id);
+      if (index === -1) return sendError(res, 404, "Nota non trovata");
+      if (method === "PUT") {
+        const body = await readBody(req);
+        const calendarNote = normalizeCalendarNote(body, db.calendarNotes[index]);
+        const validationError = validateCalendarNoteForSave(calendarNote);
+        if (validationError) return sendError(res, 400, validationError);
+        db.calendarNotes[index] = calendarNote;
+        writeDb(db);
+        broadcastRequestDataChange(req, "calendar-notes", { action: "update", id: calendarNote.id });
+        return sendJson(res, 200, { calendarNote });
+      }
+      if (method === "DELETE") {
+        db.calendarNotes.splice(index, 1);
+        writeDb(db);
+        broadcastRequestDataChange(req, "calendar-notes", { action: "delete", id });
+        return sendJson(res, 200, { ok: true });
       }
     }
 

@@ -867,7 +867,7 @@ label {
 }
 
 .calendar-page .metric-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -1215,6 +1215,18 @@ label {
   stroke-linejoin: round;
 }
 
+.day-note-count {
+  min-width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(225, 166, 61, 0.18);
+  color: #8f5f11;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
 .add-day {
   width: 28px;
   height: 28px;
@@ -1231,6 +1243,39 @@ label {
 .appointment-list {
   display: grid;
   gap: 5px;
+}
+
+.calendar-note-pill {
+  min-width: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid rgba(225, 166, 61, 0.34);
+  border-left: 4px solid var(--gold);
+  border-radius: 6px;
+  background: rgba(225, 166, 61, 0.13);
+  color: var(--ink);
+  text-align: left;
+}
+
+.calendar-note-pill span {
+  color: #8f5f11;
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.calendar-note-pill small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .appt-row {
@@ -1459,6 +1504,74 @@ body.calendar-dragging {
   color: var(--muted);
   font-size: 0.82rem;
   font-weight: 750;
+}
+
+.day-notes-panel {
+  display: grid;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid rgba(225, 166, 61, 0.28);
+  border-radius: var(--radius);
+  background: rgba(225, 166, 61, 0.09);
+}
+
+.day-notes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.day-notes-head > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.day-notes-head strong {
+  font-size: 0.9rem;
+}
+
+.day-notes-head span,
+.day-notes-empty {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.day-notes-list {
+  display: grid;
+  gap: 7px;
+}
+
+.day-note-item {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(225, 166, 61, 0.28);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.day-note-item p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 720;
+  line-height: 1.3;
+}
+
+.day-note-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.day-note-actions .icon-btn {
+  width: 28px;
+  height: 28px;
 }
 
 .day-planner-scale,
@@ -1734,6 +1847,11 @@ body.calendar-dragging {
 .mobile-appointment-list {
   display: grid;
   gap: 8px;
+}
+
+.mobile-note-list {
+  display: grid;
+  gap: 7px;
 }
 
 .mobile-appt-row {
@@ -4366,6 +4484,7 @@ body.calendar-dragging {
 :root[data-theme="dark"] .service-lines div,
 :root[data-theme="dark"] .day-planner-body,
 :root[data-theme="dark"] .day-dialog-summary,
+:root[data-theme="dark"] .day-notes-panel,
 :root[data-theme="dark"] .mobile-day-open,
 :root[data-theme="dark"] .update-block,
 :root[data-theme="dark"] .empty-chart,
@@ -4403,6 +4522,8 @@ body.calendar-dragging {
 :root[data-theme="dark"] .service-amount-row,
 :root[data-theme="dark"] .day-planner-body,
 :root[data-theme="dark"] .day-dialog-summary,
+:root[data-theme="dark"] .day-notes-panel,
+:root[data-theme="dark"] .day-note-item,
 :root[data-theme="dark"] .update-block,
 :root[data-theme="dark"] .metric {
   border-color: var(--line);
@@ -4424,6 +4545,16 @@ body.calendar-dragging {
 :root[data-theme="dark"] .mobile-appt-row,
 :root[data-theme="dark"] .state-pill.active {
   background: rgba(104, 183, 173, 0.14);
+}
+
+:root[data-theme="dark"] .calendar-note-pill,
+:root[data-theme="dark"] .day-note-item {
+  background: rgba(225, 166, 61, 0.14);
+}
+
+:root[data-theme="dark"] .day-note-count,
+:root[data-theme="dark"] .calendar-note-pill span {
+  color: #ffd28a;
 }
 
 :root[data-theme="dark"] .day-dialog-add,
