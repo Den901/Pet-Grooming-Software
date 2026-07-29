@@ -599,6 +599,15 @@ label {
   margin-bottom: 20px;
 }
 
+.topbar-actions,
+.day-action-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .page-title {
   min-width: 0;
 }
@@ -1227,6 +1236,17 @@ label {
   font-weight: 900;
 }
 
+.day-action-buttons {
+  flex: 0 0 auto;
+}
+
+.day-action-buttons .btn {
+  min-height: 32px;
+  padding: 7px 10px;
+  font-size: 0.82rem;
+  line-height: 1.1;
+}
+
 .add-day {
   width: 28px;
   height: 28px;
@@ -1266,6 +1286,7 @@ label {
   font-size: 0.68rem;
   font-weight: 900;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .calendar-note-pill small {
@@ -1556,6 +1577,18 @@ body.calendar-dragging {
   background: rgba(255, 255, 255, 0.68);
 }
 
+.day-note-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.day-note-copy strong {
+  color: #8f5f11;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
 .day-note-item p {
   margin: 0;
   color: var(--ink);
@@ -1691,6 +1724,10 @@ body.calendar-dragging {
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.18);
 }
 
+.day-dialog-actions {
+  max-width: min(460px, 54vw);
+}
+
 .mobile-day-add {
   width: 34px;
   height: 34px;
@@ -1817,6 +1854,20 @@ body.calendar-dragging {
 .mobile-day-open {
   display: grid;
   gap: 2px;
+}
+
+.mobile-day-head .mobile-day-actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mobile-day-actions .btn {
+  min-height: 30px;
+  padding: 6px 8px;
+  font-size: 0.72rem;
+  white-space: nowrap;
 }
 
 .mobile-day-open {
@@ -4553,7 +4604,8 @@ body.calendar-dragging {
 }
 
 :root[data-theme="dark"] .day-note-count,
-:root[data-theme="dark"] .calendar-note-pill span {
+:root[data-theme="dark"] .calendar-note-pill span,
+:root[data-theme="dark"] .day-note-copy strong {
   color: #ffd28a;
 }
 
@@ -5041,8 +5093,33 @@ body.calendar-dragging {
   .toolbar-right,
   .row-actions,
   .modal-actions,
+  .topbar-actions,
   .settings-actions {
     width: 100%;
+  }
+
+  .topbar-actions,
+  .day-action-buttons {
+    justify-content: stretch;
+  }
+
+  .topbar-actions .btn,
+  .day-action-buttons .btn {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .day-dialog-actions {
+    max-width: none;
+    width: 100%;
+  }
+
+  .modal-title-row {
+    flex-wrap: wrap;
+  }
+
+  .modal-title-row h2 {
+    flex: 1 0 100%;
   }
 
   .btn {

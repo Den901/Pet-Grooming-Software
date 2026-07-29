@@ -704,7 +704,9 @@ function sortAppointments(appointments) {
 }
 
 function sortCalendarNotes(calendarNotes) {
-  return [...calendarNotes].sort((a, b) => `${a.date || ""} ${a.createdAt || ""}`.localeCompare(`${b.date || ""} ${b.createdAt || ""}`));
+  return [...calendarNotes].sort((a, b) =>
+    `${a.date || ""} ${a.time || "99:99"} ${a.createdAt || ""}`.localeCompare(`${b.date || ""} ${b.time || "99:99"} ${b.createdAt || ""}`)
+  );
 }
 
 function normalizeDuckDnsDomain(value) {
@@ -1425,6 +1427,7 @@ function normalizeCalendarNote(payload, existing = {}) {
   return {
     id: existing.id || crypto.randomUUID(),
     date: stringField(payload, "date", existing.date),
+    time: stringField(payload, "time", existing.time),
     text: firstStringField(payload, ["text", "note", "notes"], existing.text),
     createdAt: existing.createdAt || now,
     updatedAt: now
@@ -1433,6 +1436,7 @@ function normalizeCalendarNote(payload, existing = {}) {
 
 function validateCalendarNoteForSave(note) {
   if (!note.date || !/^\d{4}-\d{2}-\d{2}$/.test(note.date)) return "La data della nota e obbligatoria";
+  if (note.time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(note.time)) return "L'ora della nota non e valida";
   if (!note.text) return "Scrivi il testo della nota";
   return "";
 }

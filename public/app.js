@@ -573,7 +573,9 @@ function removeStateAppointment(id) {
 }
 
 function sortStateCalendarNotes() {
-  state.calendarNotes.sort((a, b) => `${a.date || ""} ${a.createdAt || ""}`.localeCompare(`${b.date || ""} ${b.createdAt || ""}`));
+  state.calendarNotes.sort((a, b) =>
+    `${a.date || ""} ${a.time || "99:99"} ${a.createdAt || ""}`.localeCompare(`${b.date || ""} ${b.time || "99:99"} ${b.createdAt || ""}`)
+  );
 }
 
 function upsertStateCalendarNote(calendarNote) {
@@ -1243,7 +1245,10 @@ function renderCalendar() {
           <h1>Calendario</h1>
           <p>${calendarTitle()}</p>
         </div>
-        <button class="btn" type="button" id="newAppointmentBtn">Nuovo appuntamento</button>
+        <div class="topbar-actions">
+          <button class="btn" type="button" id="newAppointmentBtn">Nuovo appuntamento</button>
+          <button class="btn secondary" type="button" id="newCalendarNoteBtn">Nuova nota</button>
+        </div>
       </div>
       <section class="metric-grid" aria-label="Riepilogo agenda">
         <div class="metric"><span>Oggi</span><strong>${todayAppointments.length}</strong></div>
@@ -1272,6 +1277,14 @@ function calendarTitle() {
   if (state.calendarMode === "month") return capitalize(monthFormatter.format(state.calendarDate));
   if (state.calendarMode === "week") return weekTitle(state.calendarDate);
   return capitalize(formatter.format(state.calendarDate));
+}
+
+function calendarFocusISO() {
+  return toISODate(state.calendarDate || new Date());
+}
+
+function calendarActionISO() {
+  return state.calendarMode === "day" ? calendarFocusISO() : todayISO();
 }
 
 function renderCalendarView() {
@@ -1358,7 +1371,7 @@ function renderDayCalendar() {
       <div class="week-day day-view-card ${iso === todayISO() ? "today" : ""}" data-calendar-drop-date="${escapeAttr(iso)}">
         <div class="day-head">
           <h3>${capitalize(formatter.format(day))}</h3>
-          <button class="add-day" type="button" title="Aggiungi appuntamento" data-day-add="${iso}">+</button>
+          ${renderDayActionButtons(iso)}
         </div>
         ${renderDayNotesSection(iso, dayNotes)}
         ${renderDayPlanner(iso, dayAppointments, planner)}
@@ -1452,12 +1465,12 @@ function openDayPlannerDialog(iso, options = {}) {
     title: capitalize(formatter.format(day)),
     modalClass: options.dragAppointmentId ? "day-planner-modal calendar-drag-target-modal" : "day-planner-modal",
     hideActions: true,
-    headerAction: `<button class="add-day day-dialog-add" type="button" data-day-add="${escapeAttr(iso)}" title="Aggiungi appuntamento" aria-label="Aggiungi appuntamento">+</button>`,
+    headerAction: renderDayActionButtons(iso, "day-dialog-actions"),
     content: `
       <section class="day-dialog">
         <div class="day-dialog-summary">
           <strong>${escapeHtml(daySummaryLabel(appointments.length, dayNotes.length))}</strong>
-          <span>${options.dragAppointmentId ? "Rilascia l'appuntamento nel planning per scegliere l'orario preciso." : "Usa il + per creare un appuntamento, oppure aggiungi una nota alla giornata."}</span>
+          <span>${options.dragAppointmentId ? "Rilascia l'appuntamento nel planning per scegliere l'orario preciso." : "Usa Nuovo appuntamento o Nuova nota per organizzare la giornata."}</span>
         </div>
         ${renderDayNotesSection(iso, dayNotes)}
         ${renderDayPlanner(iso, appointments, planner)}
@@ -1498,7 +1511,7 @@ function renderMobileAgendaDay(day) {
           <strong>${escapeHtml(title)}</strong>
           <span>${escapeHtml(daySummaryLabel(dayAppointments.length, dayNotes.length))}</span>
         </button>
-        ${showDayAdd ? `<button class="add-day mobile-day-add" type="button" title="Nuovo appuntamento" data-day-add="${escapeAttr(iso)}">+</button>` : ""}
+        ${showDayAdd ? renderDayActionButtons(iso, "mobile-day-actions") : ""}
       </div>
       ${dayNotes.length ? `<div class="mobile-note-list">${dayNotes.map(renderCalendarNotePill).join("")}</div>` : ""}
       <div class="mobile-appointment-list">
@@ -1563,9 +1576,18 @@ function renderCalendarNotePill(note) {
   const preview = calendarNotePreviewText(note);
   return `
     <button class="calendar-note-pill" type="button" data-calendar-note-open="${escapeAttr(note.id)}" title="${escapeAttr(preview)}">
-      <span>Nota</span>
+      <span>${escapeHtml(note.time || "Nota")}</span>
       <small>${escapeHtml(preview)}</small>
     </button>
+  `;
+}
+
+function renderDayActionButtons(iso, extraClass = "") {
+  return `
+    <div class="day-action-buttons ${escapeAttr(extraClass)}">
+      <button class="btn slim" type="button" data-day-add="${escapeAttr(iso)}">Nuovo appuntamento</button>
+      <button class="btn secondary slim" type="button" data-calendar-note-new="${escapeAttr(iso)}">Nuova nota</button>
+    </div>
   `;
 }
 
@@ -1591,7 +1613,10 @@ function renderDayNotesSection(iso, notes = notesForDate(iso)) {
 function renderDayNoteItem(note) {
   return `
     <article class="day-note-item">
-      <p>${calendarNoteTextHtml(note.text)}</p>
+      <div class="day-note-copy">
+        <strong>${escapeHtml(note.time || "Senza ora")}</strong>
+        <p>${calendarNoteTextHtml(note.text)}</p>
+      </div>
       <div class="day-note-actions">
         <button class="icon-btn" type="button" data-calendar-note-edit="${escapeAttr(note.id)}" title="Modifica nota" aria-label="Modifica nota">&#9998;</button>
         <button class="icon-btn danger" type="button" data-calendar-note-delete="${escapeAttr(note.id)}" title="Elimina nota" aria-label="Elimina nota">&times;</button>
@@ -1608,7 +1633,8 @@ function daySummaryLabel(appointmentCount, noteCount) {
 }
 
 function bindCalendar() {
-  document.getElementById("newAppointmentBtn").addEventListener("click", () => openAppointmentDialog({ date: todayISO() }));
+  document.getElementById("newAppointmentBtn").addEventListener("click", () => openAppointmentDialog({ date: calendarActionISO() }));
+  document.getElementById("newCalendarNoteBtn").addEventListener("click", () => openCalendarNoteDialog({ date: calendarActionISO() }));
   document.getElementById("prevPeriod").addEventListener("click", () => {
     state.calendarDate = moveCalendarDate(-1);
     renderView();
@@ -1683,6 +1709,7 @@ function bindCalendarNoteActions(root) {
 function openCalendarNoteDialog(note = {}, options = {}) {
   const isEdit = Boolean(note.id);
   const dateValue = note.date || todayISO();
+  const timeValue = note.time || "";
   openModal({
     title: isEdit ? "Modifica nota" : "Nuova nota",
     modalClass: "calendar-note-modal",
@@ -1694,6 +1721,9 @@ function openCalendarNoteDialog(note = {}, options = {}) {
         <label>Data
           <input name="date" type="date" value="${escapeAttr(dateValue)}" required />
         </label>
+        <label>Ora
+          <input name="time" type="time" value="${escapeAttr(timeValue)}" />
+        </label>
         <label class="full">Nota
           <textarea name="text" placeholder="Es. chiamare cliente, fornitore, pagamento" required>${escapeHtml(note.text || "")}</textarea>
         </label>
@@ -1702,6 +1732,7 @@ function openCalendarNoteDialog(note = {}, options = {}) {
     onSubmit: async (formData) => {
       const payload = {
         date: formData.get("date"),
+        time: formData.get("time"),
         text: formData.get("text")
       };
       const saved = await saveCalendarNote(isEdit ? note.id : "", payload);
@@ -5386,7 +5417,7 @@ function appointmentsForDate(iso) {
 function notesForDate(iso) {
   return state.calendarNotes
     .filter((note) => note.date === iso)
-    .sort((a, b) => `${a.createdAt || ""}`.localeCompare(`${b.createdAt || ""}`));
+    .sort((a, b) => `${a.time || "99:99"} ${a.createdAt || ""}`.localeCompare(`${b.time || "99:99"} ${b.createdAt || ""}`));
 }
 
 function calendarNotePreviewText(note = {}) {
