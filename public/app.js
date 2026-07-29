@@ -348,6 +348,7 @@ function getAnimalSettings() {
   return {
     breeds: ["Meticcio"],
     services: ["Bagno", "Taglio", "Snodatura", "Stripping"],
+    sizes: ["Toy", "Piccola", "Media", "Grande", "Gigante"],
     colors: ["Nero", "Bianco", "Marrone", "Fulvo", "Grigio", "Beige", "Crema", "Rosso", "Dorato", "Tricolore", "Pezzato", "Tigrato", "Merle"],
     loyaltyTopVisitsPerYear: 8,
     ...(state.animalSettings || {})
@@ -1039,10 +1040,12 @@ function renderMonitorAppointment(appointment) {
   const dog = appointmentDog(appointment) || {
     dogName: appointment.dogName,
     breed: appointment.breed,
+    size: appointment.size,
     photoUrl: ""
   };
   const dogName = dog.dogName || appointment.dogName || "Senza nome";
   const breed = dog.breed || appointment.breed || "Razza non indicata";
+  const size = dog.size || appointment.size || "";
   const services = appointmentServiceLabel(appointment, true) || "Servizio da definire";
   const duration = appointmentDurationLabel(appointment);
   const timeRange = [appointment.startTime, appointment.endTime].filter(Boolean).join(" - ") || "Orario da definire";
@@ -1053,7 +1056,7 @@ function renderMonitorAppointment(appointment) {
         <div class="monitor-card-head">
           <div>
             <h2>${escapeHtml(dogName)}</h2>
-            <p>${escapeHtml(breed)}</p>
+            <p>${escapeHtml([breed, size].filter(Boolean).join(" - "))}</p>
           </div>
           <span class="monitor-countdown" data-monitor-countdown="${escapeAttr(appointment.id)}">${escapeHtml(monitorRelativeLabel(appointment))}</span>
         </div>
@@ -2202,7 +2205,7 @@ function renderServiceHistory() {
         </div>
         <div>
           <h2>${escapeHtml(selectedDog?.dogName || "Seleziona un animale")}</h2>
-          <p>${escapeHtml(selectedDog ? [selectedDog.breed, selectedDog.ownerName].filter(Boolean).join(" - ") || "Scheda animale" : "Cerca o apri l'elenco per scegliere")}</p>
+          <p>${escapeHtml(selectedDog ? [selectedDog.breed, selectedDog.size, selectedDog.ownerName].filter(Boolean).join(" - ") || "Scheda animale" : "Cerca o apri l'elenco per scegliere")}</p>
         </div>
         <div class="service-history-metrics">
           <div><span>Servizi conclusi</span><strong>${completedHistory.length}</strong></div>
@@ -2263,7 +2266,7 @@ function renderServiceHistoryDogOptions(value = "") {
   if (!dogs.length) return `<div class="service-history-option-empty">Nessun animale trovato</div>`;
   return dogs
     .map((dog) => {
-      const details = [dog.breed, dog.ownerName, dog.contact].filter(Boolean).join(" - ");
+      const details = [dog.breed, dog.size, dog.ownerName, dog.contact].filter(Boolean).join(" - ");
       return `
         <button class="service-history-option" type="button" role="option" data-service-history-select-dog="${escapeAttr(dog.id)}">
           <strong>${escapeHtml(dog.dogName || "Senza nome")}</strong>
@@ -2587,6 +2590,9 @@ function renderSettings() {
           </label>
           <label class="full">Prestazioni disponibili
             <textarea name="services" placeholder="Una prestazione per riga">${escapeHtml((animal.services || []).join("\n"))}</textarea>
+          </label>
+          <label class="full">Taglie animale
+            <textarea name="sizes" placeholder="Una taglia per riga">${escapeHtml((animal.sizes || []).join("\n"))}</textarea>
           </label>
           <label class="full">Colori cane
             <textarea name="colors" placeholder="Un colore per riga">${escapeHtml((animal.colors || []).join("\n"))}</textarea>
@@ -3016,6 +3022,7 @@ function bindSettings() {
         body: JSON.stringify({
           breeds: parseTextareaList(data.get("breeds")),
           services: parseTextareaList(data.get("services")),
+          sizes: parseTextareaList(data.get("sizes")),
           colors: parseTextareaList(data.get("colors")),
           loyaltyTopVisitsPerYear: data.get("loyaltyTopVisitsPerYear")
         })
@@ -3387,6 +3394,10 @@ function openDogDetailsDialog(dog = {}) {
               <strong>${escapeHtml(dog.breed || "-")}</strong>
             </div>
             <div class="detail-item">
+              <span>Taglia</span>
+              <strong>${escapeHtml(dog.size || "-")}</strong>
+            </div>
+            <div class="detail-item">
               <span>Eta animale</span>
               <strong>${escapeHtml(ageLabel(dog.birthYear))}</strong>
             </div>
@@ -3530,6 +3541,21 @@ function renderBreedField(dog, animal) {
     customPlaceholder: "Scrivi nuova razza",
     current: dog.breed,
     options: animal.breeds || []
+  });
+}
+
+function renderSizeField(dog, animal, required = false, quickRequired = false) {
+  return renderChoiceField({
+    name: "size",
+    label: "Taglia",
+    customLabel: "Nuova taglia",
+    placeholder: "Scrivi o scegli taglia",
+    addLabel: "+ Aggiungi taglia",
+    customPlaceholder: "Scrivi nuova taglia",
+    current: dog.size,
+    options: animal.sizes || [],
+    required,
+    quickRequired
   });
 }
 
@@ -3926,6 +3952,7 @@ function openDogDialog(dog = {}) {
         </label>
         ${renderEstimatedTimeField(estimatedTime)}
         ${renderBreedField(dog, animal)}
+        ${renderSizeField(dog, animal)}
         <label>Anno nascita
           <input name="birthYear" type="number" min="1980" max="${new Date().getFullYear()}" value="${escapeAttr(dog.birthYear || "")}" />
         </label>
@@ -4023,6 +4050,7 @@ function openDogDialog(dog = {}) {
       const photo = form.elements.photo.files[0];
       const services = collectServicesFromForm(formData, form);
       const breed = selectedChoiceValue(formData, "breed");
+      const size = selectedChoiceValue(formData, "size");
       const color = selectedChoiceValue(formData, "color");
       const payload = {
         dogName: formData.get("dogName"),
@@ -4031,6 +4059,7 @@ function openDogDialog(dog = {}) {
         contactMissing: formData.get("contactMissing") === "on",
         alternateContact: formData.get("alternateContact"),
         breed,
+        size,
         birthYear: formData.get("birthYear"),
         color,
         sex: formData.get("sex"),
@@ -4107,6 +4136,7 @@ function openCompleteServiceDialog(appointment = {}) {
   const animal = getAnimalSettings();
   const dogName = selectedDog?.dogName || appointment.dogName || "Senza nome";
   const dogBreed = selectedDog?.breed || appointment.breed || "";
+  const dogSize = selectedDog?.size || appointment.size || "";
   const ownerName = selectedDog?.ownerName || appointment.ownerName || "";
   const contact = selectedDog?.contact || appointment.contact || "";
   const dateValue = appointment.date || todayISO();
@@ -4116,7 +4146,7 @@ function openCompleteServiceDialog(appointment = {}) {
   const serviceOptions = uniqueValues([...(animal.services || []), ...selectedServices, "Toelettatura"]);
   const photoDog = selectedDog || { dogName, photoUrl: "" };
   const summaryMeta = [ownerName ? `Cliente: ${ownerName}` : "", contact ? `Contatto: ${contact}` : ""].filter(Boolean).join(" - ");
-  const title = [dogName, dogBreed].filter(Boolean).join(" - ");
+  const title = [dogName, dogBreed, dogSize].filter(Boolean).join(" - ");
   const completionTitle = isStoredCompleted ? "Modifica prestazione" : "Concludi prestazione";
 
   openModal({
@@ -4130,6 +4160,7 @@ function openCompleteServiceDialog(appointment = {}) {
         <input name="ownerName" type="hidden" value="${escapeAttr(ownerName)}" />
         <input name="contact" type="hidden" value="${escapeAttr(contact)}" />
         <input name="breed" type="hidden" value="${escapeAttr(dogBreed)}" />
+        <input name="size" type="hidden" value="${escapeAttr(dogSize)}" />
 
         <div class="completion-summary">
           <div class="completion-dog-photo">${dogPhotoMarkup(photoDog, dogName)}</div>
@@ -4381,6 +4412,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
         <label>Nome cane
           <input name="dogName" value="${escapeAttr(selectedDog?.dogName || appointment.dogName || "")}" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" inputmode="text" dir="ltr" data-stable-text-input required />
         </label>
+        ${renderSizeField(selectedDog || appointment, animal)}
         <label>Proprietario
           <input name="ownerName" value="${escapeAttr(selectedDog?.ownerName || appointment.ownerName || "")}" />
         </label>
@@ -4475,7 +4507,8 @@ function openAppointmentDialog(appointment = {}, options = {}) {
           dogId: payload.dogId || appointment.dogId,
           dogName: payload.dogName || appointment.dogName,
           ownerName: payload.ownerName || appointment.ownerName,
-          contact: payload.contact || appointment.contact
+          contact: payload.contact || appointment.contact,
+          size: payload.sizeChoice || appointment.size
         });
       });
       modalRoot.querySelector("[data-cancel-appointment-form]")?.addEventListener("click", async (event) => {
@@ -4504,6 +4537,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
             dogName: formPayload.dogName || appointment.dogName,
             ownerName: formPayload.ownerName || appointment.ownerName,
             contact: formPayload.contact || appointment.contact,
+            size: formPayload.sizeChoice || appointment.size,
             services: services.length ? services : normalizeServiceList(appointment.services?.length ? appointment.services : appointment.service || "Toelettatura"),
             status: "annullato",
             treatmentDone: "",
@@ -4541,7 +4575,8 @@ function openAppointmentDialog(appointment = {}, options = {}) {
           dogId: payload.dogId || appointment.dogId,
           dogName: payload.dogName || appointment.dogName,
           ownerName: payload.ownerName || appointment.ownerName,
-          contact: payload.contact || appointment.contact
+          contact: payload.contact || appointment.contact,
+          size: payload.sizeChoice || appointment.size
         });
       });
       form.elements.status.addEventListener("change", () => {
@@ -4564,6 +4599,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
         form.elements.dogName.value = dog.dogName || "";
         form.elements.ownerName.value = dog.ownerName || "";
         form.elements.contact.value = dog.contact || "";
+        if (form.elements.sizeChoice) form.elements.sizeChoice.value = dog.size || "";
         setServicePickerValues(form, dog.services);
         syncAmounts();
       });
@@ -4588,6 +4624,7 @@ function openAppointmentDialog(appointment = {}, options = {}) {
       payload.services = services;
       payload.service = services.join(", ");
       payload.breed = selectedChoiceValue(formData, "breed");
+      payload.size = selectedChoiceValue(formData, "size");
       payload.color = selectedChoiceValue(formData, "color");
       payload.createDogProfile = formData.get("createDogProfile") === "on";
       if (completionMode) payload.status = "completato";
@@ -5151,7 +5188,7 @@ function filteredDogList() {
   const dogs = !query
     ? state.dogs
     : state.dogs.filter((dog) =>
-        [dog.dogName, dog.ownerName, dog.contact, dog.alternateContact, dog.breed, dog.color, dog.pathologies, dog.notes, ...(dog.services || [])].some((field) =>
+        [dog.dogName, dog.ownerName, dog.contact, dog.alternateContact, dog.breed, dog.size, dog.color, dog.pathologies, dog.notes, ...(dog.services || [])].some((field) =>
           String(field || "").toLowerCase().includes(query)
         )
       );
@@ -5187,7 +5224,8 @@ function appointmentDogDisplayLabel(appointment = {}) {
   const dog = appointmentDog(appointment);
   const name = dog?.dogName || appointment.dogName || "Senza nome";
   const breed = dog?.breed || appointment.breed || "";
-  return [name, breed].filter(Boolean).join(" - ");
+  const size = dog?.size || appointment.size || "";
+  return [name, breed, size].filter(Boolean).join(" - ");
 }
 
 function appointmentServiceLabel(appointment = {}, fallbackStatus = false) {
@@ -5239,11 +5277,11 @@ function selectedServiceHistoryDog() {
 }
 
 function serviceHistoryDogLabel(dog = {}) {
-  return [dog.dogName || "Senza nome", dog.breed, dog.ownerName].filter(Boolean).join(" - ");
+  return [dog.dogName || "Senza nome", dog.breed, dog.size, dog.ownerName].filter(Boolean).join(" - ");
 }
 
 function serviceHistoryDogSearchText(dog = {}) {
-  return [dog.dogName, dog.breed, dog.ownerName, dog.contact, dog.alternateContact, serviceHistoryDogLabel(dog)].filter(Boolean).join(" ");
+  return [dog.dogName, dog.breed, dog.size, dog.ownerName, dog.contact, dog.alternateContact, serviceHistoryDogLabel(dog)].filter(Boolean).join(" ");
 }
 
 function serviceHistoryDogMatchesQuery(dog = {}, value = "") {

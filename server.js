@@ -110,6 +110,7 @@ function defaultSettings() {
     animal: {
       breeds: ["Meticcio"],
       services: ["Bagno", "Taglio", "Snodatura", "Stripping"],
+      sizes: ["Toy", "Piccola", "Media", "Grande", "Gigante"],
       colors: ["Nero", "Bianco", "Marrone", "Fulvo", "Grigio", "Beige", "Crema", "Rosso", "Dorato", "Tricolore", "Pezzato", "Tigrato", "Merle"],
       loyaltyTopVisitsPerYear: 8
     },
@@ -138,6 +139,7 @@ function ensureSettingsShape(settings = {}) {
     ...(settings.animal || {}),
     breeds: cleanStringList(settings.animal?.breeds, defaults.animal.breeds),
     services: cleanStringList(settings.animal?.services, defaults.animal.services),
+    sizes: cleanStringList(settings.animal?.sizes, defaults.animal.sizes),
     colors: cleanStringList(settings.animal?.colors, defaults.animal.colors),
     loyaltyTopVisitsPerYear: cleanNumber(settings.animal?.loyaltyTopVisitsPerYear, defaults.animal.loyaltyTopVisitsPerYear)
   };
@@ -625,6 +627,7 @@ function publicAnimalSettings(db) {
   return {
     breeds: cleanStringList(animal.breeds, defaultSettings().animal.breeds),
     services: cleanStringList(animal.services, defaultSettings().animal.services),
+    sizes: cleanStringList(animal.sizes, defaultSettings().animal.sizes),
     colors: cleanStringList(animal.colors, defaultSettings().animal.colors),
     loyaltyTopVisitsPerYear: cleanNumber(animal.loyaltyTopVisitsPerYear, defaultSettings().animal.loyaltyTopVisitsPerYear)
   };
@@ -1162,6 +1165,7 @@ function publicAlexaDog(dog) {
     dogName: cleanString(dog.dogName),
     ownerName: cleanString(dog.ownerName),
     breed: cleanString(dog.breed),
+    size: cleanString(dog.size),
     color: cleanString(dog.color),
     sex: cleanString(dog.sex),
     contactMissing: Boolean(dog.contactMissing),
@@ -1178,6 +1182,7 @@ function publicAlexaAppointment(appointment, db) {
     dogName: cleanString(dog?.dogName || appointment.dogName),
     ownerName: cleanString(dog?.ownerName || appointment.ownerName),
     breed: cleanString(dog?.breed || appointment.breed),
+    size: cleanString(dog?.size || appointment.size),
     date: cleanString(appointment.date),
     startTime: cleanString(appointment.startTime),
     endTime: cleanString(appointment.endTime),
@@ -1190,7 +1195,7 @@ function searchAlexaDogs(db, query, limit = 8) {
   const q = lowerMatch(query);
   const dogs = q
     ? db.dogs.filter((dog) =>
-        [dog.dogName, dog.ownerName, dog.breed, dog.contact].some((field) => lowerMatch(field).includes(q))
+        [dog.dogName, dog.ownerName, dog.breed, dog.size, dog.contact].some((field) => lowerMatch(field).includes(q))
       )
     : db.dogs;
   return dogs
@@ -1284,6 +1289,7 @@ function maybeCreateDogFromAppointment(payload, db) {
     estimatedMinutes: 0,
     contactMissing: booleanField(payload, "contactMissing", !contact),
     breed: cleanString(payload.breed),
+    size: cleanString(payload.size),
     color: cleanString(payload.color),
     sex: cleanString(payload.sex),
     imageConsent: cleanString(payload.imageConsent),
@@ -1339,12 +1345,14 @@ function updateAnimalOptionsFromDog(db, dog) {
   const current = publicAnimalSettings(db);
   const breeds = cleanStringList([...current.breeds, dog.breed], current.breeds);
   const services = cleanStringList([...current.services, ...(dog.services || [])], current.services);
+  const sizes = cleanStringList([...current.sizes, dog.size], current.sizes);
   const colors = cleanStringList([...current.colors, dog.color], current.colors);
   db.settings.animal = {
     ...current,
     ...(db.settings.animal || {}),
     breeds,
     services,
+    sizes,
     colors,
     loyaltyTopVisitsPerYear: cleanNumber(db.settings.animal?.loyaltyTopVisitsPerYear, current.loyaltyTopVisitsPerYear)
   };
@@ -1356,7 +1364,8 @@ function updateAnimalOptionsFromAppointment(db, appointment) {
     ...current,
     ...(db.settings.animal || {}),
     breeds: cleanStringList([...current.breeds, appointment.breed], current.breeds),
-    services: cleanStringList([...current.services, ...(appointment.services || [])], current.services)
+    services: cleanStringList([...current.services, ...(appointment.services || [])], current.services),
+    sizes: cleanStringList([...current.sizes, appointment.size], current.sizes)
   };
 }
 
@@ -1386,6 +1395,7 @@ function normalizeAppointment(payload, db, existing = {}) {
     ownerName: cleanString(dog?.ownerName || stringField(payload, "ownerName", existing.ownerName)),
     contact: cleanString(dog?.contact || stringField(payload, "contact", existing.contact)),
     breed: cleanString(dog?.breed || stringField(payload, "breed", existing.breed)),
+    size: cleanString(dog?.size || stringField(payload, "size", existing.size)),
     date: stringField(payload, "date", existing.date),
     startTime: stringField(payload, "startTime", existing.startTime),
     endTime: stringField(payload, "endTime", existing.endTime),
@@ -1417,6 +1427,7 @@ function normalizeDog(payload, existing = {}) {
     contactMissing,
     alternateContact: stringField(payload, "alternateContact", existing.alternateContact),
     breed: stringField(payload, "breed", existing.breed),
+    size: stringField(payload, "size", existing.size),
     birthYear: numberField(payload, "birthYear", existing.birthYear),
     color: stringField(payload, "color", existing.color),
     sex: ["M", "F"].includes(payload.sex) ? payload.sex : existing.sex || "",
@@ -1768,6 +1779,7 @@ async function handleApi(req, res, url) {
         db.settings.animal = {
           breeds: cleanStringList(body.breeds, defaultSettings().animal.breeds),
           services: cleanStringList(body.services, defaultSettings().animal.services),
+          sizes: cleanStringList(body.sizes, defaultSettings().animal.sizes),
           colors: cleanStringList(body.colors, defaultSettings().animal.colors),
           loyaltyTopVisitsPerYear: Math.max(1, cleanNumber(body.loyaltyTopVisitsPerYear, 8)),
           updatedAt: new Date().toISOString()
@@ -1910,7 +1922,7 @@ async function handleApi(req, res, url) {
         db.dogs[index] = dog;
         db.appointments = db.appointments.map((appointment) =>
           appointment.dogId === dog.id
-            ? { ...appointment, dogName: dog.dogName, ownerName: dog.ownerName, contact: dog.contact, breed: dog.breed, updatedAt: new Date().toISOString() }
+            ? { ...appointment, dogName: dog.dogName, ownerName: dog.ownerName, contact: dog.contact, breed: dog.breed, size: dog.size, updatedAt: new Date().toISOString() }
             : appointment
         );
         writeDb(db);
