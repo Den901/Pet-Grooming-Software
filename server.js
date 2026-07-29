@@ -5,13 +5,16 @@ const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
 const packageInfo = require("./package.json");
+const initSqlJs = require("./scripts/vendor/sqljs/sql-wasm.js");
 
 const PORT = Number(process.env.PORT || 3017);
 const ROOT_DIR = __dirname;
 const PUBLIC_DIR = path.join(ROOT_DIR, "public");
 const DATA_DIR = path.join(ROOT_DIR, "data");
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
-const DB_FILE = path.join(DATA_DIR, "db.json");
+const LEGACY_DB_FILE = path.join(DATA_DIR, "db.json");
+const SQLITE_DB_FILE = path.join(DATA_DIR, "groomly.sqlite");
+const SQLITE_VENDOR_DIR = path.join(ROOT_DIR, "scripts", "vendor", "sqljs");
 const MAX_BODY_BYTES = 16 * 1024 * 1024;
 const MAX_UPDATE_BYTES = 28 * 1024 * 1024;
 const MAX_UPDATE_BODY_BYTES = 40 * 1024 * 1024;
@@ -34,6 +37,7 @@ const MAX_UPDATE_MANIFEST_BYTES = 256 * 1024;
 const sessions = new Map();
 const eventClients = new Set();
 let restartScheduled = false;
+let sqlDb = null;
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -181,61 +185,284 @@ function ensureSettingsShape(settings = {}) {
   };
 }
 
-function ensureStorage() {
+function defaultDb() {
+  const adminPassword = makePassword(DEFAULT_ADMIN_PASSWORD);
+  const userPassword = makePassword("operatore123");
+  const now = new Date().toISOString();
+  return {
+    users: [
+      {
+        id: crypto.randomUUID(),
+        username: DEFAULT_ADMIN_USERNAME,
+        displayName: "Amministratore",
+        role: "admin",
+        active: true,
+        createdAt: now,
+        mustChangePassword: true,
+        defaultPassword: true,
+        passwordHash: adminPassword.hash,
+        passwordSalt: adminPassword.salt
+      },
+      {
+        id: crypto.randomUUID(),
+        username: "operatore",
+        displayName: "Operatore",
+        role: "user",
+        active: true,
+        createdAt: now,
+        passwordHash: userPassword.hash,
+        passwordSalt: userPassword.salt
+      }
+    ],
+    dogs: [],
+    appointments: [],
+    calendarNotes: [],
+    settings: defaultSettings()
+  };
+}
+
+async function initializeStorage() {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-  if (!fs.existsSync(DB_FILE)) {
-    const adminPassword = makePassword(DEFAULT_ADMIN_PASSWORD);
-    const userPassword = makePassword("operatore123");
-    const now = new Date().toISOString();
-    const db = {
-      users: [
-        {
-          id: crypto.randomUUID(),
-          username: DEFAULT_ADMIN_USERNAME,
-          displayName: "Amministratore",
-          role: "admin",
-          active: true,
-          createdAt: now,
-          mustChangePassword: true,
-          defaultPassword: true,
-          passwordHash: adminPassword.hash,
-          passwordSalt: adminPassword.salt
-        },
-        {
-          id: crypto.randomUUID(),
-          username: "operatore",
-          displayName: "Operatore",
-          role: "user",
-          active: true,
-          createdAt: now,
-          passwordHash: userPassword.hash,
-          passwordSalt: userPassword.salt
-        }
-      ],
-      dogs: [],
-      appointments: [],
-      calendarNotes: [],
-      settings: defaultSettings()
-    };
-    writeDb(db);
+  const SQL = await initSqlJs({ locateFile: (fileName) => path.join(SQLITE_VENDOR_DIR, fileName) });
+  const existingDatabase = fs.existsSync(SQLITE_DB_FILE) ? fs.readFileSync(SQLITE_DB_FILE) : null;
+  sqlDb = existingDatabase?.length ? new SQL.Database(existingDatabase) : new SQL.Database();
+  ensureSqlSchema();
+  if (!hasSqlData()) {
+    const migrated = readLegacyDb();
+    writeDb(migrated || defaultDb());
   }
+  const db = readDb();
+  if (ensureUserSecurityFlags(db)) writeDb(db);
+  persistSqlite();
+}
+
+function ensureStorage() {
+  if (!sqlDb) throw new Error("Archivio SQLite non inizializzato");
+}
+
+function ensureSqlSchema() {
+  ensureStorage();
+  sqlDb.run(`
+    CREATE TABLE IF NOT EXISTS settings (
+      id TEXT PRIMARY KEY,
+      data TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT,
+      role TEXT,
+      active INTEGER,
+      created_at TEXT,
+      updated_at TEXT,
+      data TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS dogs (
+      id TEXT PRIMARY KEY,
+      dog_name TEXT,
+      owner_name TEXT,
+      contact TEXT,
+      created_at TEXT,
+      updated_at TEXT,
+      data TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS appointments (
+      id TEXT PRIMARY KEY,
+      dog_id TEXT,
+      dog_name TEXT,
+      owner_name TEXT,
+      date TEXT,
+      start_time TEXT,
+      end_time TEXT,
+      status TEXT,
+      created_at TEXT,
+      updated_at TEXT,
+      data TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS calendar_notes (
+      id TEXT PRIMARY KEY,
+      date TEXT,
+      time TEXT,
+      created_at TEXT,
+      updated_at TEXT,
+      data TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+    CREATE INDEX IF NOT EXISTS idx_dogs_search ON dogs(dog_name, owner_name, contact);
+    CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(date, start_time);
+    CREATE INDEX IF NOT EXISTS idx_calendar_notes_date ON calendar_notes(date, time);
+  `);
+}
+
+function readLegacyDb() {
+  if (!fs.existsSync(LEGACY_DB_FILE)) return null;
+  try {
+    const db = JSON.parse(fs.readFileSync(LEGACY_DB_FILE, "utf8"));
+    return normalizeDbShape(db);
+  } catch (error) {
+    console.warn(`Archivio JSON non importato: ${error.message}`);
+    return null;
+  }
+}
+
+function hasSqlData() {
+  ensureStorage();
+  const result = sqlDb.exec("SELECT COUNT(*) FROM users");
+  return Number(result[0]?.values?.[0]?.[0] || 0) > 0;
+}
+
+function normalizeDbShape(db = {}) {
+  return {
+    users: Array.isArray(db.users) ? db.users : [],
+    dogs: Array.isArray(db.dogs) ? db.dogs : [],
+    appointments: Array.isArray(db.appointments) ? db.appointments : [],
+    calendarNotes: Array.isArray(db.calendarNotes) ? db.calendarNotes : [],
+    settings: ensureSettingsShape(db.settings)
+  };
 }
 
 function readDb() {
   ensureStorage();
-  const db = JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
-  db.users ||= [];
-  db.dogs ||= [];
-  db.appointments ||= [];
-  db.calendarNotes ||= [];
-  db.settings = ensureSettingsShape(db.settings);
+  const db = normalizeDbShape({
+    users: readJsonRows("users", "username COLLATE NOCASE, created_at, id"),
+    dogs: readJsonRows("dogs", "dog_name COLLATE NOCASE, owner_name COLLATE NOCASE, id"),
+    appointments: readJsonRows("appointments", "date, start_time, id"),
+    calendarNotes: readJsonRows("calendar_notes", "date, COALESCE(time, '99:99'), created_at, id"),
+    settings: readSettings()
+  });
   if (ensureUserSecurityFlags(db)) writeDb(db);
   return db;
 }
 
+function readJsonRows(tableName, orderBy) {
+  const result = sqlDb.exec(`SELECT data FROM ${tableName} ORDER BY ${orderBy}`);
+  return (result[0]?.values || []).map(([data]) => JSON.parse(data));
+}
+
+function readSettings() {
+  const result = sqlDb.exec("SELECT data FROM settings WHERE id = 'settings' LIMIT 1");
+  const data = result[0]?.values?.[0]?.[0];
+  return data ? JSON.parse(data) : defaultSettings();
+}
+
 function writeDb(db) {
+  ensureStorage();
+  const nextDb = normalizeDbShape(db);
+  sqlDb.run("BEGIN TRANSACTION");
+  try {
+    replaceSettings(nextDb.settings);
+    replaceUsers(nextDb.users);
+    replaceDogs(nextDb.dogs);
+    replaceAppointments(nextDb.appointments);
+    replaceCalendarNotes(nextDb.calendarNotes);
+    sqlDb.run("COMMIT");
+    persistSqlite();
+  } catch (error) {
+    sqlDb.run("ROLLBACK");
+    throw error;
+  }
+}
+
+function replaceSettings(settings) {
+  const statement = sqlDb.prepare("INSERT OR REPLACE INTO settings (id, data) VALUES (?, ?)");
+  try {
+    statement.run(["settings", JSON.stringify(ensureSettingsShape(settings))]);
+  } finally {
+    statement.free();
+  }
+}
+
+function replaceUsers(users = []) {
+  replaceEntityRows(
+    "users",
+    "INSERT INTO users (id, username, role, active, created_at, updated_at, data) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    users,
+    (user) => [
+      user.id,
+      cleanString(user.username),
+      cleanString(user.role),
+      user.active ? 1 : 0,
+      cleanString(user.createdAt),
+      cleanString(user.updatedAt),
+      JSON.stringify(user)
+    ]
+  );
+}
+
+function replaceDogs(dogs = []) {
+  replaceEntityRows(
+    "dogs",
+    "INSERT INTO dogs (id, dog_name, owner_name, contact, created_at, updated_at, data) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    dogs,
+    (dog) => [
+      dog.id,
+      cleanString(dog.dogName),
+      cleanString(dog.ownerName),
+      cleanString(dog.contact),
+      cleanString(dog.createdAt),
+      cleanString(dog.updatedAt),
+      JSON.stringify(dog)
+    ]
+  );
+}
+
+function replaceAppointments(appointments = []) {
+  replaceEntityRows(
+    "appointments",
+    "INSERT INTO appointments (id, dog_id, dog_name, owner_name, date, start_time, end_time, status, created_at, updated_at, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    appointments,
+    (appointment) => [
+      appointment.id,
+      cleanString(appointment.dogId),
+      cleanString(appointment.dogName),
+      cleanString(appointment.ownerName),
+      cleanString(appointment.date),
+      cleanString(appointment.startTime),
+      cleanString(appointment.endTime),
+      cleanString(appointment.status),
+      cleanString(appointment.createdAt),
+      cleanString(appointment.updatedAt),
+      JSON.stringify(appointment)
+    ]
+  );
+}
+
+function replaceCalendarNotes(calendarNotes = []) {
+  replaceEntityRows(
+    "calendar_notes",
+    "INSERT INTO calendar_notes (id, date, time, created_at, updated_at, data) VALUES (?, ?, ?, ?, ?, ?)",
+    calendarNotes,
+    (note) => [
+      note.id,
+      cleanString(note.date),
+      cleanString(note.time),
+      cleanString(note.createdAt),
+      cleanString(note.updatedAt),
+      JSON.stringify(note)
+    ]
+  );
+}
+
+function replaceEntityRows(tableName, insertSql, rows, valuesForRow) {
+  sqlDb.run(`DELETE FROM ${tableName}`);
+  const statement = sqlDb.prepare(insertSql);
+  try {
+    for (const row of rows) {
+      if (!row || typeof row !== "object") continue;
+      if (!cleanString(row.id)) row.id = crypto.randomUUID();
+      statement.run(valuesForRow(row));
+    }
+  } finally {
+    statement.free();
+  }
+}
+
+function persistSqlite() {
+  ensureStorage();
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+  const tempFile = `${SQLITE_DB_FILE}.tmp`;
+  fs.writeFileSync(tempFile, Buffer.from(sqlDb.export()));
+  fs.renameSync(tempFile, SQLITE_DB_FILE);
 }
 
 function makePassword(password, salt = crypto.randomBytes(16).toString("hex")) {
@@ -2190,7 +2417,14 @@ const server = http.createServer((req, res) => {
   serveStatic(req, res, url);
 });
 
-ensureStorage();
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Groomly attivo su http://localhost:${PORT}`);
-});
+initializeStorage()
+  .then(() => {
+    server.listen(PORT, "0.0.0.0", () => {
+      console.log(`Groomly attivo su http://localhost:${PORT}`);
+      console.log(`Archivio SQLite: ${SQLITE_DB_FILE}`);
+    });
+  })
+  .catch((error) => {
+    console.error(`Avvio non riuscito: ${error.message}`);
+    process.exit(1);
+  });

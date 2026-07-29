@@ -1,6 +1,6 @@
 # Groomly
 
-Release corrente: `1.0.23` stabile.
+Release corrente: `1.0.24` stabile.
 
 Portale web PWA in Node.js per gestire:
 
@@ -9,6 +9,7 @@ Portale web PWA in Node.js per gestire:
 - foto profilo utenti visibile nella sidebar e stato online in lista utenti;
 - personalizzazione logo, nome portale e dati azienda comuni, con colori, tema chiaro/scuro, sfondo login e dimensione interfaccia salvati come preferenze personali per utente;
 - aggiornamento live multiutente di schede, appuntamenti, utenti e impostazioni;
+- archivio dati SQLite locale in `data/groomly.sqlite`, con migrazione automatica dal vecchio `data/db.json` al primo avvio;
 - calendario appuntamenti con vista giorno planning orario, settimana tablet a blocchi leggibili, mese piu ampio su desktop e agenda compatta su iPhone;
 - note giornaliere nel calendario con promemoria liberi e ora facoltativa, visibili su mese, settimana, giorno e planning giornaliero, modificabili o eliminabili dalla giornata;
 - drag and drop appuntamenti su desktop/tablet attivo di default e disattivabile da Impostazioni: in settimana spostamento diretto sul giorno, in mese apertura del planning giornaliero dopo 2 secondi, uscita dal popup giorno per passare a un'altra giornata, appuntamento flottante centrato sotto il mouse durante il trascinamento, nel planning scelta precisa dell'orario a scatti di 5 minuti e chiusura automatica dopo il rilascio; su telefono e disattivato; movimento alleggerito con anteprima mirata;
@@ -108,9 +109,9 @@ npm.cmd run release:packages
 
 Il comando genera nella cartella `dist/`:
 
-- `Pet-Grooming-Software-1.0.23-windows.zip`;
-- `Pet-Grooming-Software-1.0.23-linux.tar.gz`;
-- `Pet-Grooming-Software-1.0.23.pgs-update`;
+- `Pet-Grooming-Software-1.0.24-windows.zip`;
+- `Pet-Grooming-Software-1.0.24-linux.tar.gz`;
+- `Pet-Grooming-Software-1.0.24.pgs-update`;
 - `pet-grooming-update.json`.
 
 Se `npm` non e bloccato dalla policy PowerShell puoi usare anche `npm run release:packages`.
@@ -119,7 +120,7 @@ Se `npm` non e bloccato dalla policy PowerShell puoi usare anche `npm run releas
 
 Prerequisito: Node.js 18 o superiore installato sul PC.
 
-1. Estrai `Pet-Grooming-Software-1.0.23-windows.zip`.
+1. Estrai `Pet-Grooming-Software-1.0.24-windows.zip`.
 2. Apri PowerShell nella cartella estratta. Per installare in `ProgramData` e creare l'avvio automatico e consigliato aprirlo come amministratore.
 3. Per installare in `C:\ProgramData\Pet Grooming Software` e creare l'avvio automatico all'accesso:
 
@@ -145,12 +146,12 @@ Per riavviare dopo un update, chiudi la finestra dove gira Node.js e rilancia lo
 
 Prerequisito: Node.js 18 o superiore installato sul server.
 
-1. Copia `Pet-Grooming-Software-1.0.23-linux.tar.gz` sul server.
+1. Copia `Pet-Grooming-Software-1.0.24-linux.tar.gz` sul server.
 2. Estrai il pacchetto e entra nella cartella:
 
 ```bash
-tar -xzf Pet-Grooming-Software-1.0.23-linux.tar.gz
-cd Pet-Grooming-Software-1.0.23
+tar -xzf Pet-Grooming-Software-1.0.24-linux.tar.gz
+cd Pet-Grooming-Software-1.0.24
 ```
 
 3. Installazione consigliata in `/opt` con servizio systemd:
@@ -247,6 +248,14 @@ Se vuoi restare su una porta esterna non standard, ad esempio `30443`, il browse
 
 Il portale include `manifest.json` e `service worker`, quindi puo essere installato dal browser come app. Su dominio pubblico con DuckDNS e dispositivi iPad e consigliato usare HTTPS, perche i browser moderni richiedono HTTPS per installazione PWA completa fuori da `localhost`.
 
+## Archivio dati
+
+I dati operativi sono salvati in SQLite nel file locale `data/groomly.sqlite`.
+
+Al primo avvio di questa versione, se esiste ancora il vecchio archivio `data/db.json` e non esiste gia il database SQLite, il portale importa automaticamente utenti, schede, appuntamenti, note calendario e impostazioni dentro SQLite. Il vecchio file JSON non viene piu usato dal portale dopo la migrazione e resta solo come copia di sicurezza locale.
+
+Le foto e gli allegati restano nella cartella `data/uploads/`. Database, foto e backup non vengono inclusi negli update software.
+
 ## Alexa
 
 Da `Impostazioni > Alexa` l'amministratore puo abilitare l'integrazione, generare una chiave API dedicata, configurare un PIN opzionale e vedere l'endpoint HTTPS da collegare a una Custom Skill Alexa.
@@ -255,7 +264,7 @@ La skill puo cercare cani e servizi/prodotti e creare appuntamenti nel calendari
 
 ## Release e aggiornamenti
 
-La release corrente e `1.0.23` stabile. Per preparare i pacchetti della versione impostata in `package.json`:
+La release corrente e `1.0.24` stabile. Per preparare i pacchetti della versione impostata in `package.json`:
 
 ```powershell
 npm.cmd run release:packages
