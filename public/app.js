@@ -13,7 +13,6 @@ const state = {
   branding: null,
   whatsapp: null,
   alexa: null,
-  cloudBackup: null,
   animalSettings: null,
   appointmentSettings: null,
   navigation: null,
@@ -618,12 +617,11 @@ async function loadData() {
   state.branding = brandingResponse.branding || state.branding;
   applyBranding();
   if (state.me?.role === "admin") {
-    const [usersResponse, duckdnsResponse, whatsappResponse, alexaResponse, cloudBackupResponse, versionResponse] = await Promise.all([
+    const [usersResponse, duckdnsResponse, whatsappResponse, alexaResponse, versionResponse] = await Promise.all([
       api("/api/users"),
       api("/api/settings/duckdns"),
       api("/api/settings/whatsapp"),
       api("/api/settings/alexa"),
-      api("/api/settings/cloud-backup"),
       api("/api/version")
     ]);
     state.users = usersResponse.users || [];
@@ -632,7 +630,6 @@ async function loadData() {
     state.duckdns = duckdnsResponse.duckdns || null;
     state.whatsapp = whatsappResponse.whatsapp || null;
     state.alexa = alexaResponse.alexa || null;
-    state.cloudBackup = cloudBackupResponse.cloudBackup || null;
     state.version = versionResponse || null;
   } else {
     state.users = [];
@@ -640,7 +637,6 @@ async function loadData() {
     state.duckdns = null;
     state.whatsapp = null;
     state.alexa = null;
-    state.cloudBackup = null;
     state.version = null;
   }
 }
@@ -2667,7 +2663,6 @@ function renderSettings() {
   const whatsapp = state.whatsapp || {};
   const alexa = state.alexa || {};
   const duckdns = state.duckdns || {};
-  const cloudBackup = state.cloudBackup || {};
   const animal = getAnimalSettings();
   const appointmentSettings = getAppointmentSettings();
   const version = state.version || {};
@@ -2681,10 +2676,12 @@ function renderSettings() {
     <div class="topbar">
       <div class="page-title">
         <h1>Impostazioni</h1>
-        <p>Identita aziendale, colori, WhatsApp, Alexa, DuckDNS, backup e backup cloud.</p>
+        <p>Identita aziendale, menu, integrazioni, backup e aggiornamento.</p>
       </div>
     </div>
     <section class="settings-grid">
+      <details class="settings-disclosure wide" open>
+        <summary><span>Identita azienda</span></summary>
       <form class="settings-panel wide" id="brandingForm">
         <div class="settings-heading-row">
           <div>
@@ -2794,6 +2791,9 @@ function renderSettings() {
           <button class="btn" type="submit">Salva identita</button>
         </div>
       </form>
+      </details>
+      <details class="settings-disclosure wide">
+        <summary><span>Scheda animale</span></summary>
       <form class="settings-panel wide" id="animalSettingsForm">
         <div class="settings-heading-row">
           <div>
@@ -2823,6 +2823,9 @@ function renderSettings() {
           <button class="btn" type="submit">Salva scheda animale</button>
         </div>
       </form>
+      </details>
+      <details class="settings-disclosure wide">
+        <summary><span>Appuntamenti e monitor</span></summary>
       <form class="settings-panel wide" id="appointmentSettingsForm">
         <div class="settings-heading-row">
           <div>
@@ -2853,6 +2856,9 @@ function renderSettings() {
           <button class="btn" type="submit">Salva appuntamenti</button>
         </div>
       </form>
+      </details>
+      <details class="settings-disclosure wide">
+        <summary><span>Menu laterale</span></summary>
       <form class="settings-panel wide" id="navigationSettingsForm">
         <div class="settings-heading-row">
           <div>
@@ -2868,6 +2874,9 @@ function renderSettings() {
           <button class="btn" type="submit">Salva menu</button>
         </div>
       </form>
+      </details>
+      <details class="settings-disclosure wide">
+        <summary><span>WhatsApp promemoria</span></summary>
       <form class="settings-panel wide" id="whatsappForm">
         <div class="settings-heading-row">
           <div>
@@ -2912,6 +2921,9 @@ function renderSettings() {
           <button class="btn" type="submit">Salva WhatsApp</button>
         </div>
       </form>
+      </details>
+      <details class="settings-disclosure wide">
+        <summary><span>Alexa</span></summary>
       <form class="settings-panel wide" id="alexaForm">
         <div class="settings-heading-row">
           <div>
@@ -2977,6 +2989,9 @@ function renderSettings() {
           <button class="btn" type="submit">Salva Alexa</button>
         </div>
       </form>
+      </details>
+      <details class="settings-disclosure wide">
+        <summary><span>DuckDNS e accesso web</span></summary>
       <form class="settings-panel wide" id="duckDnsForm">
         <div class="settings-heading-row">
           <div>
@@ -3031,6 +3046,7 @@ function renderSettings() {
             : ""
         }
       </form>
+      </details>
       <form class="settings-panel" id="exportBackupForm">
         <h2>Esporta backup</h2>
         <p class="settings-note">Scarica configurazione, utenti, schede, appuntamenti e foto in un file protetto da password.</p>
@@ -3053,52 +3069,6 @@ function renderSettings() {
           Confermo il ripristino completo
         </label>
         <button class="btn danger" type="submit">Importa e ripristina</button>
-      </form>
-      <form class="settings-panel wide" id="cloudBackupForm">
-        <div class="settings-heading-row">
-          <div>
-            <h2>Backup cloud</h2>
-            <p class="settings-note">Salva automaticamente un backup cifrato in una cartella sincronizzata, per esempio OneDrive, Google Drive, Dropbox o NAS.</p>
-          </div>
-          <span class="badge">${cloudBackup.enabled ? "Attivo" : "Disattivo"}</span>
-        </div>
-        <div class="form-grid">
-          <label class="checkbox-line full">
-            <input name="enabled" type="checkbox" ${cloudBackup.enabled ? "checked" : ""} />
-            Abilita backup cloud automatico
-          </label>
-          <label class="full">Cartella cloud sincronizzata
-            <input name="folderPath" value="${escapeAttr(cloudBackup.folderPath || "")}" placeholder="C:\\Users\\Nome\\OneDrive\\Groomly Backup" autocomplete="off" />
-          </label>
-          <label>Frequenza
-            <select name="schedule">
-              <option value="daily" ${cloudBackup.schedule !== "manual" ? "selected" : ""}>Ogni giorno</option>
-              <option value="manual" ${cloudBackup.schedule === "manual" ? "selected" : ""}>Solo manuale</option>
-            </select>
-          </label>
-          <label>Ora backup
-            <input name="time" type="time" value="${escapeAttr(cloudBackup.time || "20:00")}" />
-          </label>
-          <label>Backup da tenere
-            <input name="retentionCount" type="number" min="1" max="90" step="1" value="${escapeAttr(cloudBackup.retentionCount || 14)}" />
-          </label>
-          <label>Password backup cloud
-            <input name="password" type="password" minlength="8" autocomplete="new-password" placeholder="${cloudBackup.hasPassword ? "Lascia vuoto per non cambiarla" : "Minimo 8 caratteri"}" />
-          </label>
-          <label class="checkbox-line full">
-            <input name="clearPassword" type="checkbox" />
-            Rimuovi password backup cloud salvata
-          </label>
-        </div>
-        ${
-          cloudBackup.lastRunAt || cloudBackup.lastResult
-            ? `<p class="settings-note">Ultimo backup: ${escapeHtml(cloudBackup.lastRunAt ? formatDateTime(cloudBackup.lastRunAt) : "-")} - ${escapeHtml(cloudBackup.lastResult || "-")}</p>`
-            : `<p class="settings-note">Il file salvato nel cloud e cifrato: senza password non puo essere letto.</p>`
-        }
-        <div class="settings-actions">
-          <button class="btn" type="submit">Salva backup cloud</button>
-          <button class="btn secondary" type="button" id="runCloudBackupBtn">Esegui backup ora</button>
-        </div>
       </form>
       <form class="settings-panel wide" id="updateForm">
         <div class="settings-heading-row">
@@ -3480,48 +3450,6 @@ function bindSettings() {
       await logout();
     } catch (err) {
       notify(err.message);
-    }
-  });
-
-  document.getElementById("cloudBackupForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    try {
-      const response = await api("/api/settings/cloud-backup", {
-        method: "PUT",
-        body: JSON.stringify({
-          enabled: data.get("enabled") === "on",
-          folderPath: data.get("folderPath"),
-          schedule: data.get("schedule"),
-          time: data.get("time"),
-          retentionCount: data.get("retentionCount"),
-          password: data.get("password"),
-          clearPassword: data.get("clearPassword") === "on"
-        })
-      });
-      state.cloudBackup = response.cloudBackup;
-      renderView();
-      notify("Backup cloud salvato");
-    } catch (err) {
-      notify(err.message);
-    }
-  });
-
-  document.getElementById("runCloudBackupBtn").addEventListener("click", async () => {
-    const button = document.getElementById("runCloudBackupBtn");
-    button.disabled = true;
-    try {
-      const response = await api("/api/backup/cloud-run", {
-        method: "POST",
-        body: "{}"
-      });
-      state.cloudBackup = response.cloudBackup;
-      renderView();
-      notify("Backup cloud creato");
-    } catch (err) {
-      notify(err.message);
-      button.disabled = false;
     }
   });
 

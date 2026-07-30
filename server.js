@@ -15,7 +15,6 @@ const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 const LEGACY_DB_FILE = path.join(DATA_DIR, "db.json");
 const SQLITE_DB_FILE = path.join(DATA_DIR, "groomly.sqlite");
 const SQLITE_VENDOR_DIR = path.join(ROOT_DIR, "scripts", "vendor", "sqljs");
-const CLOUD_BACKUP_KEY_FILE = path.join(DATA_DIR, "cloud-backup.key");
 const MAX_BODY_BYTES = 16 * 1024 * 1024;
 const MAX_UPDATE_BYTES = 28 * 1024 * 1024;
 const MAX_UPDATE_BODY_BYTES = 40 * 1024 * 1024;
@@ -39,8 +38,6 @@ const sessions = new Map();
 const eventClients = new Set();
 let restartScheduled = false;
 let sqlDb = null;
-let cloudBackupTimer = null;
-let cloudBackupRunning = false;
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -114,17 +111,6 @@ function defaultSettings() {
       lastResult: "",
       lastUpdateAt: ""
     },
-    cloudBackup: {
-      enabled: false,
-      folderPath: "",
-      schedule: "daily",
-      time: "20:00",
-      retentionCount: 14,
-      passwordSecret: "",
-      lastRunAt: "",
-      lastResult: "",
-      lastFileName: ""
-    },
     animal: {
       breeds: ["Meticcio"],
       services: ["Bagno", "Taglio", "Snodatura", "Stripping"],
@@ -172,19 +158,6 @@ function ensureSettingsShape(settings = {}) {
     internalReminderMinutes: cleanNumber(settings.appointments?.internalReminderMinutes, defaults.appointments.internalReminderMinutes),
     calendarDragDropEnabled: settings.appointments?.calendarDragDropEnabled !== false
   };
-  const cloudBackup = {
-    ...defaults.cloudBackup,
-    ...(settings.cloudBackup || {}),
-    enabled: settings.cloudBackup?.enabled === true,
-    folderPath: cleanString(settings.cloudBackup?.folderPath),
-    schedule: cleanBackupSchedule(settings.cloudBackup?.schedule, defaults.cloudBackup.schedule),
-    time: cleanBackupTime(settings.cloudBackup?.time, defaults.cloudBackup.time),
-    retentionCount: cleanRetentionCount(settings.cloudBackup?.retentionCount, defaults.cloudBackup.retentionCount),
-    passwordSecret: cleanString(settings.cloudBackup?.passwordSecret),
-    lastRunAt: cleanString(settings.cloudBackup?.lastRunAt),
-    lastResult: cleanString(settings.cloudBackup?.lastResult),
-    lastFileName: cleanString(settings.cloudBackup?.lastFileName)
-  };
   return {
     branding: {
       ...defaults.branding,
@@ -206,7 +179,6 @@ function ensureSettingsShape(settings = {}) {
       ...defaults.alexa,
       ...(settings.alexa || {})
     },
-    cloudBackup,
     animal,
     appointments,
     navigation
@@ -713,21 +685,6 @@ function cleanNumber(value, fallback = 0) {
   return Number.isFinite(number) && number >= 0 ? number : fallback;
 }
 
-function cleanBackupSchedule(value, fallback = "daily") {
-  const schedule = cleanString(value);
-  return ["manual", "daily"].includes(schedule) ? schedule : fallback;
-}
-
-function cleanBackupTime(value, fallback = "20:00") {
-  const time = cleanString(value);
-  return /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? time : fallback;
-}
-
-function cleanRetentionCount(value, fallback = 14) {
-  const number = Math.round(cleanNumber(value, fallback));
-  return Math.min(90, Math.max(1, number || fallback));
-}
-
 function cleanUiScale(value, fallback = 100) {
   const number = cleanNumber(value, fallback);
   return Math.min(105, Math.max(85, Math.round(number / 5) * 5));
@@ -1077,22 +1034,11 @@ function readUploadsForBackup() {
     }));
 }
 
-function backupDbSnapshot(db) {
-  const snapshot = JSON.parse(JSON.stringify(db || {}));
-  if (snapshot.settings?.cloudBackup) {
-    snapshot.settings.cloudBackup.passwordSecret = "";
-    snapshot.settings.cloudBackup.enabled = false;
-    snapshot.settings.cloudBackup.lastResult = "Backup cloud da riconfigurare su questo dispositivo";
-  }
-  return snapshot;
-}
-
-function backupPayload(db, detail = {}) {
+function backupPayload(db) {
   return {
     exportedAt: new Date().toISOString(),
-    db: backupDbSnapshot(db),
-    uploads: readUploadsForBackup(),
-    ...detail
+    db,
+    uploads: readUploadsForBackup()
   };
 }
 
@@ -1128,149 +1074,6 @@ function decryptBackup(envelope, password) {
   return JSON.parse(decrypted);
 }
 
-function cloudBackupKey() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (fs.existsSync(CLOUD_BACKUP_KEY_FILE)) {
-    const stored = cleanString(fs.readFileSync(CLOUD_BACKUP_KEY_FILE, "utf8"));
-    const key = Buffer.from(stored, "base64");
-    if (key.length === 32) return key;
-  }
-  const key = crypto.randomBytes(32);
-  fs.writeFileSync(CLOUD_BACKUP_KEY_FILE, key.toString("base64"), { mode: 0o600 });
-  return key;
-}
-
-function encryptLocalSecret(value) {
-  const text = cleanString(value);
-  if (!text) return "";
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv("aes-256-gcm", cloudBackupKey(), iv);
-  const encrypted = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
-  return ["v1", iv.toString("base64"), cipher.getAuthTag().toString("base64"), encrypted.toString("base64")].join(":");
-}
-
-function decryptLocalSecret(secret) {
-  const parts = cleanString(secret).split(":");
-  if (parts.length !== 4 || parts[0] !== "v1") return "";
-  try {
-    const decipher = crypto.createDecipheriv("aes-256-gcm", cloudBackupKey(), Buffer.from(parts[1], "base64"));
-    decipher.setAuthTag(Buffer.from(parts[2], "base64"));
-    return Buffer.concat([decipher.update(Buffer.from(parts[3], "base64")), decipher.final()]).toString("utf8");
-  } catch {
-    return "";
-  }
-}
-
-function cloudBackupSettings(db) {
-  return ensureSettingsShape(db.settings).cloudBackup;
-}
-
-function publicCloudBackupSettings(db) {
-  const cloudBackup = cloudBackupSettings(db);
-  const password = decryptLocalSecret(cloudBackup.passwordSecret);
-  return {
-    enabled: Boolean(cloudBackup.enabled),
-    folderPath: cleanString(cloudBackup.folderPath),
-    schedule: cleanBackupSchedule(cloudBackup.schedule),
-    time: cleanBackupTime(cloudBackup.time),
-    retentionCount: cleanRetentionCount(cloudBackup.retentionCount),
-    hasPassword: Boolean(password),
-    lastRunAt: cleanString(cloudBackup.lastRunAt),
-    lastResult: cleanString(cloudBackup.lastResult),
-    lastFileName: cleanString(cloudBackup.lastFileName)
-  };
-}
-
-function validateCloudBackupSettings(settings) {
-  if (!settings.enabled) return "";
-  if (!settings.folderPath) return "Indica la cartella cloud dove salvare i backup";
-  if (!settings.passwordSecret || !decryptLocalSecret(settings.passwordSecret)) return "Imposta una password backup cloud";
-  return "";
-}
-
-function cloudBackupFileName(date = new Date()) {
-  const stamp = date.toISOString().replace(/[:.]/g, "-").replace("T", "-").slice(0, 19);
-  return `toelettatura-backup-cloud-${stamp}.json`;
-}
-
-function runCloudBackup(db, trigger = "manual") {
-  const settings = cloudBackupSettings(db);
-  const password = decryptLocalSecret(settings.passwordSecret);
-  if (!settings.folderPath) throw new Error("Cartella backup cloud non configurata");
-  if (!password) throw new Error("Password backup cloud da reinserire");
-  fs.mkdirSync(settings.folderPath, { recursive: true });
-  const fileName = cloudBackupFileName();
-  const filePath = path.join(settings.folderPath, fileName);
-  const backup = encryptBackup(backupPayload(db, { cloudBackup: { trigger } }), password);
-  fs.writeFileSync(filePath, `${JSON.stringify(backup, null, 2)}\n`);
-  pruneCloudBackups(settings.folderPath, settings.retentionCount);
-  const nextDb = readDb();
-  nextDb.settings.cloudBackup = {
-    ...cloudBackupSettings(nextDb),
-    lastRunAt: new Date().toISOString(),
-    lastResult: `Backup cloud salvato in ${fileName}`,
-    lastFileName: fileName
-  };
-  writeDb(nextDb);
-  return { fileName, filePath };
-}
-
-function pruneCloudBackups(folderPath, retentionCount) {
-  const keep = cleanRetentionCount(retentionCount);
-  const files = fs
-    .readdirSync(folderPath, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && /^toelettatura-backup-cloud-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.json$/.test(entry.name))
-    .map((entry) => {
-      const filePath = path.join(folderPath, entry.name);
-      return { name: entry.name, path: filePath, mtime: fs.statSync(filePath).mtimeMs };
-    })
-    .sort((a, b) => b.mtime - a.mtime || b.name.localeCompare(a.name));
-  files.slice(keep).forEach((file) => fs.rmSync(file.path, { force: true }));
-}
-
-function localDateKey(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function localTimeValue(date = new Date()) {
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-}
-
-function shouldRunCloudBackup(settings, now = new Date()) {
-  if (!settings.enabled || settings.schedule !== "daily") return false;
-  if (!settings.folderPath || !settings.passwordSecret) return false;
-  const lastRunAt = cleanString(settings.lastRunAt);
-  if (lastRunAt && localDateKey(new Date(lastRunAt)) === localDateKey(now)) return false;
-  return localTimeValue(now) >= cleanBackupTime(settings.time);
-}
-
-function startCloudBackupScheduler() {
-  if (cloudBackupTimer) clearInterval(cloudBackupTimer);
-  cloudBackupTimer = setInterval(checkCloudBackupSchedule, 60 * 1000);
-  setTimeout(checkCloudBackupSchedule, 3000);
-}
-
-async function checkCloudBackupSchedule() {
-  if (cloudBackupRunning) return;
-  const db = readDb();
-  const settings = cloudBackupSettings(db);
-  if (!shouldRunCloudBackup(settings)) return;
-  cloudBackupRunning = true;
-  try {
-    runCloudBackup(db, "automatic");
-  } catch (error) {
-    const nextDb = readDb();
-    nextDb.settings.cloudBackup = {
-      ...cloudBackupSettings(nextDb),
-      lastRunAt: new Date().toISOString(),
-      lastResult: error.message || "Errore backup cloud"
-    };
-    writeDb(nextDb);
-  } finally {
-    cloudBackupRunning = false;
-  }
-}
-
 function restoreBackup(payload) {
   const nextDb = payload?.db;
   if (!nextDb || !Array.isArray(nextDb.users) || !Array.isArray(nextDb.dogs) || !Array.isArray(nextDb.appointments)) {
@@ -1298,14 +1101,7 @@ function restoreBackup(payload) {
 }
 
 function settingsForRestore(settings) {
-  const restored = ensureSettingsShape(settings);
-  restored.cloudBackup = {
-    ...restored.cloudBackup,
-    enabled: false,
-    passwordSecret: "",
-    lastResult: "Backup cloud da riconfigurare su questo dispositivo"
-  };
-  return restored;
+  return ensureSettingsShape(settings);
 }
 
 function isUpdateFileName(fileName) {
@@ -2297,41 +2093,6 @@ async function handleApi(req, res, url) {
       }
     }
 
-    if (parts[1] === "settings" && parts[2] === "cloud-backup") {
-      if (user.role !== "admin") return sendError(res, 403, "Solo amministratore");
-      if (method === "GET") {
-        return sendJson(res, 200, { cloudBackup: publicCloudBackupSettings(db) });
-      }
-      if (method === "PUT") {
-        const body = await readBody(req);
-        const current = cloudBackupSettings(db);
-        const folderPath = cleanString(body.folderPath);
-        if (folderPath && !path.isAbsolute(folderPath)) return sendError(res, 400, "Inserisci il percorso completo della cartella cloud");
-        const next = {
-          ...current,
-          enabled: body.enabled === true,
-          folderPath,
-          schedule: cleanBackupSchedule(body.schedule, current.schedule),
-          time: cleanBackupTime(body.time, current.time),
-          retentionCount: cleanRetentionCount(body.retentionCount, current.retentionCount),
-          updatedAt: new Date().toISOString()
-        };
-        const password = cleanString(body.password);
-        if (password) {
-          if (password.length < 8) return sendError(res, 400, "La password backup cloud deve avere almeno 8 caratteri");
-          next.passwordSecret = encryptLocalSecret(password);
-        }
-        if (body.clearPassword === true) next.passwordSecret = "";
-        const validationError = validateCloudBackupSettings(next);
-        if (validationError) return sendError(res, 400, validationError);
-        if (next.enabled || next.folderPath) fs.mkdirSync(next.folderPath, { recursive: true });
-        db.settings.cloudBackup = next;
-        writeDb(db);
-        broadcastRequestDataChange(req, "settings", { section: "cloud-backup" });
-        return sendJson(res, 200, { cloudBackup: publicCloudBackupSettings(readDb()) });
-      }
-    }
-
     if (parts[1] === "backup") {
       if (user.role !== "admin") return sendError(res, 403, "Solo amministratore");
       if (parts[2] === "export" && method === "POST") {
@@ -2348,25 +2109,6 @@ async function handleApi(req, res, url) {
         restoreBackup(backupPayload);
         broadcastRequestDataChange(req, "backup", { action: "import" });
         return sendJson(res, 200, { ok: true });
-      }
-      if (parts[2] === "cloud-run" && method === "POST") {
-        if (cloudBackupRunning) return sendError(res, 409, "Backup cloud gia in corso");
-        cloudBackupRunning = true;
-        try {
-          const result = runCloudBackup(db, "manual");
-          broadcastRequestDataChange(req, "backup", { action: "cloud-run" });
-          return sendJson(res, 200, { ok: true, result, cloudBackup: publicCloudBackupSettings(readDb()) });
-        } catch (error) {
-          const nextDb = readDb();
-          nextDb.settings.cloudBackup = {
-            ...cloudBackupSettings(nextDb),
-            lastResult: error.message || "Errore backup cloud"
-          };
-          writeDb(nextDb);
-          return sendError(res, 400, error.message || "Errore backup cloud");
-        } finally {
-          cloudBackupRunning = false;
-        }
       }
     }
 
@@ -2682,7 +2424,6 @@ const server = http.createServer((req, res) => {
 
 initializeStorage()
   .then(() => {
-    startCloudBackupScheduler();
     server.listen(PORT, "0.0.0.0", () => {
       console.log(`Groomly attivo su http://localhost:${PORT}`);
       console.log(`Archivio SQLite: ${SQLITE_DB_FILE}`);

@@ -3188,6 +3188,68 @@ body.calendar-dragging {
   grid-column: 1 / -1;
 }
 
+.settings-disclosure {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0;
+}
+
+.settings-disclosure.wide {
+  grid-column: 1 / -1;
+}
+
+.settings-disclosure summary {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 16px;
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 850;
+  list-style: none;
+}
+
+.settings-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-disclosure summary::after {
+  content: "+";
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.settings-disclosure[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-disclosure[open] summary::after {
+  content: "-";
+}
+
+.settings-disclosure > .settings-panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 16px;
+}
+
+.settings-disclosure > .settings-panel > .settings-heading-row:first-child h2 {
+  display: none;
+}
+
 .settings-heading-row {
   display: flex;
   justify-content: space-between;
@@ -4514,6 +4576,7 @@ body.calendar-dragging {
 :root[data-theme="dark"] .table-card,
 :root[data-theme="dark"] .history-item,
 :root[data-theme="dark"] .service-history-card,
+:root[data-theme="dark"] .settings-disclosure,
 :root[data-theme="dark"] .settings-panel,
 :root[data-theme="dark"] .panel,
 :root[data-theme="dark"] .card,
