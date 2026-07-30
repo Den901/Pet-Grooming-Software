@@ -9,6 +9,7 @@ data/db.json
 data/*.sqlite
 data/*.sqlite-shm
 data/*.sqlite-wal
+data/cloud-backup.key
 data/uploads/*
 !data/uploads/.gitkeep
 data/update-backups/

@@ -2,12 +2,12 @@
   "format": "PET_GROOMING_SOFTWARE_UPDATE_MANIFEST",
   "formatVersion": 1,
   "app": "pet-grooming-software",
-  "version": "1.0.24",
-  "releaseLabel": "1.0.24",
-  "createdAt": "2026-07-29T13:21:22.490Z",
-  "packageName": "Pet-Grooming-Software-1.0.24.pgs-update",
-  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v1.0.24/Pet-Grooming-Software-1.0.24.pgs-update",
-  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v1.0.24",
-  "notes": "Release 1.0.24",
-  "changelog": "Migrazione archivio dati a SQLite: il portale salva utenti, schede, appuntamenti, note calendario e impostazioni in data/groomly.sqlite; al primo avvio importa automaticamente il vecchio data/db.json se presente; database e foto restano esclusi dagli update software."
+  "version": "1.0.25",
+  "releaseLabel": "1.0.25",
+  "createdAt": "2026-07-30T05:58:03.694Z",
+  "packageName": "Pet-Grooming-Software-1.0.25.pgs-update",
+  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v1.0.25/Pet-Grooming-Software-1.0.25.pgs-update",
+  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v1.0.25",
+  "notes": "Release 1.0.25",
+  "changelog": "Aggiunge Backup cloud in Impostazioni: salvataggio cifrato in una cartella sincronizzata come OneDrive, Google Drive desktop, Dropbox o NAS; backup manuale immediato, backup giornaliero programmato, password locale protetta e conservazione automatica degli ultimi backup."
 }
