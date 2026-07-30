@@ -13,6 +13,7 @@ const state = {
   branding: null,
   whatsapp: null,
   alexa: null,
+  remoteBackup: null,
   animalSettings: null,
   appointmentSettings: null,
   navigation: null,
@@ -617,11 +618,12 @@ async function loadData() {
   state.branding = brandingResponse.branding || state.branding;
   applyBranding();
   if (state.me?.role === "admin") {
-    const [usersResponse, duckdnsResponse, whatsappResponse, alexaResponse, versionResponse] = await Promise.all([
+    const [usersResponse, duckdnsResponse, whatsappResponse, alexaResponse, remoteBackupResponse, versionResponse] = await Promise.all([
       api("/api/users"),
       api("/api/settings/duckdns"),
       api("/api/settings/whatsapp"),
       api("/api/settings/alexa"),
+      api("/api/settings/remote-backup"),
       api("/api/version")
     ]);
     state.users = usersResponse.users || [];
@@ -630,6 +632,7 @@ async function loadData() {
     state.duckdns = duckdnsResponse.duckdns || null;
     state.whatsapp = whatsappResponse.whatsapp || null;
     state.alexa = alexaResponse.alexa || null;
+    state.remoteBackup = remoteBackupResponse.remoteBackup || null;
     state.version = versionResponse || null;
   } else {
     state.users = [];
@@ -637,6 +640,7 @@ async function loadData() {
     state.duckdns = null;
     state.whatsapp = null;
     state.alexa = null;
+    state.remoteBackup = null;
     state.version = null;
   }
 }
@@ -2663,6 +2667,8 @@ function renderSettings() {
   const whatsapp = state.whatsapp || {};
   const alexa = state.alexa || {};
   const duckdns = state.duckdns || {};
+  const remoteBackup = state.remoteBackup || {};
+  const remoteFtp = remoteBackup.ftp || {};
   const animal = getAnimalSettings();
   const appointmentSettings = getAppointmentSettings();
   const version = state.version || {};
@@ -3070,6 +3076,81 @@ function renderSettings() {
         </label>
         <button class="btn danger" type="submit">Importa e ripristina</button>
       </form>
+      <form class="settings-panel wide" id="remoteBackupForm">
+        <div class="settings-heading-row">
+          <div>
+            <h2>Backup remoto</h2>
+            <p class="settings-note">Invia automaticamente un backup cifrato su uno spazio FTP/FTPS esterno. Se il portale e spento, recupera il backup saltato al prossimo avvio utile.</p>
+          </div>
+          <span class="badge">${remoteBackup.enabled ? "Attivo" : "Disattivo"}</span>
+        </div>
+        <div class="form-grid">
+          <label class="checkbox-line full">
+            <input name="enabled" type="checkbox" ${remoteBackup.enabled ? "checked" : ""} />
+            Abilita backup remoto automatico
+          </label>
+          <label>Destinazione
+            <select name="provider">
+              <option value="ftp" selected>FTP / FTPS</option>
+            </select>
+          </label>
+          <label>Frequenza
+            <select name="schedule">
+              <option value="daily" ${remoteBackup.schedule !== "manual" ? "selected" : ""}>Ogni giorno</option>
+              <option value="manual" ${remoteBackup.schedule === "manual" ? "selected" : ""}>Solo manuale</option>
+            </select>
+          </label>
+          <label>Ora backup
+            <input name="time" type="time" value="${escapeAttr(remoteBackup.time || "20:00")}" />
+          </label>
+          <label>Backup da tenere
+            <input name="retentionCount" type="number" min="1" max="90" step="1" value="${escapeAttr(remoteBackup.retentionCount || 14)}" />
+          </label>
+          <label>Password file backup
+            <input name="backupPassword" type="password" minlength="8" autocomplete="new-password" placeholder="${remoteBackup.hasBackupPassword ? "Lascia vuoto per non cambiarla" : "Minimo 8 caratteri"}" />
+          </label>
+          <label class="checkbox-line full">
+            <input name="clearBackupPassword" type="checkbox" />
+            Rimuovi password file backup salvata
+          </label>
+          <label>Protocollo
+            <select name="ftpProtocol">
+              <option value="ftp" ${remoteFtp.protocol === "ftp" ? "selected" : ""}>FTP</option>
+              <option value="ftps-explicit" ${remoteFtp.protocol === "ftps-explicit" ? "selected" : ""}>FTPS esplicito</option>
+              <option value="ftps-implicit" ${remoteFtp.protocol === "ftps-implicit" ? "selected" : ""}>FTPS implicito</option>
+            </select>
+          </label>
+          <label>Host
+            <input name="ftpHost" value="${escapeAttr(remoteFtp.host || "")}" placeholder="ftp.dominio.it" autocomplete="off" />
+          </label>
+          <label>Porta
+            <input name="ftpPort" value="${escapeAttr(remoteFtp.port || "")}" inputmode="numeric" placeholder="21 o 990" />
+          </label>
+          <label>Utente
+            <input name="ftpUsername" value="${escapeAttr(remoteFtp.username || "")}" autocomplete="off" />
+          </label>
+          <label>Password FTP/FTPS
+            <input name="ftpPassword" type="password" autocomplete="new-password" placeholder="${remoteFtp.hasPassword ? "Lascia vuoto per non cambiarla" : "Password spazio FTP"}" />
+          </label>
+          <label class="checkbox-line">
+            <input name="clearFtpPassword" type="checkbox" />
+            Rimuovi password FTP salvata
+          </label>
+          <label class="full">Cartella remota
+            <input name="ftpRemoteDir" value="${escapeAttr(remoteFtp.remoteDir || "/groomly-backup")}" placeholder="/groomly-backup" autocomplete="off" />
+          </label>
+        </div>
+        <p class="settings-note">Google Drive richiede il collegamento OAuth dell'account: lo aggiungiamo come destinazione appena prepariamo le credenziali Google del cliente.</p>
+        ${
+          remoteBackup.lastAttemptAt || remoteBackup.lastResult
+            ? `<p class="settings-note">Ultimo tentativo: ${escapeHtml(remoteBackup.lastAttemptAt ? formatDateTime(remoteBackup.lastAttemptAt) : "-")} - ${escapeHtml(remoteBackup.lastResult || "-")}</p>`
+            : `<p class="settings-note">Il file viene cifrato prima dell'invio: senza la password backup non puo essere letto.</p>`
+        }
+        <div class="settings-actions">
+          <button class="btn" type="submit">Salva backup remoto</button>
+          <button class="btn secondary" type="button" id="runRemoteBackupBtn">Esegui backup ora</button>
+        </div>
+      </form>
       <form class="settings-panel wide" id="updateForm">
         <div class="settings-heading-row">
           <div>
@@ -3450,6 +3531,57 @@ function bindSettings() {
       await logout();
     } catch (err) {
       notify(err.message);
+    }
+  });
+
+  document.getElementById("remoteBackupForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    try {
+      const response = await api("/api/settings/remote-backup", {
+        method: "PUT",
+        body: JSON.stringify({
+          enabled: data.get("enabled") === "on",
+          provider: data.get("provider"),
+          schedule: data.get("schedule"),
+          time: data.get("time"),
+          retentionCount: data.get("retentionCount"),
+          backupPassword: data.get("backupPassword"),
+          clearBackupPassword: data.get("clearBackupPassword") === "on",
+          ftp: {
+            protocol: data.get("ftpProtocol"),
+            host: data.get("ftpHost"),
+            port: data.get("ftpPort"),
+            username: data.get("ftpUsername"),
+            password: data.get("ftpPassword"),
+            clearPassword: data.get("clearFtpPassword") === "on",
+            remoteDir: data.get("ftpRemoteDir")
+          }
+        })
+      });
+      state.remoteBackup = response.remoteBackup;
+      renderView();
+      notify("Backup remoto salvato");
+    } catch (err) {
+      notify(err.message);
+    }
+  });
+
+  document.getElementById("runRemoteBackupBtn").addEventListener("click", async () => {
+    const button = document.getElementById("runRemoteBackupBtn");
+    button.disabled = true;
+    try {
+      const response = await api("/api/backup/remote-run", {
+        method: "POST",
+        body: "{}"
+      });
+      state.remoteBackup = response.remoteBackup;
+      renderView();
+      notify("Backup remoto inviato");
+    } catch (err) {
+      notify(err.message);
+      button.disabled = false;
     }
   });
 

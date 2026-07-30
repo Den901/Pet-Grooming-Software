@@ -1,5 +1,7 @@
 const http = require("http");
 const https = require("https");
+const net = require("net");
+const tls = require("tls");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -15,6 +17,7 @@ const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 const LEGACY_DB_FILE = path.join(DATA_DIR, "db.json");
 const SQLITE_DB_FILE = path.join(DATA_DIR, "groomly.sqlite");
 const SQLITE_VENDOR_DIR = path.join(ROOT_DIR, "scripts", "vendor", "sqljs");
+const REMOTE_BACKUP_KEY_FILE = path.join(DATA_DIR, "remote-backup.key");
 const MAX_BODY_BYTES = 16 * 1024 * 1024;
 const MAX_UPDATE_BYTES = 28 * 1024 * 1024;
 const MAX_UPDATE_BODY_BYTES = 40 * 1024 * 1024;
@@ -38,6 +41,8 @@ const sessions = new Map();
 const eventClients = new Set();
 let restartScheduled = false;
 let sqlDb = null;
+let remoteBackupTimer = null;
+let remoteBackupRunning = false;
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -111,6 +116,26 @@ function defaultSettings() {
       lastResult: "",
       lastUpdateAt: ""
     },
+    remoteBackup: {
+      enabled: false,
+      provider: "ftp",
+      schedule: "daily",
+      time: "20:00",
+      retentionCount: 14,
+      backupPasswordSecret: "",
+      lastAttemptAt: "",
+      lastRunAt: "",
+      lastResult: "",
+      lastFileName: "",
+      ftp: {
+        protocol: "ftp",
+        host: "",
+        port: "",
+        username: "",
+        passwordSecret: "",
+        remoteDir: "/groomly-backup"
+      }
+    },
     animal: {
       breeds: ["Meticcio"],
       services: ["Bagno", "Taglio", "Snodatura", "Stripping"],
@@ -158,6 +183,7 @@ function ensureSettingsShape(settings = {}) {
     internalReminderMinutes: cleanNumber(settings.appointments?.internalReminderMinutes, defaults.appointments.internalReminderMinutes),
     calendarDragDropEnabled: settings.appointments?.calendarDragDropEnabled !== false
   };
+  const remoteBackup = cleanRemoteBackupSettings(settings.remoteBackup || {}, defaults.remoteBackup);
   return {
     branding: {
       ...defaults.branding,
@@ -179,6 +205,7 @@ function ensureSettingsShape(settings = {}) {
       ...defaults.alexa,
       ...(settings.alexa || {})
     },
+    remoteBackup,
     animal,
     appointments,
     navigation
@@ -685,6 +712,77 @@ function cleanNumber(value, fallback = 0) {
   return Number.isFinite(number) && number >= 0 ? number : fallback;
 }
 
+function cleanBackupSchedule(value, fallback = "daily") {
+  const schedule = cleanString(value);
+  return ["manual", "daily"].includes(schedule) ? schedule : fallback;
+}
+
+function cleanBackupTime(value, fallback = "20:00") {
+  const time = cleanString(value);
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? time : fallback;
+}
+
+function cleanRetentionCount(value, fallback = 14) {
+  const number = Math.round(cleanNumber(value, fallback));
+  return Math.min(90, Math.max(1, number || fallback));
+}
+
+function cleanRemoteBackupProvider(value, fallback = "ftp") {
+  const provider = cleanString(value);
+  return ["ftp"].includes(provider) ? provider : fallback;
+}
+
+function cleanFtpProtocol(value, fallback = "ftp") {
+  const protocol = cleanString(value);
+  return ["ftp", "ftps-explicit", "ftps-implicit"].includes(protocol) ? protocol : fallback;
+}
+
+function defaultFtpPort(protocol) {
+  return protocol === "ftps-implicit" ? 990 : 21;
+}
+
+function cleanFtpPort(value, protocol = "ftp") {
+  const port = Math.round(cleanNumber(value, defaultFtpPort(protocol)));
+  return port >= 1 && port <= 65535 ? port : defaultFtpPort(protocol);
+}
+
+function cleanRemoteDir(value, fallback = "/groomly-backup") {
+  const raw = cleanString(value || fallback).replace(/\\/g, "/");
+  const parts = raw.split("/").map((part) => part.trim()).filter(Boolean);
+  if (!parts.length || parts.some((part) => part === "." || part === ".." || /[\r\n\0]/.test(part))) return fallback;
+  return `/${parts.join("/")}`;
+}
+
+function cleanRemoteBackupSettings(settings = {}, fallback = defaultSettings().remoteBackup) {
+  const provider = cleanRemoteBackupProvider(settings.provider, fallback.provider);
+  const protocol = cleanFtpProtocol(settings.ftp?.protocol, fallback.ftp.protocol);
+  const ftp = {
+    ...fallback.ftp,
+    ...(settings.ftp || {}),
+    protocol,
+    host: cleanString(settings.ftp?.host),
+    port: settings.ftp?.port ? cleanFtpPort(settings.ftp.port, protocol) : "",
+    username: cleanString(settings.ftp?.username),
+    passwordSecret: cleanString(settings.ftp?.passwordSecret),
+    remoteDir: cleanRemoteDir(settings.ftp?.remoteDir, fallback.ftp.remoteDir)
+  };
+  return {
+    ...fallback,
+    ...settings,
+    enabled: settings.enabled === true,
+    provider,
+    schedule: cleanBackupSchedule(settings.schedule, fallback.schedule),
+    time: cleanBackupTime(settings.time, fallback.time),
+    retentionCount: cleanRetentionCount(settings.retentionCount, fallback.retentionCount),
+    backupPasswordSecret: cleanString(settings.backupPasswordSecret),
+    lastAttemptAt: cleanString(settings.lastAttemptAt),
+    lastRunAt: cleanString(settings.lastRunAt),
+    lastResult: cleanString(settings.lastResult),
+    lastFileName: cleanString(settings.lastFileName),
+    ftp
+  };
+}
+
 function cleanUiScale(value, fallback = 100) {
   const number = cleanNumber(value, fallback);
   return Math.min(105, Math.max(85, Math.round(number / 5) * 5));
@@ -877,6 +975,35 @@ function publicNavigationSettings(db) {
   };
 }
 
+function remoteBackupSettings(db) {
+  return ensureSettingsShape(db.settings).remoteBackup;
+}
+
+function publicRemoteBackupSettings(db) {
+  const remoteBackup = remoteBackupSettings(db);
+  const protocol = cleanFtpProtocol(remoteBackup.ftp?.protocol);
+  return {
+    enabled: Boolean(remoteBackup.enabled),
+    provider: cleanRemoteBackupProvider(remoteBackup.provider),
+    schedule: cleanBackupSchedule(remoteBackup.schedule),
+    time: cleanBackupTime(remoteBackup.time),
+    retentionCount: cleanRetentionCount(remoteBackup.retentionCount),
+    hasBackupPassword: Boolean(decryptLocalSecret(remoteBackup.backupPasswordSecret)),
+    lastAttemptAt: cleanString(remoteBackup.lastAttemptAt),
+    lastRunAt: cleanString(remoteBackup.lastRunAt),
+    lastResult: cleanString(remoteBackup.lastResult),
+    lastFileName: cleanString(remoteBackup.lastFileName),
+    ftp: {
+      protocol,
+      host: cleanString(remoteBackup.ftp?.host),
+      port: remoteBackup.ftp?.port || defaultFtpPort(protocol),
+      username: cleanString(remoteBackup.ftp?.username),
+      remoteDir: cleanRemoteDir(remoteBackup.ftp?.remoteDir),
+      hasPassword: Boolean(decryptLocalSecret(remoteBackup.ftp?.passwordSecret))
+    }
+  };
+}
+
 function showInitialAccessHint(db) {
   return db.users.some(
     (item) =>
@@ -1034,10 +1161,27 @@ function readUploadsForBackup() {
     }));
 }
 
+function backupDbSnapshot(db) {
+  const snapshot = JSON.parse(JSON.stringify(db || {}));
+  if (snapshot.settings?.remoteBackup) {
+    snapshot.settings.remoteBackup = {
+      ...snapshot.settings.remoteBackup,
+      enabled: false,
+      backupPasswordSecret: "",
+      lastResult: "Backup remoto da riconfigurare su questo dispositivo",
+      ftp: {
+        ...(snapshot.settings.remoteBackup.ftp || {}),
+        passwordSecret: ""
+      }
+    };
+  }
+  return snapshot;
+}
+
 function backupPayload(db) {
   return {
     exportedAt: new Date().toISOString(),
-    db,
+    db: backupDbSnapshot(db),
     uploads: readUploadsForBackup()
   };
 }
@@ -1074,6 +1218,39 @@ function decryptBackup(envelope, password) {
   return JSON.parse(decrypted);
 }
 
+function remoteBackupKey() {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (fs.existsSync(REMOTE_BACKUP_KEY_FILE)) {
+    const stored = cleanString(fs.readFileSync(REMOTE_BACKUP_KEY_FILE, "utf8"));
+    const key = Buffer.from(stored, "base64");
+    if (key.length === 32) return key;
+  }
+  const key = crypto.randomBytes(32);
+  fs.writeFileSync(REMOTE_BACKUP_KEY_FILE, key.toString("base64"), { mode: 0o600 });
+  return key;
+}
+
+function encryptLocalSecret(value) {
+  const text = cleanString(value);
+  if (!text) return "";
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", remoteBackupKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
+  return ["v1", iv.toString("base64"), cipher.getAuthTag().toString("base64"), encrypted.toString("base64")].join(":");
+}
+
+function decryptLocalSecret(secret) {
+  const parts = cleanString(secret).split(":");
+  if (parts.length !== 4 || parts[0] !== "v1") return "";
+  try {
+    const decipher = crypto.createDecipheriv("aes-256-gcm", remoteBackupKey(), Buffer.from(parts[1], "base64"));
+    decipher.setAuthTag(Buffer.from(parts[2], "base64"));
+    return Buffer.concat([decipher.update(Buffer.from(parts[3], "base64")), decipher.final()]).toString("utf8");
+  } catch {
+    return "";
+  }
+}
+
 function restoreBackup(payload) {
   const nextDb = payload?.db;
   if (!nextDb || !Array.isArray(nextDb.users) || !Array.isArray(nextDb.dogs) || !Array.isArray(nextDb.appointments)) {
@@ -1101,7 +1278,400 @@ function restoreBackup(payload) {
 }
 
 function settingsForRestore(settings) {
-  return ensureSettingsShape(settings);
+  const restored = ensureSettingsShape(settings);
+  restored.remoteBackup = {
+    ...restored.remoteBackup,
+    enabled: false,
+    backupPasswordSecret: "",
+    lastResult: "Backup remoto da riconfigurare su questo dispositivo",
+    ftp: {
+      ...restored.remoteBackup.ftp,
+      passwordSecret: ""
+    }
+  };
+  return restored;
+}
+
+function remoteBackupFileName(date = new Date()) {
+  const stamp = date.toISOString().replace(/[:.]/g, "-").replace("T", "-").slice(0, 19);
+  return `toelettatura-backup-remoto-${stamp}.json`;
+}
+
+function localDateKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function localTimeValue(date = new Date()) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function validateRemoteBackupReady(settings) {
+  if (!decryptLocalSecret(settings.backupPasswordSecret)) return "Imposta una password per cifrare il backup remoto";
+  if (settings.provider !== "ftp") return "Destinazione backup remoto non valida";
+  if (!settings.ftp.host) return "Inserisci host FTP/FTPS";
+  if (!settings.ftp.username) return "Inserisci utente FTP/FTPS";
+  if (!decryptLocalSecret(settings.ftp.passwordSecret)) return "Inserisci password FTP/FTPS";
+  if (!settings.ftp.remoteDir) return "Inserisci cartella remota FTP/FTPS";
+  return "";
+}
+
+function shouldRunRemoteBackup(settings, now = new Date()) {
+  if (!settings.enabled || settings.schedule !== "daily") return false;
+  if (settings.lastAttemptAt && localDateKey(new Date(settings.lastAttemptAt)) === localDateKey(now)) return false;
+  return localTimeValue(now) >= cleanBackupTime(settings.time);
+}
+
+function updateRemoteBackupStatus(partial) {
+  const nextDb = readDb();
+  nextDb.settings.remoteBackup = {
+    ...remoteBackupSettings(nextDb),
+    ...partial,
+    ftp: remoteBackupSettings(nextDb).ftp
+  };
+  writeDb(nextDb);
+}
+
+async function runRemoteBackup(db, trigger = "manual") {
+  const settings = remoteBackupSettings(db);
+  const validationError = validateRemoteBackupReady(settings);
+  if (validationError) throw new Error(validationError);
+  const backupPassword = decryptLocalSecret(settings.backupPasswordSecret);
+  const fileName = remoteBackupFileName();
+  const backup = encryptBackup(backupPayload(db), backupPassword);
+  const buffer = Buffer.from(`${JSON.stringify(backup, null, 2)}\n`, "utf8");
+  if (settings.provider === "ftp") {
+    await uploadFtpBackup(settings.ftp, fileName, buffer, settings.retentionCount);
+  }
+  updateRemoteBackupStatus({
+    lastAttemptAt: new Date().toISOString(),
+    lastRunAt: new Date().toISOString(),
+    lastResult: trigger === "automatic" ? `Backup remoto automatico salvato: ${fileName}` : `Backup remoto salvato: ${fileName}`,
+    lastFileName: fileName
+  });
+  return { fileName };
+}
+
+function startRemoteBackupScheduler() {
+  if (remoteBackupTimer) clearInterval(remoteBackupTimer);
+  remoteBackupTimer = setInterval(checkRemoteBackupSchedule, 60 * 1000);
+  setTimeout(checkRemoteBackupSchedule, 4000);
+}
+
+async function checkRemoteBackupSchedule() {
+  if (remoteBackupRunning) return;
+  const db = readDb();
+  const settings = remoteBackupSettings(db);
+  if (!shouldRunRemoteBackup(settings)) return;
+  remoteBackupRunning = true;
+  try {
+    await runRemoteBackup(db, "automatic");
+  } catch (error) {
+    updateRemoteBackupStatus({
+      lastAttemptAt: new Date().toISOString(),
+      lastResult: error.message || "Errore backup remoto"
+    });
+  } finally {
+    remoteBackupRunning = false;
+  }
+}
+
+function ftpSafeCommandValue(value, label = "FTP") {
+  const text = cleanString(value);
+  if (!text || /[\r\n\0]/.test(text)) throw new Error(`${label} non valido`);
+  return text;
+}
+
+function ftpReplyMessage(reply) {
+  return (reply?.lines || []).join(" ").trim() || `FTP ${reply?.code || ""}`.trim();
+}
+
+function createFtpSession(socket, timeoutMs = 20000) {
+  let buffer = "";
+  let current = null;
+  let closed = false;
+  const replies = [];
+  const waiters = [];
+
+  function completeReply(reply) {
+    replies.push(reply);
+    flushWaiters();
+  }
+
+  function failWaiters(error) {
+    while (waiters.length) waiters.shift().reject(error);
+  }
+
+  function flushWaiters() {
+    while (replies.length && waiters.length) {
+      const reply = replies.shift();
+      const waiter = waiters.shift();
+      clearTimeout(waiter.timer);
+      waiter.resolve(reply);
+    }
+  }
+
+  function parseLine(line) {
+    const match = line.match(/^(\d{3})([\s-])(.*)$/);
+    if (!current) {
+      if (!match) return;
+      current = {
+        code: Number(match[1]),
+        multiline: match[2] === "-",
+        lines: [line]
+      };
+      if (!current.multiline) {
+        const reply = current;
+        current = null;
+        completeReply(reply);
+      }
+      return;
+    }
+    current.lines.push(line);
+    if (current.multiline && line.startsWith(`${current.code} `)) {
+      const reply = current;
+      current = null;
+      completeReply(reply);
+    }
+  }
+
+  function handleData(chunk) {
+    buffer += chunk.toString("utf8");
+    let index = buffer.indexOf("\n");
+    while (index >= 0) {
+      const line = buffer.slice(0, index).replace(/\r$/, "");
+      buffer = buffer.slice(index + 1);
+      parseLine(line);
+      index = buffer.indexOf("\n");
+    }
+  }
+
+  function handleError(error) {
+    failWaiters(error);
+  }
+
+  function handleClose() {
+    closed = true;
+    failWaiters(new Error("Connessione FTP chiusa"));
+  }
+
+  socket.on("data", handleData);
+  socket.on("error", handleError);
+  socket.on("close", handleClose);
+
+  async function readReply(okCodes = [], timeout = timeoutMs) {
+    const reply = replies.length
+      ? replies.shift()
+      : await new Promise((resolve, reject) => {
+          if (closed) {
+            reject(new Error("Connessione FTP chiusa"));
+            return;
+          }
+          const timer = setTimeout(() => reject(new Error("Timeout risposta FTP")), timeout);
+          waiters.push({ resolve, reject, timer });
+        });
+    if (okCodes.length && !okCodes.includes(reply.code)) {
+      throw new Error(ftpReplyMessage(reply));
+    }
+    return reply;
+  }
+
+  async function command(commandText, okCodes = []) {
+    if (/[\r\n\0]/.test(commandText)) throw new Error("Comando FTP non valido");
+    socket.write(`${commandText}\r\n`);
+    return readReply(okCodes);
+  }
+
+  function detach() {
+    socket.off("data", handleData);
+    socket.off("error", handleError);
+    socket.off("close", handleClose);
+  }
+
+  function close() {
+    detach();
+    socket.destroy();
+  }
+
+  return { socket, readReply, command, detach, close };
+}
+
+function waitSocketReady(socket, eventName, label, timeoutMs = 20000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      socket.destroy();
+      reject(new Error(`Timeout connessione ${label}`));
+    }, timeoutMs);
+    function cleanup() {
+      clearTimeout(timer);
+      socket.off(eventName, onReady);
+      socket.off("error", onError);
+    }
+    function onReady() {
+      cleanup();
+      resolve();
+    }
+    function onError(error) {
+      cleanup();
+      reject(error);
+    }
+    socket.once(eventName, onReady);
+    socket.once("error", onError);
+  });
+}
+
+async function connectFtpSession(ftp) {
+  const protocol = cleanFtpProtocol(ftp.protocol);
+  const host = ftpSafeCommandValue(ftp.host, "Host FTP");
+  const port = cleanFtpPort(ftp.port, protocol);
+  let session;
+  if (protocol === "ftps-implicit") {
+    const socket = tls.connect({ host, port, servername: host, rejectUnauthorized: false });
+    session = createFtpSession(socket);
+    await waitSocketReady(socket, "secureConnect", "FTPS");
+    await session.readReply([220]);
+  } else {
+    const socket = net.connect({ host, port });
+    session = createFtpSession(socket);
+    await waitSocketReady(socket, "connect", "FTP");
+    await session.readReply([220]);
+    if (protocol === "ftps-explicit") {
+      await session.command("AUTH TLS", [234]);
+      const plainSocket = session.socket;
+      session.detach();
+      const secureSocket = tls.connect({ socket: plainSocket, servername: host, rejectUnauthorized: false });
+      await waitSocketReady(secureSocket, "secureConnect", "FTPS");
+      session = createFtpSession(secureSocket);
+      await session.command("PBSZ 0", [200]);
+      await session.command("PROT P", [200]);
+    }
+  }
+  const username = ftpSafeCommandValue(ftp.username, "Utente FTP");
+  const password = ftpSafeCommandValue(decryptLocalSecret(ftp.passwordSecret), "Password FTP");
+  const userReply = await session.command(`USER ${username}`, [230, 331]);
+  if (userReply.code === 331) await session.command(`PASS ${password}`, [230, 202]);
+  await session.command("TYPE I", [200]);
+  return { session, protocol, host };
+}
+
+async function ftpEnsureRemoteDir(client, remoteDir) {
+  const dir = cleanRemoteDir(remoteDir);
+  const parts = dir.split("/").filter(Boolean);
+  if (dir.startsWith("/")) await client.session.command("CWD /", [250]).catch(() => {});
+  for (const part of parts) {
+    const safePart = ftpSafeCommandValue(part, "Cartella FTP");
+    try {
+      await client.session.command(`CWD ${safePart}`, [250]);
+    } catch {
+      await client.session.command(`MKD ${safePart}`, [257, 250]).catch(() => {});
+      await client.session.command(`CWD ${safePart}`, [250]);
+    }
+  }
+}
+
+function parsePassiveReply(reply, fallbackHost) {
+  const text = ftpReplyMessage(reply);
+  const match = text.match(/\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
+  if (!match) throw new Error("Risposta PASV FTP non valida");
+  const [, a, b, c, d, p1, p2] = match.map(Number);
+  const host = [a, b, c, d].join(".");
+  const port = p1 * 256 + p2;
+  return {
+    host: host === "0.0.0.0" ? fallbackHost : host,
+    port
+  };
+}
+
+async function connectFtpDataSocket(client) {
+  const passive = parsePassiveReply(await client.session.command("PASV", [227]), client.host);
+  const secure = client.protocol === "ftps-explicit" || client.protocol === "ftps-implicit";
+  const socket = secure
+    ? tls.connect({ host: passive.host, port: passive.port, servername: client.host, rejectUnauthorized: false })
+    : net.connect({ host: passive.host, port: passive.port });
+  await waitSocketReady(socket, secure ? "secureConnect" : "connect", "dati FTP");
+  return socket;
+}
+
+function waitDataClose(socket) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    function cleanup() {
+      socket.off("close", onClose);
+      socket.off("end", onClose);
+      socket.off("error", onError);
+    }
+    function onClose() {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve();
+    }
+    function onError(error) {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    }
+    socket.once("close", onClose);
+    socket.once("end", onClose);
+    socket.once("error", onError);
+  });
+}
+
+async function ftpUploadBuffer(client, fileName, buffer) {
+  const safeFileName = ftpSafeCommandValue(fileName, "Nome file backup");
+  const dataSocket = await connectFtpDataSocket(client);
+  const closePromise = waitDataClose(dataSocket);
+  await client.session.command(`STOR ${safeFileName}`, [125, 150]);
+  await new Promise((resolve, reject) => {
+    dataSocket.once("error", reject);
+    dataSocket.end(buffer, resolve);
+  });
+  await closePromise;
+  await client.session.readReply([226, 250]);
+}
+
+async function ftpListFiles(client) {
+  const dataSocket = await connectFtpDataSocket(client);
+  const chunks = [];
+  dataSocket.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+  const closePromise = waitDataClose(dataSocket);
+  let preliminary;
+  try {
+    preliminary = await client.session.command("NLST", [125, 150, 226, 250]);
+  } catch {
+    dataSocket.destroy();
+    return [];
+  }
+  await closePromise.catch(() => {});
+  if ([125, 150].includes(preliminary.code)) await client.session.readReply([226, 250]).catch(() => {});
+  return Buffer.concat(chunks)
+    .toString("utf8")
+    .split(/\r?\n/)
+    .map((line) => path.posix.basename(cleanString(line)))
+    .filter(Boolean);
+}
+
+async function ftpPruneBackups(client, retentionCount) {
+  const keep = cleanRetentionCount(retentionCount);
+  const files = (await ftpListFiles(client))
+    .filter((fileName) => /^toelettatura-backup-remoto-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.json$/.test(fileName))
+    .sort((a, b) => b.localeCompare(a));
+  for (const fileName of files.slice(keep)) {
+    await client.session.command(`DELE ${ftpSafeCommandValue(fileName, "Nome file backup")}`, [250, 200]).catch(() => {});
+  }
+}
+
+async function uploadFtpBackup(ftp, fileName, buffer, retentionCount) {
+  const client = await connectFtpSession(ftp);
+  try {
+    await ftpEnsureRemoteDir(client, ftp.remoteDir);
+    await ftpUploadBuffer(client, fileName, buffer);
+    await ftpPruneBackups(client, retentionCount);
+    await client.session.command("QUIT", [221]).catch(() => {});
+  } finally {
+    client.session.close();
+  }
 }
 
 function isUpdateFileName(fileName) {
@@ -2093,6 +2663,50 @@ async function handleApi(req, res, url) {
       }
     }
 
+    if (parts[1] === "settings" && parts[2] === "remote-backup") {
+      if (user.role !== "admin") return sendError(res, 403, "Solo amministratore");
+      if (method === "GET") {
+        return sendJson(res, 200, { remoteBackup: publicRemoteBackupSettings(db) });
+      }
+      if (method === "PUT") {
+        const body = await readBody(req);
+        const current = remoteBackupSettings(db);
+        const protocol = cleanFtpProtocol(body.ftp?.protocol, current.ftp.protocol);
+        const next = {
+          ...current,
+          enabled: body.enabled === true,
+          provider: cleanRemoteBackupProvider(body.provider, current.provider),
+          schedule: cleanBackupSchedule(body.schedule, current.schedule),
+          time: cleanBackupTime(body.time, current.time),
+          retentionCount: cleanRetentionCount(body.retentionCount, current.retentionCount),
+          updatedAt: new Date().toISOString(),
+          ftp: {
+            ...current.ftp,
+            protocol,
+            host: cleanString(body.ftp?.host),
+            port: body.ftp?.port ? cleanFtpPort(body.ftp.port, protocol) : "",
+            username: cleanString(body.ftp?.username),
+            remoteDir: cleanRemoteDir(body.ftp?.remoteDir, current.ftp.remoteDir)
+          }
+        };
+        const backupPassword = cleanString(body.backupPassword);
+        if (backupPassword) {
+          if (backupPassword.length < 8) return sendError(res, 400, "La password backup remoto deve avere almeno 8 caratteri");
+          next.backupPasswordSecret = encryptLocalSecret(backupPassword);
+        }
+        if (body.clearBackupPassword === true) next.backupPasswordSecret = "";
+        const ftpPassword = cleanString(body.ftp?.password);
+        if (ftpPassword) next.ftp.passwordSecret = encryptLocalSecret(ftpPassword);
+        if (body.ftp?.clearPassword === true) next.ftp.passwordSecret = "";
+        const validationError = next.enabled ? validateRemoteBackupReady(next) : "";
+        if (validationError) return sendError(res, 400, validationError);
+        db.settings.remoteBackup = next;
+        writeDb(db);
+        broadcastRequestDataChange(req, "settings", { section: "remote-backup" });
+        return sendJson(res, 200, { remoteBackup: publicRemoteBackupSettings(readDb()) });
+      }
+    }
+
     if (parts[1] === "backup") {
       if (user.role !== "admin") return sendError(res, 403, "Solo amministratore");
       if (parts[2] === "export" && method === "POST") {
@@ -2109,6 +2723,23 @@ async function handleApi(req, res, url) {
         restoreBackup(backupPayload);
         broadcastRequestDataChange(req, "backup", { action: "import" });
         return sendJson(res, 200, { ok: true });
+      }
+      if (parts[2] === "remote-run" && method === "POST") {
+        if (remoteBackupRunning) return sendError(res, 409, "Backup remoto gia in corso");
+        remoteBackupRunning = true;
+        try {
+          const result = await runRemoteBackup(db, "manual");
+          broadcastRequestDataChange(req, "backup", { action: "remote-run" });
+          return sendJson(res, 200, { ok: true, result, remoteBackup: publicRemoteBackupSettings(readDb()) });
+        } catch (error) {
+          updateRemoteBackupStatus({
+            lastAttemptAt: new Date().toISOString(),
+            lastResult: error.message || "Errore backup remoto"
+          });
+          return sendError(res, 400, error.message || "Errore backup remoto");
+        } finally {
+          remoteBackupRunning = false;
+        }
       }
     }
 
@@ -2424,6 +3055,7 @@ const server = http.createServer((req, res) => {
 
 initializeStorage()
   .then(() => {
+    startRemoteBackupScheduler();
     server.listen(PORT, "0.0.0.0", () => {
       console.log(`Groomly attivo su http://localhost:${PORT}`);
       console.log(`Archivio SQLite: ${SQLITE_DB_FILE}`);

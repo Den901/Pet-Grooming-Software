@@ -2,12 +2,12 @@
   "format": "PET_GROOMING_SOFTWARE_UPDATE_MANIFEST",
   "formatVersion": 1,
   "app": "pet-grooming-software",
-  "version": "1.0.26",
-  "releaseLabel": "1.0.26",
-  "createdAt": "2026-07-30T06:31:45.688Z",
-  "packageName": "Pet-Grooming-Software-1.0.26.pgs-update",
-  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v1.0.26/Pet-Grooming-Software-1.0.26.pgs-update",
-  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v1.0.26",
-  "notes": "Release 1.0.26",
-  "changelog": "Rimuove l'opzione Backup cloud in attesa della soluzione cloud vera; mantiene backup manuale cifrato e import backup. Riordina le Impostazioni con sezioni a tendina per identita, scheda animale, appuntamenti, menu laterale, WhatsApp, Alexa e DuckDNS, lasciando Backup e Aggiornamento come sezioni separate."
+  "version": "1.0.27",
+  "releaseLabel": "1.0.27",
+  "createdAt": "2026-07-30T06:47:59.089Z",
+  "packageName": "Pet-Grooming-Software-1.0.27.pgs-update",
+  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v1.0.27/Pet-Grooming-Software-1.0.27.pgs-update",
+  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v1.0.27",
+  "notes": "Release 1.0.27",
+  "changelog": "Aggiunge Backup remoto in Impostazioni: invio manuale o giornaliero di un backup cifrato su FTP/FTPS, con password salvate localmente in modo protetto, cartella remota configurabile, conservazione automatica degli ultimi backup e recupero del backup saltato al prossimo avvio utile. Google Drive resta previsto come destinazione successiva quando saranno pronte le credenziali OAuth del cliente."
 }
