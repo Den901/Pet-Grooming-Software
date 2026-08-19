@@ -1063,15 +1063,22 @@ function renderMonitor() {
 }
 
 function renderMonitorAppointment(appointment) {
-  const dog = appointmentDog(appointment) || {
-    dogName: appointment.dogName,
-    breed: appointment.breed,
-    size: appointment.size,
-    photoUrl: ""
-  };
-  const dogName = dog.dogName || appointment.dogName || "Senza nome";
-  const breed = dog.breed || appointment.breed || "Razza non indicata";
-  const size = dog.size || appointment.size || "";
+  const dog = appointment.isExpress
+    ? {
+        dogName: appointment.dogName || "Prestazione express",
+        breed: "Express",
+        size: "",
+        photoUrl: ""
+      }
+    : appointmentDog(appointment) || {
+        dogName: appointment.dogName,
+        breed: appointment.breed,
+        size: appointment.size,
+        photoUrl: ""
+      };
+  const dogName = appointment.isExpress ? appointmentDogDisplayLabel(appointment) : dog.dogName || appointment.dogName || "Senza nome";
+  const breed = appointment.isExpress ? "Prestazione rapida" : dog.breed || appointment.breed || "Razza non indicata";
+  const size = appointment.isExpress ? "" : dog.size || appointment.size || "";
   const services = appointmentServiceLabel(appointment, true) || "Servizio da definire";
   const duration = appointmentDurationLabel(appointment);
   const timeRange = [appointment.startTime, appointment.endTime].filter(Boolean).join(" - ") || "Orario da definire";
@@ -1251,6 +1258,7 @@ function renderCalendar() {
         </div>
         <div class="topbar-actions">
           <button class="btn" type="button" id="newAppointmentBtn">Nuovo appuntamento</button>
+          <button class="btn success" type="button" id="newExpressServiceBtn">Prestazione express</button>
           <button class="btn secondary" type="button" id="newCalendarNoteBtn">Nuova nota</button>
         </div>
       </div>
@@ -1474,7 +1482,7 @@ function openDayPlannerDialog(iso, options = {}) {
       <section class="day-dialog">
         <div class="day-dialog-summary">
           <strong>${escapeHtml(daySummaryLabel(appointments.length, dayNotes.length))}</strong>
-          <span>${options.dragAppointmentId ? "Rilascia l'appuntamento nel planning per scegliere l'orario preciso." : "Usa Nuovo appuntamento o Nuova nota per organizzare la giornata."}</span>
+          <span>${options.dragAppointmentId ? "Rilascia l'appuntamento nel planning per scegliere l'orario preciso." : "Usa Nuovo appuntamento, Prestazione express o Nuova nota per organizzare la giornata."}</span>
         </div>
         ${renderDayNotesSection(iso, dayNotes)}
         ${renderDayPlanner(iso, appointments, planner)}
@@ -1590,6 +1598,7 @@ function renderDayActionButtons(iso, extraClass = "") {
   return `
     <div class="day-action-buttons ${escapeAttr(extraClass)}">
       <button class="btn slim" type="button" data-day-add="${escapeAttr(iso)}">Nuovo appuntamento</button>
+      <button class="btn success slim" type="button" data-day-express="${escapeAttr(iso)}">Prestazione express</button>
       <button class="btn secondary slim" type="button" data-calendar-note-new="${escapeAttr(iso)}">Nuova nota</button>
     </div>
   `;
@@ -1638,6 +1647,7 @@ function daySummaryLabel(appointmentCount, noteCount) {
 
 function bindCalendar() {
   document.getElementById("newAppointmentBtn").addEventListener("click", () => openAppointmentDialog({ date: calendarActionISO() }));
+  document.getElementById("newExpressServiceBtn").addEventListener("click", () => openExpressServiceDialog({ date: calendarActionISO() }));
   document.getElementById("newCalendarNoteBtn").addEventListener("click", () => openCalendarNoteDialog({ date: calendarActionISO() }));
   document.getElementById("prevPeriod").addEventListener("click", () => {
     state.calendarDate = moveCalendarDate(-1);
@@ -1674,6 +1684,9 @@ function bindCalendarDayActions(root) {
   root.querySelectorAll("[data-day-add]").forEach((button) => {
     button.addEventListener("click", () => openAppointmentDialog({ date: button.dataset.dayAdd, startTime: button.dataset.dayAddTime || undefined }));
   });
+  root.querySelectorAll("[data-day-express]").forEach((button) => {
+    button.addEventListener("click", () => openExpressServiceDialog({ date: button.dataset.dayExpress, startTime: button.dataset.dayAddTime || undefined }));
+  });
   root.querySelectorAll("[data-appointment-id]").forEach((button) => {
     button.addEventListener("click", (event) => {
       if (isCalendarDragClickBlocked()) {
@@ -1682,6 +1695,11 @@ function bindCalendarDayActions(root) {
         return;
       }
       const appointment = state.appointments.find((item) => item.id === button.dataset.appointmentId);
+      if (!appointment) return;
+      if (appointment.isExpress) {
+        openExpressServiceDialog(appointment);
+        return;
+      }
       openAppointmentDialog(appointment);
     });
   });
@@ -2202,13 +2220,14 @@ function moveCalendarDate(direction) {
 function renderDashboard() {
   const today = todayISO();
   const completed = state.appointments.filter((item) => item.status === "completato");
+  const completedWithDog = completed.filter((item) => !item.isExpress);
   const planned = state.appointments.filter((item) => ["programmato", "confermato"].includes(item.status) && item.date >= today);
-  const breedStats = countBy(completed, (appointment) => {
+  const breedStats = countBy(completedWithDog, (appointment) => {
     const dog = state.dogs.find((item) => item.id === appointment.dogId);
     return dog?.breed || "Non indicata";
   });
   const serviceStats = countBy(completed.flatMap((appointment) => appointment.services?.length ? appointment.services : [appointment.service || "Servizio"]));
-  const dogStats = countBy(completed, (appointment) => appointment.dogName || "Senza nome");
+  const dogStats = countBy(completedWithDog, (appointment) => appointment.dogName || "Senza nome");
   const serviceRevenueStats = revenueByService(completed);
   const revenueSeries = revenueTrendSeries(completed, state.revenueRange);
   const topClient = topDashboardClient(completed);
@@ -2377,17 +2396,7 @@ function bindDogs() {
 
 function renderServiceHistory() {
   const selectedDog = selectedServiceHistoryDog();
-  if (!state.dogs.length) {
-    return `
-      <div class="topbar">
-        <div class="page-title">
-          <h1>Storico servizi</h1>
-          <p>Consulta servizi conclusi e foto prima/dopo.</p>
-        </div>
-      </div>
-      <section class="empty-state"><div><h2>Nessuna scheda animale</h2><p>Crea una scheda per iniziare a registrare lo storico servizi.</p></div></section>
-    `;
-  }
+  const expressHistory = expressServiceAppointments();
   const history = selectedDog ? serviceHistoryAppointments(selectedDog) : [];
   const completedHistory = history.filter((appointment) => appointment.status === "completato");
   const canceledHistory = history.filter((appointment) => appointment.status === "annullato");
@@ -2399,15 +2408,18 @@ function renderServiceHistory() {
       <div class="topbar">
       <div class="page-title">
         <h1>Storico servizi</h1>
-        <p>Seleziona un animale e rivedi servizi conclusi, appuntamenti annullati e foto zoomabili.</p>
+        <p>Seleziona un animale oppure consulta le prestazioni express senza scheda.</p>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn success" type="button" data-new-express-service>Prestazione express</button>
       </div>
     </div>
     <section class="panel service-history-filter">
       <div class="service-history-field">
         <label for="serviceHistoryDogSearch">Animale</label>
         <div class="service-history-picker" data-service-history-picker>
-          <input id="serviceHistoryDogSearch" type="search" value="${escapeAttr(searchValue)}" placeholder="Cerca animale" autocomplete="off" aria-controls="serviceHistoryDogOptions" aria-expanded="false" />
-          <button class="service-history-toggle" type="button" data-service-history-toggle aria-label="Apri lista animali" aria-controls="serviceHistoryDogOptions" aria-expanded="false">v</button>
+          <input id="serviceHistoryDogSearch" type="search" value="${escapeAttr(searchValue)}" placeholder="${state.dogs.length ? "Cerca animale" : "Nessuna scheda animale"}" autocomplete="off" aria-controls="serviceHistoryDogOptions" aria-expanded="false" ${state.dogs.length ? "" : "disabled"} />
+          <button class="service-history-toggle" type="button" data-service-history-toggle aria-label="Apri lista animali" aria-controls="serviceHistoryDogOptions" aria-expanded="false" ${state.dogs.length ? "" : "disabled"}>v</button>
           <div class="service-history-options" id="serviceHistoryDogOptions" role="listbox" hidden>
             ${renderServiceHistoryDogOptions(searchValue)}
           </div>
@@ -2415,6 +2427,22 @@ function renderServiceHistory() {
       </div>
       <button class="btn secondary" type="button" data-service-history-open-dog="${escapeAttr(selectedDog?.id || "")}" ${selectedDog ? "" : "disabled"}>Apri scheda</button>
     </section>
+    ${
+      expressHistory.length
+        ? `<section class="panel service-history-express-panel">
+            <div class="service-history-section-head">
+              <div>
+                <h2>Prestazioni express</h2>
+                <p>Servizi registrati al volo senza scheda cane.</p>
+              </div>
+              <span class="badge">${escapeHtml(String(expressHistory.length))}</span>
+            </div>
+            <div class="service-history-results express-results">
+              ${expressHistory.map((appointment) => renderServiceHistoryCard(appointment, { showAnimalLabel: true })).join("")}
+            </div>
+          </section>`
+        : ""
+    }
     <section class="service-history-layout">
       <aside class="panel service-history-profile">
         <div class="service-history-photo ${selectedDog && isTopDog(selectedDog) ? "top-client" : ""}">
@@ -2443,6 +2471,7 @@ function renderServiceHistory() {
 }
 
 function renderServiceHistoryCard(appointment) {
+  const animalLabel = appointmentDogDisplayLabel(appointment);
   const serviceRows = appointmentServiceRows(appointment);
   return `
     <article class="service-history-card status-${escapeHtml(appointment.status)}">
@@ -2450,6 +2479,7 @@ function renderServiceHistoryCard(appointment) {
         <div>
           <strong>${escapeHtml(formatShortDate(appointment.date))}</strong>
           <span>${escapeHtml([appointment.startTime, appointment.endTime].filter(Boolean).join(" - ") || "--:--")}</span>
+          ${appointment.isExpress ? `<small class="service-history-animal">${escapeHtml(animalLabel)}</small>` : ""}
         </div>
         <div class="service-history-card-side">
           <span class="history-status-pill status-${escapeAttr(appointment.status)}">${escapeHtml(statusLabel(appointment.status))}</span>
@@ -2495,6 +2525,7 @@ function renderServiceHistoryDogOptions(value = "") {
 }
 
 function bindServiceHistory() {
+  document.querySelector("[data-new-express-service]")?.addEventListener("click", () => openExpressServiceDialog({ date: todayISO() }));
   const searchInput = document.getElementById("serviceHistoryDogSearch");
   const picker = document.querySelector("[data-service-history-picker]");
   const dropdown = document.getElementById("serviceHistoryDogOptions");
@@ -2580,7 +2611,8 @@ function bindServiceHistory() {
   document.querySelectorAll("[data-service-history-edit]").forEach((button) => {
     button.addEventListener("click", () => {
       const appointment = state.appointments.find((item) => item.id === button.dataset.serviceHistoryEdit);
-      if (appointment) openCompleteServiceDialog(appointment);
+      if (appointment?.isExpress) openExpressServiceDialog(appointment);
+      else if (appointment) openCompleteServiceDialog(appointment);
     });
   });
   document.querySelectorAll("[data-service-history-delete]").forEach((button) => {
@@ -4495,6 +4527,187 @@ function syncCompletionInlineWarnings(form) {
   `;
 }
 
+function openExpressServiceDialog(initial = {}) {
+  const isEdit = Boolean(initial.id);
+  const animal = getAnimalSettings();
+  const startTimeValue = initial.startTime || currentTimeInput();
+  const endTimeValue = initial.endTime || startTimeValue;
+  const selectedServices = normalizeServiceList(initial.services?.length ? initial.services : initial.service || "Taglio unghie");
+  const serviceOptions = uniqueValues(["Taglio unghie", ...(animal.services || []), ...selectedServices]);
+  const appointment = {
+    isExpress: true,
+    status: "completato",
+    date: initial.date || todayISO(),
+    startTime: startTimeValue,
+    endTime: endTimeValue,
+    dogName: initial.dogName || "",
+    ownerName: initial.ownerName || "",
+    contact: initial.contact || "",
+    services: selectedServices,
+    service: selectedServices.join(", "),
+    paidAmount: initial.paidAmount || 0,
+    serviceAmounts: initial.serviceAmounts || []
+  };
+
+  openModal({
+    title: isEdit ? "Modifica express" : "Prestazione express",
+    modalClass: "appointment-modal completion-modal express-modal status-completato",
+    hideActions: true,
+    content: `
+      <section class="express-checkout">
+        <div class="completion-summary express-summary">
+          <div class="express-icon" aria-hidden="true">${NAV_ICONS.serviceHistory}</div>
+          <div class="completion-dog-copy">
+            <h3>Registra subito</h3>
+            <p>Per taglio unghie o servizi rapidi senza creare la scheda completa.</p>
+            <div class="completion-chip-row">
+              <span>Express</span>
+              <span>Storico e incassi</span>
+            </div>
+          </div>
+          <div class="completion-time-card">
+            <label>Data
+              <input name="date" type="date" value="${escapeAttr(appointment.date)}" required />
+            </label>
+            <div class="completion-time-grid">
+              ${renderClockTimeField("startTime", "Ora", appointment.startTime, { required: true })}
+              ${renderClockTimeField("endTime", "Fine", appointment.endTime, { required: true })}
+            </div>
+          </div>
+        </div>
+
+        <div class="completion-layout express-layout">
+          <section class="completion-panel completion-main-panel">
+            <div class="completion-panel-head">
+              <div>
+                <h3>Prestazione e prezzo</h3>
+                <p>Scegli cosa hai fatto e inserisci l'importo pagato.</p>
+              </div>
+            </div>
+            ${renderServicePicker(selectedServices, serviceOptions)}
+            <div class="completion-inline-warning" data-completion-inline-warning hidden></div>
+            <div class="service-amount-list completion-service-amount-list" data-service-amount-list>
+              ${renderServiceAmountRows(selectedServices, appointment)}
+            </div>
+          </section>
+
+          <section class="completion-panel completion-side-panel">
+            <div class="completion-panel-head">
+              <div>
+                <h3>Info rapide</h3>
+                <p>Facoltative: utili se vuoi ritrovarla meglio dopo.</p>
+              </div>
+            </div>
+            <div class="form-grid">
+              <label>Nome cane
+                <input name="dogName" value="${escapeAttr(appointment.dogName)}" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" inputmode="text" dir="ltr" data-stable-text-input />
+              </label>
+              <label>Cliente
+                <input name="ownerName" value="${escapeAttr(appointment.ownerName)}" />
+              </label>
+              <label>Telefono
+                <input name="contact" value="${escapeAttr(appointment.contact)}" inputmode="tel" />
+              </label>
+              <label class="full">Note
+                <textarea name="notes" placeholder="Esempio: cane piccolo, passato al volo">${escapeHtml(initial.notes || "")}</textarea>
+              </label>
+            </div>
+          </section>
+        </div>
+
+        <footer class="completion-footer">
+          <div>
+            <strong>${isEdit ? "Aggiorna express" : "Salva nello storico"}</strong>
+            <span>Non crea una scheda cane, ma entra in incassi e storico express.</span>
+          </div>
+          <div class="completion-total">
+            <span>Totale</span>
+            <strong data-service-amount-total>${escapeHtml(moneyLabel(appointment.paidAmount))}</strong>
+          </div>
+          <div class="completion-actions">
+            ${isEdit ? `<button class="btn danger completion-delete" type="button" data-delete-express-service>Elimina express</button>` : ""}
+            <button class="btn success completion-submit" type="submit">${isEdit ? "Salva express" : "Registra express"}</button>
+          </div>
+        </footer>
+      </section>
+    `,
+    onOpen: (form) => {
+      bindServicePickers(form);
+      bindClockTimeFields(form);
+      const syncAmounts = () => {
+        syncServiceAmountRows(form, appointment);
+        syncCompletionInlineWarnings(form);
+      };
+      form.addEventListener("change", (event) => {
+        if (event.target.matches("[data-service-select]")) setTimeout(syncAmounts, 0);
+        if (event.target.matches("[data-service-amount-input]")) {
+          syncServiceAmountTotal(form);
+          syncCompletionInlineWarnings(form);
+        }
+      });
+      form.addEventListener("click", (event) => {
+        if (event.target.closest("[data-service-remove], [data-service-custom-add]")) setTimeout(syncAmounts, 0);
+      });
+      form.querySelector("[data-delete-express-service]")?.addEventListener("click", async (event) => {
+        const label = [appointment.dogName || "questa express", formatShortDate(appointment.date)].filter(Boolean).join(" - ");
+        const confirmed = await showActionConfirm({
+          title: "Elimina express",
+          message: `Eliminare definitivamente ${label} dallo storico servizi?`,
+          confirmLabel: "Elimina",
+          confirmClass: "danger"
+        });
+        if (!confirmed) return;
+        const button = event.currentTarget;
+        button.disabled = true;
+        try {
+          await api(`/api/appointments/${initial.id}`, { method: "DELETE", body: "{}" });
+          removeStateAppointment(initial.id);
+          state.calendarDate = parseISODate(appointment.date);
+          renderView();
+          closeModal();
+          window.setTimeout(closeModal, 0);
+          notify("Prestazione express eliminata");
+        } catch (err) {
+          notify(err.message);
+          button.disabled = false;
+        }
+      });
+      syncServiceAmountTotal(form);
+      syncCompletionInlineWarnings(form);
+    },
+    onSubmit: async (formData, form) => {
+      const services = collectServicesFromForm(formData, form);
+      const payload = {
+        isExpress: true,
+        createDogProfile: false,
+        status: "completato",
+        dogId: "",
+        dogName: String(formData.get("dogName") || "").trim(),
+        ownerName: String(formData.get("ownerName") || "").trim(),
+        contact: String(formData.get("contact") || "").trim(),
+        date: formData.get("date"),
+        startTime: formData.get("startTime"),
+        endTime: formData.get("endTime") || formData.get("startTime"),
+        services,
+        service: services.join(", "),
+        treatmentDone: services.join(", "),
+        notes: formData.get("notes"),
+        serviceAmounts: collectServiceAmounts(form)
+      };
+      payload.paidAmount = Number(serviceAmountsTotal(payload.serviceAmounts).toFixed(2));
+      validateAppointmentBeforeSave(form, payload, services);
+      const response = await api(isEdit ? `/api/appointments/${initial.id}` : "/api/appointments", {
+        method: isEdit ? "PUT" : "POST",
+        body: JSON.stringify(payload)
+      });
+      applyAppointmentApiResponse(response);
+      state.calendarDate = parseISODate(payload.date);
+      renderView();
+      notify(isEdit ? "Prestazione express aggiornata" : "Prestazione express registrata");
+    }
+  });
+}
+
 function openCompleteServiceDialog(appointment = {}) {
   const isEdit = Boolean(appointment.id);
   const isStoredCompleted = isEdit && appointment.status === "completato";
@@ -4699,6 +4912,10 @@ function openCompleteServiceDialog(appointment = {}) {
 }
 
 function openAppointmentDialog(appointment = {}, options = {}) {
+  if (appointment?.isExpress) {
+    openExpressServiceDialog(appointment);
+    return;
+  }
   const isEdit = Boolean(appointment.id);
   const completionMode = Boolean(options.completionMode) || (!isEdit && appointment.status === "completato");
   const currentStatus = completionMode ? "completato" : appointment.status || "programmato";
@@ -5350,7 +5567,7 @@ function validateAppointmentBeforeSave(form, payload, services) {
   if (!payload.startTime) {
     errors.push({ label: "ora inizio", element: form.querySelector('[data-clock-time-name="startTime"]') || form.elements.startTime });
   }
-  if (!String(payload.dogName || "").trim()) {
+  if (!payload.isExpress && !String(payload.dogName || "").trim()) {
     errors.push({ label: "nome cane", element: form.elements.dogName });
   }
   if (payload.status === "completato") {
@@ -5584,6 +5801,7 @@ function calendarNoteTextHtml(text = "") {
 }
 
 function appointmentDog(appointment = {}) {
+  if (appointment.isExpress) return null;
   if (appointment.dogId) {
     const linkedDog = state.dogs.find((dog) => dog.id === appointment.dogId);
     if (linkedDog) return linkedDog;
@@ -5603,6 +5821,9 @@ function appointmentDog(appointment = {}) {
 }
 
 function appointmentDogDisplayLabel(appointment = {}) {
+  if (appointment.isExpress) {
+    return appointment.dogName ? `Express - ${appointment.dogName}` : "Prestazione express";
+  }
   const dog = appointmentDog(appointment);
   const name = dog?.dogName || appointment.dogName || "Senza nome";
   const breed = dog?.breed || appointment.breed || "";
@@ -5636,6 +5857,7 @@ function dogAppointmentHistory(dog) {
   const ownerName = lowerText(dog.ownerName);
   return state.appointments
     .filter((appointment) => {
+      if (appointment.isExpress) return false;
       if (appointment.dogId && appointment.dogId === dog.id) return true;
       if (appointment.dogId) return false;
       return lowerText(appointment.dogName) === dogName && (!ownerName || lowerText(appointment.ownerName) === ownerName);
@@ -5645,6 +5867,12 @@ function dogAppointmentHistory(dog) {
 
 function serviceHistoryAppointments(dog) {
   return dogAppointmentHistory(dog).filter((appointment) => ["completato", "annullato"].includes(appointment.status));
+}
+
+function expressServiceAppointments() {
+  return state.appointments
+    .filter((appointment) => appointment.isExpress && appointment.status === "completato")
+    .sort((a, b) => `${b.date || ""} ${b.startTime || ""}`.localeCompare(`${a.date || ""} ${a.startTime || ""}`));
 }
 
 function canceledAppointmentCount(dog) {
@@ -6020,6 +6248,7 @@ function topStatLabel(stats) {
 function topDashboardClient(completedAppointments = []) {
   const counts = new Map();
   for (const appointment of completedAppointments) {
+    if (appointment.isExpress) continue;
     const key = appointment.dogId || `name:${lowerText(appointment.dogName)}|owner:${lowerText(appointment.ownerName)}`;
     const current = counts.get(key) || { appointment, count: 0 };
     current.count += 1;
@@ -6044,6 +6273,7 @@ function topDashboardClient(completedAppointments = []) {
 function topRevenueClient(completedAppointments = []) {
   const totals = new Map();
   for (const appointment of completedAppointments) {
+    if (appointment.isExpress) continue;
     const amount = appointmentRevenue(appointment);
     if (!Number.isFinite(amount) || amount <= 0) continue;
     const key = appointment.dogId || `name:${lowerText(appointment.dogName)}|owner:${lowerText(appointment.ownerName)}`;

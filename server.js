@@ -2092,6 +2092,7 @@ function findMatchingDogFromAppointment(payload, db) {
 }
 
 function maybeCreateDogFromAppointment(payload, db) {
+  if (payload.isExpress === true || payload.isExpress === "true" || payload.isExpress === "on") return { payload, dog: null };
   if (payload.createDogProfile !== true || cleanString(payload.dogId)) return { payload, dog: null };
   const dogName = cleanString(payload.dogName);
   if (!dogName) return { payload, dog: null };
@@ -2190,6 +2191,7 @@ function updateAnimalOptionsFromAppointment(db, appointment) {
 function normalizeAppointment(payload, db, existing = {}) {
   const now = new Date().toISOString();
   const id = existing.id || crypto.randomUUID();
+  const isExpress = booleanField(payload, "isExpress", existing.isExpress);
   const dogId = stringField(payload, "dogId", existing.dogId);
   const dog = dogId ? db.dogs.find((item) => item.id === dogId) : null;
   const services = selectedServices(payload, existing.services || (existing.service ? [existing.service] : []));
@@ -2208,6 +2210,7 @@ function normalizeAppointment(payload, db, existing = {}) {
     : savePhotoList(payload.afterPhotoData, `${id}-after`, existing.afterPhotos, MAX_GALLERY_PHOTOS_PER_TYPE);
   return {
     id,
+    isExpress,
     dogId,
     dogName: cleanString(dog?.dogName || stringField(payload, "dogName", existing.dogName)),
     ownerName: cleanString(dog?.ownerName || stringField(payload, "ownerName", existing.ownerName)),
@@ -2873,8 +2876,8 @@ async function handleApi(req, res, url) {
         const prepared = maybeCreateDogFromAppointment(body, db);
         if (prepared.error) return sendError(res, 400, prepared.error);
         const appointment = normalizeAppointment(prepared.payload, db);
-        if (!appointment.date || !appointment.startTime || !appointment.dogName) {
-          return sendError(res, 400, "Data, orario e cane sono obbligatori");
+        if (!appointment.date || !appointment.startTime || (!appointment.dogName && !appointment.isExpress)) {
+          return sendError(res, 400, appointment.isExpress ? "Data e orario sono obbligatori" : "Data, orario e cane sono obbligatori");
         }
         updateAnimalOptionsFromAppointment(db, appointment);
         db.appointments.push(appointment);
@@ -2889,8 +2892,8 @@ async function handleApi(req, res, url) {
         const prepared = maybeCreateDogFromAppointment(body, db);
         if (prepared.error) return sendError(res, 400, prepared.error);
         const appointment = normalizeAppointment(prepared.payload, db, db.appointments[index]);
-        if (!appointment.date || !appointment.startTime || !appointment.dogName) {
-          return sendError(res, 400, "Data, orario e cane sono obbligatori");
+        if (!appointment.date || !appointment.startTime || (!appointment.dogName && !appointment.isExpress)) {
+          return sendError(res, 400, appointment.isExpress ? "Data e orario sono obbligatori" : "Data, orario e cane sono obbligatori");
         }
         updateAnimalOptionsFromAppointment(db, appointment);
         db.appointments[index] = appointment;

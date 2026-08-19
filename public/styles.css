@@ -2556,6 +2556,34 @@ body.calendar-dragging {
   margin-top: 16px;
 }
 
+.service-history-express-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.service-history-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.service-history-section-head h2,
+.service-history-section-head p {
+  margin: 0;
+}
+
+.service-history-section-head p {
+  margin-top: 3px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.express-results {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
 .service-history-profile {
   align-content: start;
   display: grid;
@@ -2681,8 +2709,14 @@ body.calendar-dragging {
 }
 
 .service-history-card-head span,
+.service-history-animal,
 .service-history-note {
   color: var(--muted);
+}
+
+.service-history-animal {
+  font-size: 0.78rem;
+  font-weight: 850;
 }
 
 .service-lines {
@@ -3997,6 +4031,40 @@ body.calendar-dragging {
   display: grid;
   gap: 0;
   background: var(--panel);
+}
+
+.express-checkout {
+  display: grid;
+  gap: 0;
+  background: var(--panel);
+}
+
+.express-modal {
+  width: min(860px, 100%);
+}
+
+.express-summary {
+  grid-template-columns: auto minmax(0, 1fr) minmax(230px, 0.55fr);
+}
+
+.express-icon {
+  width: 70px;
+  height: 70px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius);
+  border: 2px solid var(--traffic-green);
+  background: var(--traffic-green-soft);
+  color: var(--traffic-green);
+}
+
+.express-icon svg {
+  width: 34px;
+  height: 34px;
+}
+
+.express-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.75fr);
 }
 
 .completion-summary,
