@@ -4961,7 +4961,10 @@ function openAppointmentDialog(appointment = {}, options = {}) {
           <select name="dogId" id="appointmentDog">
             <option value="">Cane non presente in scheda</option>
             ${state.dogs
-              .map((dog) => `<option value="${dog.id}" ${dog.id === appointment.dogId ? "selected" : ""}>${escapeHtml(dog.dogName)} - ${escapeHtml(dog.ownerName || "senza proprietario")}</option>`)
+              .map(
+                (dog) =>
+                  `<option value="${dog.id}" ${dog.id === appointment.dogId ? "selected" : ""}>${escapeHtml(appointmentDogSelectLabel(dog))}</option>`
+              )
               .join("")}
           </select>
         </label>
@@ -5829,6 +5832,13 @@ function appointmentDogDisplayLabel(appointment = {}) {
   const breed = dog?.breed || appointment.breed || "";
   const size = dog?.size || appointment.size || "";
   return [name, breed, size].filter(Boolean).join(" - ");
+}
+
+function appointmentDogSelectLabel(dog = {}) {
+  const name = dog.dogName || "Senza nome";
+  const breed = dog.breed ? `Razza: ${dog.breed}` : "Razza non indicata";
+  const owner = dog.ownerName ? `Cliente: ${dog.ownerName}` : "Senza proprietario";
+  return [name, breed, owner].join(" - ");
 }
 
 function appointmentServiceLabel(appointment = {}, fallbackStatus = false) {
