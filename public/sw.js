@@ -1,4 +1,4 @@
-const CACHE_NAME = "groomly-pwa-v80";
+const CACHE_NAME = "groomly-pwa-v81";
 const APP_SHELL = [
   "/",
   "/index.html",

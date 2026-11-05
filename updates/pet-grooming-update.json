@@ -2,12 +2,12 @@
   "format": "PET_GROOMING_SOFTWARE_UPDATE_MANIFEST",
   "formatVersion": 1,
   "app": "pet-grooming-software",
-  "version": "1.0.32",
-  "releaseLabel": "1.0.32",
-  "createdAt": "2026-11-05T19:58:59.852Z",
-  "packageName": "Pet-Grooming-Software-1.0.32.pgs-update",
-  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v1.0.32/Pet-Grooming-Software-1.0.32.pgs-update",
-  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v1.0.32",
-  "notes": "Release 1.0.32",
-  "changelog": "Aggiunge il flag Deceduto nella scheda animale. Quando attivo, applica il timbro rosso sulla foto nell'elenco schede, nel dettaglio, nello storico servizi, nei riepiloghi e nell'esportazione PDF; lo stato viene salvato nel database e incluso nei backup."
+  "version": "1.0.33",
+  "releaseLabel": "1.0.33",
+  "createdAt": "2026-11-05T20:12:15.393Z",
+  "packageName": "Pet-Grooming-Software-1.0.33.pgs-update",
+  "packageUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/download/v1.0.33/Pet-Grooming-Software-1.0.33.pgs-update",
+  "releaseUrl": "https://github.com/Den901/Pet-Grooming-Software/releases/tag/v1.0.33",
+  "notes": "Correzione visualizzazione timbro Deceduto",
+  "changelog": "Corregge il timbro Deceduto nella scheda animale: durante lo scorrimento resta vincolato alla foto e passa correttamente dietro l'intestazione della finestra."
 }

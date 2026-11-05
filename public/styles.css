@@ -2057,6 +2057,16 @@ body.calendar-dragging {
   filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.26));
 }
 
+.dog-thumb,
+.dog-detail-photo,
+.metric-client-photo,
+.monitor-photo,
+.service-history-photo,
+.completion-dog-photo,
+.dog-pdf-page-photo {
+  isolation: isolate;
+}
+
 .dog-thumb > img:not(.top-paw):not(.deceased-stamp),
 .dog-detail-photo > img:not(.top-paw):not(.deceased-stamp) {
   width: 100%;
