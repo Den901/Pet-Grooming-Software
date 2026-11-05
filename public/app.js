@@ -3839,6 +3839,7 @@ function openDogDetailsDialog(dog = {}) {
           <div class="modal-inline-actions">
             <button class="btn success" type="button" data-detail-done-appointment="${dog.id}">Concludi prestazione</button>
             <button class="btn secondary" type="button" data-detail-appointment="${dog.id}">Nuovo appuntamento</button>
+            <button class="btn secondary" type="button" data-detail-pdf="${dog.id}">Esporta come PDF</button>
             <button class="btn danger" type="button" data-detail-delete="${dog.id}">Elimina</button>
           </div>
           <details class="dog-history" data-history-dropdown>
@@ -3865,6 +3866,7 @@ function openDogDetailsDialog(dog = {}) {
     onOpen: () => {
       const appointmentButton = modalRoot.querySelector("[data-detail-appointment]");
       const doneAppointmentButton = modalRoot.querySelector("[data-detail-done-appointment]");
+      const pdfButton = modalRoot.querySelector("[data-detail-pdf]");
       const deleteButton = modalRoot.querySelector("[data-detail-delete]");
       appointmentButton?.addEventListener("click", () => {
         const freshDog = state.dogs.find((item) => item.id === dog.id) || dog;
@@ -3887,6 +3889,11 @@ function openDogDetailsDialog(dog = {}) {
           service: freshDog.services?.length ? freshDog.services.join(", ") : "Toelettatura",
           status: "completato"
         });
+      });
+      pdfButton?.addEventListener("click", () => {
+        const freshDog = state.dogs.find((item) => item.id === dog.id) || dog;
+        closeModal();
+        openDogPdfPreview(freshDog);
       });
       deleteButton?.addEventListener("click", () => {
         const freshDog = state.dogs.find((item) => item.id === dog.id) || dog;
@@ -3927,6 +3934,494 @@ function renderHistoryAppointment(appointment) {
       ${gallery}
     </article>
   `;
+}
+
+function dogSexLabel(dog = {}) {
+  if (dog.sex === "F") return "Femmina";
+  if (dog.sex === "M") return "Maschio";
+  return "-";
+}
+
+function dogImageConsentLabel(dog = {}) {
+  if (dog.imageConsent === "yes") return "Si";
+  if (dog.imageConsent === "no") return "No";
+  return "-";
+}
+
+function dogTopClientLabel(dog = {}) {
+  if (!isTopDog(dog)) return "No";
+  return dog.manualTopClient ? "Si, manuale" : "Si, automatico";
+}
+
+function dogPdfHistoryAmount(appointment = {}) {
+  return appointment.status === "completato" ? moneyLabel(appointment.paidAmount) : "-";
+}
+
+function renderDogPdfPreviewField(label, value, full = false) {
+  return `
+    <div class="dog-pdf-preview-field ${full ? "full" : ""}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value || "-")}</strong>
+    </div>
+  `;
+}
+
+function renderDogPdfPreview(dog = {}) {
+  const branding = getBranding();
+  const history = dogAppointmentHistory(dog);
+  const previewHistory = history.slice(0, 5);
+  const hiddenHistoryCount = Math.max(0, history.length - previewHistory.length);
+  const contact = dog.contactMissing ? "Non presente" : dog.contact || "-";
+  const footer = [branding.address, branding.phone, branding.email].filter(Boolean).join(" - ");
+  return `
+    <article class="dog-pdf-page" aria-label="Anteprima della scheda PDF di ${escapeAttr(dog.dogName || "cane")}">
+      <header class="dog-pdf-page-head">
+        <div class="dog-pdf-page-title">
+          <span>Scheda animale</span>
+          <h3>${escapeHtml(dog.dogName || "Senza nome")}</h3>
+          <p>${escapeHtml([dog.breed, dog.size].filter(Boolean).join(" - ") || "Dati animale")}</p>
+          <small>${escapeHtml(branding.businessName || branding.portalName || "Groomly")}</small>
+        </div>
+        <div class="dog-pdf-page-photo">
+          ${dogPhotoMarkup(dog)}
+        </div>
+      </header>
+
+      <div class="dog-pdf-page-content">
+        <section>
+          <h4>Informazioni animale</h4>
+          <div class="dog-pdf-preview-grid">
+            ${renderDogPdfPreviewField("Proprietario", dog.ownerName)}
+            ${renderDogPdfPreviewField("Contatto", contact)}
+            ${renderDogPdfPreviewField("Contatto alternativo", dog.alternateContact)}
+            ${renderDogPdfPreviewField("Razza", dog.breed)}
+            ${renderDogPdfPreviewField("Taglia", dog.size)}
+            ${renderDogPdfPreviewField("Eta animale", ageLabel(dog.birthYear))}
+            ${renderDogPdfPreviewField("Colore", dog.color)}
+            ${renderDogPdfPreviewField("Sesso", dogSexLabel(dog))}
+            ${renderDogPdfPreviewField("Consenso immagini", dogImageConsentLabel(dog))}
+            ${renderDogPdfPreviewField("Cliente top", dogTopClientLabel(dog))}
+          </div>
+        </section>
+
+        <section>
+          <h4>Gestione e salute</h4>
+          <div class="dog-pdf-preview-grid">
+            ${renderDogPdfPreviewField("Tempo stimato", durationLabel(dog.estimatedMinutes))}
+            ${renderDogPdfPreviewField("Reminder", reminderLabel(dog.reminderDaysBefore))}
+            ${renderDogPdfPreviewField("Servizi preferiti", (dog.services || []).join(", "), true)}
+            ${renderDogPdfPreviewField("Patologie", dog.pathologies, true)}
+            ${renderDogPdfPreviewField("Note", dog.notes, true)}
+          </div>
+        </section>
+
+        <section>
+          <div class="dog-pdf-history-heading">
+            <h4>Storico appuntamenti</h4>
+            <span>${escapeHtml(history.length)}</span>
+          </div>
+          <div class="dog-pdf-preview-history">
+            <div class="dog-pdf-preview-history-row head">
+              <span>Data</span>
+              <span>Stato</span>
+              <span>Prestazione</span>
+              <span>Totale</span>
+            </div>
+            ${
+              previewHistory.length
+                ? previewHistory
+                    .map(
+                      (appointment) => `
+                        <div class="dog-pdf-preview-history-row">
+                          <span>${escapeHtml(formatShortDate(appointment.date))}<small>${escapeHtml(appointment.startTime || "")}</small></span>
+                          <span>${escapeHtml(statusLabel(appointment.status))}</span>
+                          <strong>${escapeHtml(appointmentServiceLabel(appointment, true))}</strong>
+                          <span>${escapeHtml(dogPdfHistoryAmount(appointment))}</span>
+                        </div>
+                      `
+                    )
+                    .join("")
+                : `<div class="dog-pdf-preview-history-empty">Nessun appuntamento registrato.</div>`
+            }
+          </div>
+          ${hiddenHistoryCount ? `<p class="dog-pdf-more-history">Altre ${escapeHtml(hiddenHistoryCount)} prestazioni saranno incluse nel PDF.</p>` : ""}
+        </section>
+      </div>
+
+      <footer class="dog-pdf-page-footer">
+        <span>${escapeHtml(footer || branding.businessName || "Groomly")}</span>
+        <strong>1</strong>
+      </footer>
+    </article>
+  `;
+}
+
+function dogPdfFileName(dog = {}) {
+  const dogName = String(dog.dogName || "animale")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+  return `scheda-${dogName || "animale"}-${todayISO()}.pdf`;
+}
+
+function dogPdfRgb(value, fallback = [35, 67, 68]) {
+  const match = String(value || "").trim().match(/^#([0-9a-f]{6})$/i);
+  if (!match) return fallback;
+  return [
+    Number.parseInt(match[1].slice(0, 2), 16),
+    Number.parseInt(match[1].slice(2, 4), 16),
+    Number.parseInt(match[1].slice(4, 6), 16)
+  ];
+}
+
+function dogPdfText(value, fallback = "-") {
+  const text = String(value || "")
+    .replace(/[\u2010-\u2015]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text || fallback;
+}
+
+async function dogPhotoDataForPdf(dog = {}) {
+  try {
+    const response = await fetch(dogPhotoSrc(dog), { credentials: "same-origin" });
+    if (!response.ok) throw new Error("Foto non disponibile");
+    const source = await fileToDataUrl(await response.blob());
+    const image = await new Promise((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = reject;
+      element.src = source;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = 1200;
+    canvas.height = 900;
+    const context = canvas.getContext("2d");
+    if (!context) return "";
+    const targetRatio = canvas.width / canvas.height;
+    const sourceWidth = image.naturalWidth || image.width;
+    const sourceHeight = image.naturalHeight || image.height;
+    const position = dogPhotoPosition(dog);
+    let cropX = 0;
+    let cropY = 0;
+    let cropWidth = sourceWidth;
+    let cropHeight = sourceHeight;
+    if (sourceWidth / sourceHeight > targetRatio) {
+      cropWidth = sourceHeight * targetRatio;
+      cropX = (sourceWidth - cropWidth) * (position.x / 100);
+    } else {
+      cropHeight = sourceWidth / targetRatio;
+      cropY = (sourceHeight - cropHeight) * (position.y / 100);
+    }
+    context.fillStyle = "#f0eee8";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, cropX, cropY, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.9);
+  } catch {
+    return "";
+  }
+}
+
+async function createDogPdfDocument(dog = {}) {
+  const JsPdf = window.jspdf?.jsPDF;
+  if (!JsPdf) throw new Error("Generatore PDF non disponibile. Ricarica il portale e riprova.");
+
+  const doc = new JsPdf({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+    compress: true
+  });
+  const branding = getBranding();
+  const brand = dogPdfRgb(branding.colors?.brand);
+  const accent = dogPdfRgb(branding.colors?.accent, [207, 97, 85]);
+  const ink = [22, 38, 37];
+  const muted = [91, 108, 104];
+  const panel = [246, 248, 247];
+  const line = [218, 225, 221];
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 14;
+  const contentWidth = pageWidth - margin * 2;
+  const pageBottom = pageHeight - 19;
+  const history = dogAppointmentHistory(dog);
+  const photoData = await dogPhotoDataForPdf(dog);
+  const businessName = dogPdfText(branding.businessName || branding.portalName || "Groomly");
+  const footerText = dogPdfText([branding.address, branding.phone, branding.email].filter(Boolean).join(" - "), businessName);
+  let y = 0;
+  let historyStripe = 0;
+
+  doc.setProperties({
+    title: `Scheda animale - ${dogPdfText(dog.dogName, "Senza nome")}`,
+    subject: "Scheda animale e storico appuntamenti",
+    author: businessName,
+    creator: "Groomly"
+  });
+
+  const setTextColor = (rgb) => doc.setTextColor(rgb[0], rgb[1], rgb[2]);
+  const setFillColor = (rgb) => doc.setFillColor(rgb[0], rgb[1], rgb[2]);
+  const setDrawColor = (rgb) => doc.setDrawColor(rgb[0], rgb[1], rgb[2]);
+
+  const drawFirstPageHeader = () => {
+    setFillColor(brand);
+    doc.rect(0, 0, pageWidth, 48, "F");
+    setTextColor([255, 255, 255]);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.text("SCHEDA ANIMALE", margin, 10);
+    doc.setFontSize(22);
+    doc.text(dogPdfText(dog.dogName, "Senza nome"), margin, 23, { maxWidth: 132 });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(dogPdfText([dog.breed, dog.size].filter(Boolean).join(" - "), "Dati animale"), margin, 31, { maxWidth: 132 });
+    doc.setFontSize(8);
+    doc.text(businessName, margin, 41, { maxWidth: 132 });
+    doc.text(`Esportata il ${formatShortDate(todayISO())}`, pageWidth - margin, 9, { align: "right" });
+
+    setFillColor([255, 255, 255]);
+    doc.roundedRect(pageWidth - margin - 42, 12, 42, 31, 2, 2, "F");
+    if (photoData) {
+      doc.addImage(photoData, "JPEG", pageWidth - margin - 40.5, 13.5, 39, 28, undefined, "FAST");
+    } else {
+      setTextColor(muted);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text("Foto animale", pageWidth - margin - 21, 29, { align: "center" });
+    }
+    y = 56;
+  };
+
+  const drawContinuationHeader = (label) => {
+    setFillColor(brand);
+    doc.rect(0, 0, pageWidth, 14, "F");
+    setTextColor([255, 255, 255]);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.text(businessName, margin, 9);
+    doc.text(dogPdfText(label), pageWidth - margin, 9, { align: "right" });
+    setTextColor(ink);
+    doc.setFontSize(14);
+    doc.text(dogPdfText(dog.dogName, "Senza nome"), margin, 24);
+    y = 30;
+  };
+
+  const addContentPage = (label) => {
+    doc.addPage();
+    drawContinuationHeader(label);
+  };
+
+  const drawSectionTitle = (label) => {
+    setFillColor(accent);
+    doc.roundedRect(margin, y, 3, 6, 1, 1, "F");
+    setTextColor(ink);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text(dogPdfText(label).toUpperCase(), margin + 7, y + 4.6);
+    y += 10;
+  };
+
+  const drawInfoGrid = (items) => {
+    const gap = 4;
+    const columnWidth = (contentWidth - gap) / 2;
+    for (let index = 0; index < items.length; index += 2) {
+      const pair = items.slice(index, index + 2).map(([label, value]) => ({
+        label: dogPdfText(label),
+        lines: doc.splitTextToSize(dogPdfText(value), columnWidth - 8)
+      }));
+      const rowHeight = Math.max(16, ...pair.map((item) => 10 + item.lines.length * 4));
+      pair.forEach((item, pairIndex) => {
+        const x = margin + pairIndex * (columnWidth + gap);
+        setFillColor(panel);
+        setDrawColor(line);
+        doc.roundedRect(x, y, columnWidth, rowHeight, 2, 2, "FD");
+        setTextColor(muted);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(6.7);
+        doc.text(item.label.toUpperCase(), x + 4, y + 5);
+        setTextColor(ink);
+        doc.setFontSize(9);
+        doc.text(item.lines, x + 4, y + 10);
+      });
+      y += rowHeight + 4;
+    }
+  };
+
+  const drawWideTextBlock = (label, value) => {
+    let lines = doc.splitTextToSize(dogPdfText(value), contentWidth - 8);
+    let continuation = false;
+    while (lines.length) {
+      let availableLines = Math.floor((pageBottom - y - 12) / 4);
+      if (availableLines < 2) {
+        addContentPage("Scheda animale");
+        availableLines = Math.floor((pageBottom - y - 12) / 4);
+      }
+      const chunk = lines.splice(0, Math.max(1, availableLines));
+      const boxHeight = 10 + chunk.length * 4;
+      setFillColor(panel);
+      setDrawColor(line);
+      doc.roundedRect(margin, y, contentWidth, boxHeight, 2, 2, "FD");
+      setTextColor(muted);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6.7);
+      doc.text(`${dogPdfText(label).toUpperCase()}${continuation ? " - CONTINUA" : ""}`, margin + 4, y + 5);
+      setTextColor(ink);
+      doc.setFontSize(9);
+      doc.text(chunk, margin + 4, y + 10);
+      y += boxHeight + 4;
+      continuation = true;
+      if (lines.length) addContentPage("Scheda animale");
+    }
+  };
+
+  const drawHistoryHeader = () => {
+    setFillColor(brand);
+    doc.rect(margin, y, contentWidth, 8, "F");
+    setTextColor([255, 255, 255]);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.text("DATA", margin + 3, y + 5.2);
+    doc.text("STATO", margin + 30, y + 5.2);
+    doc.text("PRESTAZIONE", margin + 61, y + 5.2);
+    doc.text("TOTALE", pageWidth - margin - 3, y + 5.2, { align: "right" });
+    y += 8;
+  };
+
+  const ensureHistorySpace = (height) => {
+    if (y + height <= pageBottom) return;
+    addContentPage("Storico appuntamenti");
+    drawHistoryHeader();
+  };
+
+  drawFirstPageHeader();
+  drawSectionTitle("Informazioni animale");
+  drawInfoGrid([
+    ["Proprietario", dog.ownerName],
+    ["Contatto", dog.contactMissing ? "Non presente" : dog.contact],
+    ["Contatto alternativo", dog.alternateContact],
+    ["Razza", dog.breed],
+    ["Taglia", dog.size],
+    ["Eta animale", ageLabel(dog.birthYear)],
+    ["Colore", dog.color],
+    ["Sesso", dogSexLabel(dog)],
+    ["Consenso immagini", dogImageConsentLabel(dog)],
+    ["Cliente top", dogTopClientLabel(dog)]
+  ]);
+
+  if (y > pageBottom - 42) addContentPage("Scheda animale");
+  drawSectionTitle("Gestione e salute");
+  drawInfoGrid([
+    ["Tempo stimato", durationLabel(dog.estimatedMinutes)],
+    ["Reminder", reminderLabel(dog.reminderDaysBefore)]
+  ]);
+  drawWideTextBlock("Servizi preferiti", (dog.services || []).join(", "));
+  drawWideTextBlock("Patologie", dog.pathologies);
+  drawWideTextBlock("Note", dog.notes);
+
+  if (y > pageBottom - 32) addContentPage("Storico appuntamenti");
+  drawSectionTitle("Storico appuntamenti");
+  drawHistoryHeader();
+  if (!history.length) {
+    setFillColor(panel);
+    setTextColor(muted);
+    doc.rect(margin, y, contentWidth, 14, "F");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.text("Nessun appuntamento registrato.", margin + 4, y + 8.5);
+    y += 14;
+  } else {
+    history.forEach((appointment) => {
+      const serviceText = [
+        appointmentServiceLabel(appointment, true),
+        appointment.notes ? `Note: ${dogPdfText(appointment.notes)}` : ""
+      ]
+        .filter(Boolean)
+        .join(" - ");
+      const serviceLines = doc.splitTextToSize(dogPdfText(serviceText), 93);
+      const rowHeight = Math.max(13, 6 + serviceLines.length * 4);
+      ensureHistorySpace(rowHeight);
+      if (historyStripe % 2 === 0) {
+        setFillColor(panel);
+        doc.rect(margin, y, contentWidth, rowHeight, "F");
+      }
+      setDrawColor(line);
+      doc.line(margin, y + rowHeight, pageWidth - margin, y + rowHeight);
+      setTextColor(ink);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.4);
+      doc.text(formatShortDate(appointment.date), margin + 3, y + 5);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.8);
+      doc.text(dogPdfText(appointment.startTime, ""), margin + 3, y + 9);
+      doc.setFontSize(7.4);
+      doc.text(dogPdfText(statusLabel(appointment.status)), margin + 30, y + 6);
+      doc.setFont("helvetica", "bold");
+      doc.text(serviceLines, margin + 61, y + 5);
+      doc.setFont("helvetica", "normal");
+      doc.text(dogPdfHistoryAmount(appointment).replace(/\s*€/g, " EUR"), pageWidth - margin - 3, y + 6, { align: "right" });
+      y += rowHeight;
+      historyStripe += 1;
+    });
+  }
+
+  const pageCount = doc.getNumberOfPages();
+  for (let page = 1; page <= pageCount; page += 1) {
+    doc.setPage(page);
+    setDrawColor(line);
+    doc.line(margin, pageHeight - 13, pageWidth - margin, pageHeight - 13);
+    setTextColor(muted);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.8);
+    doc.text(footerText, margin, pageHeight - 8, { maxWidth: contentWidth - 25 });
+    doc.setFont("helvetica", "bold");
+    doc.text(`${page} / ${pageCount}`, pageWidth - margin, pageHeight - 8, { align: "right" });
+  }
+  return doc;
+}
+
+function openDogPdfPreview(dog = {}) {
+  let preparedDocument = null;
+  openModal({
+    title: "Anteprima PDF",
+    modalClass: "dog-pdf-modal",
+    hideActions: true,
+    content: `
+      <section class="dog-pdf-preview">
+        <div class="dog-pdf-preview-actions">
+          <button class="btn secondary" type="button" data-dog-pdf-back>Torna alla scheda</button>
+          <button class="btn" type="button" data-dog-pdf-download disabled>Preparazione PDF...</button>
+        </div>
+        <div class="dog-pdf-preview-viewport">
+          ${renderDogPdfPreview(dog)}
+        </div>
+      </section>
+    `,
+    onOpen: () => {
+      const backButton = modalRoot.querySelector("[data-dog-pdf-back]");
+      const downloadButton = modalRoot.querySelector("[data-dog-pdf-download]");
+      backButton?.addEventListener("click", () => {
+        closeModal();
+        openDogDetailsDialog(state.dogs.find((item) => item.id === dog.id) || dog);
+      });
+      downloadButton?.addEventListener("click", () => {
+        if (!preparedDocument) return;
+        preparedDocument.save(dogPdfFileName(dog));
+        notify("PDF esportato");
+      });
+      createDogPdfDocument(dog)
+        .then((document) => {
+          preparedDocument = document;
+          if (!downloadButton?.isConnected) return;
+          downloadButton.disabled = false;
+          downloadButton.textContent = "Esporta come PDF";
+        })
+        .catch((error) => {
+          if (downloadButton?.isConnected) downloadButton.textContent = "PDF non disponibile";
+          notify(error.message);
+        });
+    }
+  });
 }
 
 function renderBreedField(dog, animal) {

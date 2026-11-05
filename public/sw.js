@@ -1,9 +1,10 @@
-const CACHE_NAME = "groomly-pwa-v77";
+const CACHE_NAME = "groomly-pwa-v78";
 const APP_SHELL = [
   "/",
   "/index.html",
   "/styles.css",
   "/app.js",
+  "/vendor/jspdf.umd.min.js",
   "/manifest.json",
   "/apple-touch-icon.png",
   "/apple-touch-icon-precomposed.png",

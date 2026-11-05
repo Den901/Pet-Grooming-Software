@@ -2168,6 +2168,268 @@ body.calendar-dragging {
   gap: 14px;
 }
 
+.modal-card.dog-pdf-modal {
+  width: min(980px, 100%);
+  max-height: min(94vh, 1000px);
+}
+
+.dog-pdf-modal .modal-body {
+  padding: 0;
+  background: #e7ece9;
+}
+
+.dog-pdf-preview {
+  min-height: 520px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.dog-pdf-preview-actions {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.dog-pdf-preview-viewport {
+  padding: 24px;
+  overflow: auto;
+}
+
+.dog-pdf-page {
+  width: min(760px, 100%);
+  min-height: 1010px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+  color: #162625;
+  border: 1px solid #d6dfda;
+  border-radius: 4px;
+  box-shadow: 0 18px 44px rgba(22, 38, 37, 0.18);
+}
+
+.dog-pdf-page-head {
+  min-height: 176px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 210px;
+  align-items: center;
+  gap: 28px;
+  padding: 28px 34px;
+  background: var(--brand);
+  color: #fff;
+}
+
+.dog-pdf-page-title {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.dog-pdf-page-title > span {
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.dog-pdf-page-title h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 2rem;
+  line-height: 1.05;
+}
+
+.dog-pdf-page-title p,
+.dog-pdf-page-title small {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.86);
+  font-weight: 700;
+}
+
+.dog-pdf-page-photo {
+  width: 210px;
+  aspect-ratio: 4 / 3;
+  padding: 6px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+}
+
+.dog-pdf-page-photo img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  border-radius: 3px;
+}
+
+.dog-pdf-page-content {
+  flex: 1;
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  padding: 26px 34px 20px;
+}
+
+.dog-pdf-page-content section {
+  display: grid;
+  gap: 9px;
+}
+
+.dog-pdf-page-content h4 {
+  margin: 0;
+  padding-left: 10px;
+  border-left: 4px solid var(--accent);
+  color: #162625;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.dog-pdf-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.dog-pdf-preview-field {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid #dce4e0;
+  border-radius: 4px;
+  background: #f6f8f7;
+}
+
+.dog-pdf-preview-field.full {
+  grid-column: 1 / -1;
+}
+
+.dog-pdf-preview-field span {
+  color: #61716d;
+  font-size: 0.62rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.dog-pdf-preview-field strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #162625;
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.dog-pdf-history-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dog-pdf-history-heading span {
+  min-width: 28px;
+  min-height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eaf3f0;
+  color: #234344;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.dog-pdf-preview-history {
+  overflow: hidden;
+  border: 1px solid #dce4e0;
+  border-radius: 4px;
+}
+
+.dog-pdf-preview-history-row {
+  min-height: 38px;
+  display: grid;
+  grid-template-columns: 92px 98px minmax(0, 1fr) 86px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-top: 1px solid #dce4e0;
+  color: #162625;
+  font-size: 0.7rem;
+}
+
+.dog-pdf-preview-history-row:first-child {
+  border-top: 0;
+}
+
+.dog-pdf-preview-history-row:nth-child(odd):not(.head) {
+  background: #f6f8f7;
+}
+
+.dog-pdf-preview-history-row.head {
+  min-height: 30px;
+  border: 0;
+  background: var(--brand);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.dog-pdf-preview-history-row span,
+.dog-pdf-preview-history-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dog-pdf-preview-history-row small {
+  display: block;
+  margin-top: 2px;
+  color: #61716d;
+  font-size: 0.62rem;
+  font-weight: 750;
+}
+
+.dog-pdf-preview-history-empty {
+  padding: 16px;
+  color: #61716d;
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+.dog-pdf-more-history {
+  margin: 0;
+  color: #61716d;
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.dog-pdf-page-footer {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 34px;
+  border-top: 1px solid #dce4e0;
+  color: #61716d;
+  font-size: 0.66rem;
+}
+
+.dog-pdf-page-footer span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .dog-detail-heading {
   display: grid;
   gap: 4px;
@@ -5731,5 +5993,75 @@ body.calendar-dragging {
     width: min(100%, 300px);
     justify-self: center;
     max-height: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .dog-pdf-preview {
+    min-height: 0;
+  }
+
+  .dog-pdf-preview-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    padding: 10px;
+  }
+
+  .dog-pdf-preview-actions .btn {
+    width: 100%;
+  }
+
+  .dog-pdf-preview-viewport {
+    padding: 10px;
+  }
+
+  .dog-pdf-page {
+    min-height: 0;
+  }
+
+  .dog-pdf-page-head {
+    min-height: 132px;
+    grid-template-columns: minmax(0, 1fr) 108px;
+    gap: 12px;
+    padding: 18px;
+  }
+
+  .dog-pdf-page-title h3 {
+    font-size: 1.35rem;
+  }
+
+  .dog-pdf-page-title p,
+  .dog-pdf-page-title small {
+    font-size: 0.68rem;
+  }
+
+  .dog-pdf-page-photo {
+    width: 108px;
+  }
+
+  .dog-pdf-page-content {
+    gap: 14px;
+    padding: 16px 18px;
+  }
+
+  .dog-pdf-preview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dog-pdf-preview-field.full {
+    grid-column: auto;
+  }
+
+  .dog-pdf-preview-history {
+    overflow-x: auto;
+  }
+
+  .dog-pdf-preview-history-row {
+    min-width: 470px;
+    grid-template-columns: 82px 90px minmax(150px, 1fr) 78px;
+  }
+
+  .dog-pdf-page-footer {
+    margin: 0 18px;
   }
 }
