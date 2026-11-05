@@ -54,6 +54,7 @@ const formatter = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "2-di
 const monthFormatter = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" });
 const CUSTOM_OPTION_VALUE = "__add_new__";
 const DEFAULT_DOG_PHOTO = "/icons/default-dog.jpg";
+const DECEASED_STAMP_IMAGE = "/icons/deceased-stamp.png";
 const NAV_ICONS = {
   calendar: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="3"></rect><path d="M8 3v4M16 3v4M4 10h16"></path><path d="M8 14h2M12 14h2M16 14h2M8 17h2M12 17h2"></path></svg>`,
   monitor: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path><path d="M7 9h4M7 12h7"></path><circle cx="17" cy="10" r="1.5"></circle></svg>`,
@@ -395,7 +396,8 @@ function dogPhotoPositionStyle(dog = {}) {
 function dogPhotoMarkup(dog = {}, altName = "") {
   const name = altName || dog?.dogName || "cane";
   const alt = dog?.photoUrl ? `Foto di ${name}` : "Foto cane predefinita";
-  return `<img src="${escapeAttr(dogPhotoSrc(dog))}" alt="${escapeAttr(alt)}" style="${escapeAttr(dogPhotoPositionStyle(dog))}" />`;
+  const stamp = dog?.deceased ? `<img class="deceased-stamp" src="${DECEASED_STAMP_IMAGE}" alt="Deceduto" />` : "";
+  return `<img src="${escapeAttr(dogPhotoSrc(dog))}" alt="${escapeAttr(alt)}" style="${escapeAttr(dogPhotoPositionStyle(dog))}" />${stamp}`;
 }
 
 function renderDogDetailPhoto(dog = {}, topDog = false) {
@@ -3769,6 +3771,7 @@ function openDogDetailsDialog(dog = {}) {
             <strong>${escapeHtml(dog.dogName || "Scheda cane")}</strong>
             <div class="dog-detail-meta">
               ${topDog ? `<span class="top-badge"><img src="/icons/top-client-paw.png" alt="" /> Cliente top</span>` : ""}
+              ${dog.deceased ? `<span class="deceased-badge">Deceduto</span>` : ""}
               ${canceledCount ? `<span class="cancel-badge">Interventi annullati: ${escapeHtml(canceledCount)}</span>` : ""}
               <span class="visit-frequency">${escapeHtml(visitFrequency)}</span>
             </div>
@@ -4124,6 +4127,17 @@ async function dogPhotoDataForPdf(dog = {}) {
   }
 }
 
+async function deceasedStampDataForPdf(dog = {}) {
+  if (!dog.deceased) return "";
+  try {
+    const response = await fetch(DECEASED_STAMP_IMAGE, { credentials: "same-origin" });
+    if (!response.ok) return "";
+    return await fileToDataUrl(await response.blob());
+  } catch {
+    return "";
+  }
+}
+
 async function createDogPdfDocument(dog = {}, options = {}) {
   const JsPdf = window.jspdf?.jsPDF;
   if (!JsPdf) throw new Error("Generatore PDF non disponibile. Ricarica il portale e riprova.");
@@ -4148,7 +4162,7 @@ async function createDogPdfDocument(dog = {}, options = {}) {
   const contentWidth = pageWidth - margin * 2;
   const pageBottom = pageHeight - 19;
   const history = includeHistory ? dogAppointmentHistory(dog) : [];
-  const photoData = await dogPhotoDataForPdf(dog);
+  const [photoData, deceasedStampData] = await Promise.all([dogPhotoDataForPdf(dog), deceasedStampDataForPdf(dog)]);
   const businessName = dogPdfText(branding.businessName || branding.portalName || "Groomly");
   const footerText = dogPdfText([branding.address, branding.phone, branding.email].filter(Boolean).join(" - "), businessName);
   let y = 0;
@@ -4190,6 +4204,9 @@ async function createDogPdfDocument(dog = {}, options = {}) {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
       doc.text("Foto animale", pageWidth - margin - 21, 29, { align: "center" });
+    }
+    if (deceasedStampData) {
+      doc.addImage(deceasedStampData, "PNG", pageWidth - margin - 39.5, 14, 37, 27, undefined, "FAST");
     }
     y = 56;
   };
@@ -4901,6 +4918,10 @@ function openDogDialog(dog = {}) {
           <input name="manualTopClient" type="checkbox" ${dog.manualTopClient ? "checked" : ""} />
           Cliente top manuale
         </label>
+        <label class="checkbox-line full deceased-checkbox">
+          <input name="deceased" type="checkbox" ${dog.deceased ? "checked" : ""} />
+          Deceduto
+        </label>
         <fieldset class="field-group full">
           <legend>Prestazioni</legend>
           ${renderServicePicker(dogServices, animal.services)}
@@ -4982,6 +5003,7 @@ function openDogDialog(dog = {}) {
         sex: formData.get("sex"),
         imageConsent: formData.get("imageConsent"),
         manualTopClient: formData.get("manualTopClient") === "on",
+        deceased: formData.get("deceased") === "on",
         pathologies: formData.get("pathologies"),
         estimatedMinutes: timePartsToMinutes(formData.get("estimatedHours"), formData.get("estimatedMinutesPart")),
         reminderDaysBefore: formData.get("reminderDaysBefore"),

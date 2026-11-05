@@ -2273,6 +2273,7 @@ function normalizeDog(payload, existing = {}) {
     sex: ["M", "F"].includes(payload.sex) ? payload.sex : existing.sex || "",
     imageConsent: ["yes", "no"].includes(payload.imageConsent) ? payload.imageConsent : existing.imageConsent || "",
     manualTopClient: booleanField(payload, "manualTopClient", existing.manualTopClient),
+    deceased: booleanField(payload, "deceased", existing.deceased),
     pathologies: stringField(payload, "pathologies", existing.pathologies),
     estimatedMinutes: numberField(payload, "estimatedMinutes", existing.estimatedMinutes),
     reminderDaysBefore: numberField(payload, "reminderDaysBefore", existing.reminderDaysBefore ?? 1),

@@ -821,7 +821,7 @@ label {
   border: 2px solid rgba(225, 166, 61, 0.58);
 }
 
-.metric-client-photo > img:not(.top-paw) {
+.metric-client-photo > img:not(.top-paw):not(.deceased-stamp) {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -993,6 +993,7 @@ label {
 }
 
 .monitor-photo {
+  position: relative;
   min-height: 148px;
   overflow: hidden;
   border-radius: var(--radius);
@@ -1000,7 +1001,7 @@ label {
   border: 3px solid rgba(54, 106, 138, 0.42);
 }
 
-.monitor-photo img {
+.monitor-photo img:not(.deceased-stamp) {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -2042,8 +2043,22 @@ body.calendar-dragging {
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.28));
 }
 
-.dog-thumb > img:not(.top-paw),
-.dog-detail-photo > img:not(.top-paw) {
+.deceased-stamp {
+  position: absolute !important;
+  inset: 4% !important;
+  z-index: 5;
+  width: 92% !important;
+  height: 92% !important;
+  max-width: none !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  opacity: 0.9;
+  pointer-events: none;
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.26));
+}
+
+.dog-thumb > img:not(.top-paw):not(.deceased-stamp),
+.dog-detail-photo > img:not(.top-paw):not(.deceased-stamp) {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -2276,6 +2291,7 @@ body.calendar-dragging {
 }
 
 .dog-pdf-page-photo {
+  position: relative;
   width: 210px;
   aspect-ratio: 4 / 3;
   padding: 6px;
@@ -2285,7 +2301,7 @@ body.calendar-dragging {
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
 }
 
-.dog-pdf-page-photo img {
+.dog-pdf-page-photo img:not(.deceased-stamp) {
   width: 100%;
   height: 100%;
   display: block;
@@ -2510,6 +2526,18 @@ body.calendar-dragging {
   background: var(--traffic-blue-soft);
   color: var(--traffic-blue-ink) !important;
   border: 1px solid rgba(47, 116, 181, 0.34);
+}
+
+.deceased-badge {
+  width: max-content;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(210, 31, 41, 0.1);
+  color: #b3131d !important;
+  border: 1px solid rgba(210, 31, 41, 0.3);
 }
 
 .top-badge img {
@@ -2894,7 +2922,7 @@ body.calendar-dragging {
   border-color: var(--gold);
 }
 
-.service-history-photo > img:not(.top-paw) {
+.service-history-photo > img:not(.top-paw):not(.deceased-stamp) {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -3206,6 +3234,11 @@ body.calendar-dragging {
 .checkbox-line input {
   width: 18px;
   height: 18px;
+}
+
+.deceased-checkbox {
+  color: var(--danger);
+  font-weight: 850;
 }
 
 .choice-line {
@@ -4369,6 +4402,7 @@ body.calendar-dragging {
 }
 
 .completion-dog-photo {
+  position: relative;
   width: 78px;
   height: 78px;
   overflow: hidden;
@@ -4377,7 +4411,7 @@ body.calendar-dragging {
   background: var(--panel);
 }
 
-.completion-dog-photo img {
+.completion-dog-photo img:not(.deceased-stamp) {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -5116,6 +5150,16 @@ body.calendar-dragging {
   background: rgba(47, 116, 181, 0.2);
   color: #9ccaff !important;
   border-color: rgba(156, 202, 255, 0.28);
+}
+
+:root[data-theme="dark"] .deceased-badge {
+  background: rgba(210, 31, 41, 0.2);
+  color: #ff9ea4 !important;
+  border-color: rgba(255, 158, 164, 0.3);
+}
+
+:root[data-theme="dark"] .deceased-checkbox {
+  color: #ff9ea4;
 }
 
 :root[data-theme="dark"] .week-day.today {
