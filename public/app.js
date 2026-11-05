@@ -4015,7 +4015,7 @@ function renderDogPdfPreview(dog = {}) {
           </div>
         </section>
 
-        <section>
+        <section data-dog-pdf-preview-history>
           <div class="dog-pdf-history-heading">
             <h4>Storico appuntamenti</h4>
             <span>${escapeHtml(history.length)}</span>
@@ -4124,10 +4124,11 @@ async function dogPhotoDataForPdf(dog = {}) {
   }
 }
 
-async function createDogPdfDocument(dog = {}) {
+async function createDogPdfDocument(dog = {}, options = {}) {
   const JsPdf = window.jspdf?.jsPDF;
   if (!JsPdf) throw new Error("Generatore PDF non disponibile. Ricarica il portale e riprova.");
 
+  const includeHistory = options.includeHistory !== false;
   const doc = new JsPdf({
     orientation: "portrait",
     unit: "mm",
@@ -4146,7 +4147,7 @@ async function createDogPdfDocument(dog = {}) {
   const margin = 14;
   const contentWidth = pageWidth - margin * 2;
   const pageBottom = pageHeight - 19;
-  const history = dogAppointmentHistory(dog);
+  const history = includeHistory ? dogAppointmentHistory(dog) : [];
   const photoData = await dogPhotoDataForPdf(dog);
   const businessName = dogPdfText(branding.businessName || branding.portalName || "Groomly");
   const footerText = dogPdfText([branding.address, branding.phone, branding.email].filter(Boolean).join(" - "), businessName);
@@ -4155,7 +4156,7 @@ async function createDogPdfDocument(dog = {}) {
 
   doc.setProperties({
     title: `Scheda animale - ${dogPdfText(dog.dogName, "Senza nome")}`,
-    subject: "Scheda animale e storico appuntamenti",
+    subject: includeHistory ? "Scheda animale e storico appuntamenti" : "Scheda animale",
     author: businessName,
     creator: "Groomly"
   });
@@ -4319,50 +4320,52 @@ async function createDogPdfDocument(dog = {}) {
   drawWideTextBlock("Patologie", dog.pathologies);
   drawWideTextBlock("Note", dog.notes);
 
-  if (y > pageBottom - 32) addContentPage("Storico appuntamenti");
-  drawSectionTitle("Storico appuntamenti");
-  drawHistoryHeader();
-  if (!history.length) {
-    setFillColor(panel);
-    setTextColor(muted);
-    doc.rect(margin, y, contentWidth, 14, "F");
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.text("Nessun appuntamento registrato.", margin + 4, y + 8.5);
-    y += 14;
-  } else {
-    history.forEach((appointment) => {
-      const serviceText = [
-        appointmentServiceLabel(appointment, true),
-        appointment.notes ? `Note: ${dogPdfText(appointment.notes)}` : ""
-      ]
-        .filter(Boolean)
-        .join(" - ");
-      const serviceLines = doc.splitTextToSize(dogPdfText(serviceText), 93);
-      const rowHeight = Math.max(13, 6 + serviceLines.length * 4);
-      ensureHistorySpace(rowHeight);
-      if (historyStripe % 2 === 0) {
-        setFillColor(panel);
-        doc.rect(margin, y, contentWidth, rowHeight, "F");
-      }
-      setDrawColor(line);
-      doc.line(margin, y + rowHeight, pageWidth - margin, y + rowHeight);
-      setTextColor(ink);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(7.4);
-      doc.text(formatShortDate(appointment.date), margin + 3, y + 5);
+  if (includeHistory) {
+    if (y > pageBottom - 32) addContentPage("Storico appuntamenti");
+    drawSectionTitle("Storico appuntamenti");
+    drawHistoryHeader();
+    if (!history.length) {
+      setFillColor(panel);
+      setTextColor(muted);
+      doc.rect(margin, y, contentWidth, 14, "F");
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(6.8);
-      doc.text(dogPdfText(appointment.startTime, ""), margin + 3, y + 9);
-      doc.setFontSize(7.4);
-      doc.text(dogPdfText(statusLabel(appointment.status)), margin + 30, y + 6);
-      doc.setFont("helvetica", "bold");
-      doc.text(serviceLines, margin + 61, y + 5);
-      doc.setFont("helvetica", "normal");
-      doc.text(dogPdfHistoryAmount(appointment).replace(/\s*€/g, " EUR"), pageWidth - margin - 3, y + 6, { align: "right" });
-      y += rowHeight;
-      historyStripe += 1;
-    });
+      doc.setFontSize(8.5);
+      doc.text("Nessun appuntamento registrato.", margin + 4, y + 8.5);
+      y += 14;
+    } else {
+      history.forEach((appointment) => {
+        const serviceText = [
+          appointmentServiceLabel(appointment, true),
+          appointment.notes ? `Note: ${dogPdfText(appointment.notes)}` : ""
+        ]
+          .filter(Boolean)
+          .join(" - ");
+        const serviceLines = doc.splitTextToSize(dogPdfText(serviceText), 93);
+        const rowHeight = Math.max(13, 6 + serviceLines.length * 4);
+        ensureHistorySpace(rowHeight);
+        if (historyStripe % 2 === 0) {
+          setFillColor(panel);
+          doc.rect(margin, y, contentWidth, rowHeight, "F");
+        }
+        setDrawColor(line);
+        doc.line(margin, y + rowHeight, pageWidth - margin, y + rowHeight);
+        setTextColor(ink);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7.4);
+        doc.text(formatShortDate(appointment.date), margin + 3, y + 5);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.8);
+        doc.text(dogPdfText(appointment.startTime, ""), margin + 3, y + 9);
+        doc.setFontSize(7.4);
+        doc.text(dogPdfText(statusLabel(appointment.status)), margin + 30, y + 6);
+        doc.setFont("helvetica", "bold");
+        doc.text(serviceLines, margin + 61, y + 5);
+        doc.setFont("helvetica", "normal");
+        doc.text(dogPdfHistoryAmount(appointment).replace(/\s*€/g, " EUR"), pageWidth - margin - 3, y + 6, { align: "right" });
+        y += rowHeight;
+        historyStripe += 1;
+      });
+    }
   }
 
   const pageCount = doc.getNumberOfPages();
@@ -4382,6 +4385,7 @@ async function createDogPdfDocument(dog = {}) {
 
 function openDogPdfPreview(dog = {}) {
   let preparedDocument = null;
+  let preparationId = 0;
   openModal({
     title: "Anteprima PDF",
     modalClass: "dog-pdf-modal",
@@ -4389,8 +4393,14 @@ function openDogPdfPreview(dog = {}) {
     content: `
       <section class="dog-pdf-preview">
         <div class="dog-pdf-preview-actions">
-          <button class="btn secondary" type="button" data-dog-pdf-back>Torna alla scheda</button>
-          <button class="btn" type="button" data-dog-pdf-download disabled>Preparazione PDF...</button>
+          <label class="dog-pdf-history-option">
+            <input type="checkbox" data-dog-pdf-history checked />
+            <span>Includi storico appuntamenti</span>
+          </label>
+          <div class="dog-pdf-preview-buttons">
+            <button class="btn secondary" type="button" data-dog-pdf-back>Torna alla scheda</button>
+            <button class="btn" type="button" data-dog-pdf-download disabled>Preparazione PDF...</button>
+          </div>
         </div>
         <div class="dog-pdf-preview-viewport">
           ${renderDogPdfPreview(dog)}
@@ -4400,6 +4410,29 @@ function openDogPdfPreview(dog = {}) {
     onOpen: () => {
       const backButton = modalRoot.querySelector("[data-dog-pdf-back]");
       const downloadButton = modalRoot.querySelector("[data-dog-pdf-download]");
+      const historyOption = modalRoot.querySelector("[data-dog-pdf-history]");
+      const historyPreview = modalRoot.querySelector("[data-dog-pdf-preview-history]");
+      const prepareDocument = async () => {
+        const currentPreparation = ++preparationId;
+        const includeHistory = Boolean(historyOption?.checked);
+        preparedDocument = null;
+        if (downloadButton?.isConnected) {
+          downloadButton.disabled = true;
+          downloadButton.textContent = "Preparazione PDF...";
+        }
+        if (historyPreview) historyPreview.hidden = !includeHistory;
+        try {
+          const document = await createDogPdfDocument(dog, { includeHistory });
+          if (currentPreparation !== preparationId || !downloadButton?.isConnected) return;
+          preparedDocument = document;
+          downloadButton.disabled = false;
+          downloadButton.textContent = "Esporta come PDF";
+        } catch (error) {
+          if (currentPreparation !== preparationId) return;
+          if (downloadButton?.isConnected) downloadButton.textContent = "PDF non disponibile";
+          notify(error.message);
+        }
+      };
       backButton?.addEventListener("click", () => {
         closeModal();
         openDogDetailsDialog(state.dogs.find((item) => item.id === dog.id) || dog);
@@ -4409,17 +4442,8 @@ function openDogPdfPreview(dog = {}) {
         preparedDocument.save(dogPdfFileName(dog));
         notify("PDF esportato");
       });
-      createDogPdfDocument(dog)
-        .then((document) => {
-          preparedDocument = document;
-          if (!downloadButton?.isConnected) return;
-          downloadButton.disabled = false;
-          downloadButton.textContent = "Esporta come PDF";
-        })
-        .catch((error) => {
-          if (downloadButton?.isConnected) downloadButton.textContent = "PDF non disponibile";
-          notify(error.message);
-        });
+      historyOption?.addEventListener("change", prepareDocument);
+      prepareDocument();
     }
   });
 }

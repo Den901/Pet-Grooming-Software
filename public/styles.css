@@ -2189,11 +2189,34 @@ body.calendar-dragging {
   top: 0;
   z-index: 2;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
   padding: 12px 18px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
+}
+
+.dog-pdf-history-option {
+  width: max-content;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 850;
+}
+
+.dog-pdf-history-option input {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 auto;
+}
+
+.dog-pdf-preview-buttons {
+  display: flex;
+  gap: 10px;
 }
 
 .dog-pdf-preview-viewport {
@@ -6009,6 +6032,17 @@ body.calendar-dragging {
 
   .dog-pdf-preview-actions .btn {
     width: 100%;
+  }
+
+  .dog-pdf-history-option {
+    width: 100%;
+    min-height: 42px;
+    justify-content: center;
+  }
+
+  .dog-pdf-preview-buttons {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .dog-pdf-preview-viewport {
